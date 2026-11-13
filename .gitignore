@@ -6,3 +6,9 @@ test-results/
 .DS_Store
 
 src-tauri/gen/
+
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*

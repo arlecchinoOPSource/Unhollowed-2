@@ -12,7 +12,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:mac": "bash scripts/test-mac.sh",
+    "test:mac:full": "bash scripts/test-mac.sh full"
   },
   "type": "module",
   "private": true,
