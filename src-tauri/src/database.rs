@@ -58,3 +58,31 @@ pub async fn database_status(
         workspace_name,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULT_WORKSPACE;
+    use sqlx::{migrate::Migrator, SqlitePool};
+
+    #[test]
+    fn workspace_migration_seeds_the_default_workspace_once() {
+        tauri::async_runtime::block_on(async {
+            let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+            let migrations = Migrator::new(std::path::Path::new(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/migrations"
+            )))
+            .await
+            .unwrap();
+
+            migrations.run(&pool).await.unwrap();
+            migrations.run(&pool).await.unwrap();
+
+            let rows: Vec<(String, String)> = sqlx::query_as("SELECT id, name FROM workspaces")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            assert_eq!(rows, vec![(DEFAULT_WORKSPACE.into(), "Personal".into())]);
+        });
+    }
+}

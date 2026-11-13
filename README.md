@@ -1,30 +1,34 @@
 # Unhollowed 2
 
-A free, local-first desktop workspace by Arlecchino. Phase 0 includes Home, feature previews, appearance settings, and a local SQLite workspace.
+A free, local-first desktop workspace by Arlecchino for connecting documents, projects, and personal routines. The current scaffold includes Home, feature previews, appearance settings, and a local SQLite workspace.
+
+Built with Tauri 2, Rust, SQLite, React, TypeScript, and Vite. GitHub Issues and milestones track upcoming work.
 
 ## Set up
 
-Use Node.js 24 LTS, npm, and stable Rust. On macOS, install the Xcode command line tools with `xcode-select --install`. On Windows, install the Microsoft C++ Build Tools and WebView2 Runtime. See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for platform setup.
+Use the Node version in `.nvmrc`, npm, and rustup. Rust is pinned in `rust-toolchain.toml`. On macOS, install the Xcode command line tools with `xcode-select --install`. On Windows, install the Microsoft C++ Build Tools and WebView2 Runtime. See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for platform setup.
 
 ```sh
 npm ci
 npx playwright install chromium
 ```
 
-| Command                                                     | Purpose                                       |
-| ----------------------------------------------------------- | --------------------------------------------- |
-| `npm run dev`                                               | Start the Vite browser preview on port 1420   |
-| `npm run desktop`                                           | Start Tauri in development mode               |
-| `npm run build`                                             | Type-check and build the frontend             |
-| `npm run desktop:build`                                     | Build and bundle the desktop app for the host |
-| `npm run desktop:build -- --bundles app`                    | Build only the macOS app bundle               |
-| `npm run typecheck`                                         | Check TypeScript                              |
-| `npm run lint`                                              | Run ESLint                                    |
-| `npm run format`                                            | Format source and documentation               |
-| `npm run format:check`                                      | Check formatting                              |
-| `npm test`                                                  | Run the Vitest suite                          |
-| `npm run test:browser`                                      | Run Chromium smoke tests                      |
-| `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` | Check Rust formatting                         |
+| Command                                                     | Purpose                                                   |
+| ----------------------------------------------------------- | --------------------------------------------------------- |
+| `npm run dev`                                               | Start the Vite browser preview on port 1420               |
+| `npm run desktop`                                           | Start Tauri in development mode                           |
+| `npm run build`                                             | Type-check and build the frontend                         |
+| `npm run desktop:build`                                     | Build and bundle the desktop app for the host             |
+| `npm run desktop:build -- --bundles app`                    | Build only the macOS app bundle                           |
+| `npm run typecheck`                                         | Check TypeScript                                          |
+| `npm run lint`                                              | Run ESLint                                                |
+| `npm run format`                                            | Format source and documentation                           |
+| `npm run format:check`                                      | Check formatting                                          |
+| `npm test`                                                  | Run the Vitest suite                                      |
+| `npm run test:mac`                                          | Run local macOS frontend, Rust, and SQLite checks         |
+| `npm run test:mac:full`                                     | Also build and verify an optimized local macOS app bundle |
+| `npm run test:browser`                                      | Run Chromium smoke tests                                  |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` | Check Rust formatting                                     |
 
 Dependency installation needs internet access. The built app serves its UI and fonts locally. It can open without Vite, an account, or internet access.
 
@@ -45,3 +49,10 @@ The workspace uses a stable UUID stored as text. As features are implemented, gi
 3. Validate Windows development, WebView2 startup, and installer behavior on Windows. Add repeatable native smoke coverage for both platforms.
 
 See [Phase 0 verification](docs/phase-0.md) for resolved versions and checks.
+
+## Project documentation
+
+- [Product](docs/PRODUCT.md) and [architecture](docs/ARCHITECTURE.md)
+- [Development](docs/DEVELOPMENT.md) and [local macOS testing](docs/MACOS_TESTING.md)
+- [CI and packaging](docs/CI_CD.md) and [release preparation](docs/RELEASE.md)
+- [Contributing](docs/CONTRIBUTING.md), [decisions](docs/DECISIONS.md), and [changelog](CHANGELOG.md)
