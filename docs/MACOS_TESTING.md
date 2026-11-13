@@ -28,3 +28,7 @@ The SQLite test uses a fresh in-memory database. The normal desktop app uses its
 - If `xcode-select -p` or `xcrun --show-sdk-path` fails, run `xcode-select --install`. If Xcode is already installed, select the correct Command Line Tools in Xcode Settings → Locations.
 - If packages are missing or out of sync with the lockfile, run `npm ci`. If rustup reports a missing compiler or rustfmt, rerun the toolchain install above.
 - Local macOS testing covers your Mac and avoids routine hosted macOS jobs. Ubuntu Quick CI checks compilation and tests independently. Windows installers and macOS disk images are handled by Desktop packaging.
+
+## Phase 0.5 verification
+
+The quick and full commands passed on Apple Silicon macOS 26.5.1. Two frontend tests and the SQLite migration test passed, and the optimized app bundle contained an arm64 executable. An unsigned disk image was also built and verified with `hdiutil verify`. The disk-image check verifies packaging integrity. Distribution signing, notarization, and clean-machine installer tests are separate release checks.
