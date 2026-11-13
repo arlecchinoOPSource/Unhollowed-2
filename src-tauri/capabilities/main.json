@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Local workspace window with no plugin permissions",
+  "windows": ["main"],
+  "permissions": []
+}
