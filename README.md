@@ -40,7 +40,7 @@ Dependency installation needs internet access. The built app serves its UI and f
 - `src/database/status.ts` calls the typed desktop command. In Rust, Tauri's SQL plugin preloads `workspace.sqlite3` under the application-specific config directory and applies migrations. On macOS this is `~/Library/Application Support/dev.arlecchino.unhollowed2/`.
 - **Settings → Check local storage** queries the seeded Personal workspace through Tauri IPC. The main window has no plugin permissions. Rust owns the connection and query.
 
-The workspace uses a stable UUID stored as text. As features are implemented, give their rows independent UUIDs and a foreign key to the owning workspace. Use explicit foreign keys for optional project or task relationships. Document links and graph edges can use document IDs. Add new migration files and preserve migrations already applied to existing databases.
+The workspace uses a stable UUID stored as text, and `app_state` records which workspace is active. As features are implemented, give their rows independent UUIDs and a required `workspace_id` foreign key. Add new migration files and preserve migrations already applied to existing databases. The [data model](docs/DATA_MODEL.md) documents the conventions.
 
 ## Phase 1
 
@@ -52,7 +52,7 @@ See [Phase 0 verification](docs/phase-0.md) for resolved versions and checks.
 
 ## Project documentation
 
-- [Product](docs/PRODUCT.md) and [architecture](docs/ARCHITECTURE.md)
+- [Product](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [data model](docs/DATA_MODEL.md)
 - [Development](docs/DEVELOPMENT.md) and [local macOS testing](docs/MACOS_TESTING.md)
 - [CI and packaging](docs/CI_CD.md) and [release preparation](docs/RELEASE.md)
 - [Contributing](docs/CONTRIBUTING.md), [decisions](docs/DECISIONS.md), and [changelog](CHANGELOG.md)
