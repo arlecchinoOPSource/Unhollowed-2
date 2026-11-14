@@ -253,3 +253,111 @@ p {
     display: none;
   }
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.documents {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  gap: 32px;
+  margin-top: 24px;
+}
+.action svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.document-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+.document-list button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-list button:hover,
+.document-list button[aria-current="true"] {
+  color: var(--accent);
+  background: var(--selection);
+}
+.document-title {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font: 400 28px/1.2 var(--editorial);
+}
+.editor-toolbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.editor-toolbar button {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.editor-toolbar button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--selection);
+  border-color: var(--accent);
+}
+.editor {
+  min-height: 280px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.save-status {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.ProseMirror {
+  min-height: 250px;
+  outline: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.ProseMirror p {
+  color: var(--text);
+  margin: 0 0 10px;
+}
+.ProseMirror h2 {
+  font-size: 22px;
+  margin: 16px 0 8px;
+}
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 24px;
+  margin: 0 0 10px;
+}
+
+@media (max-width: 680px) {
+  .documents {
+    grid-template-columns: 1fr;
+  }
+}

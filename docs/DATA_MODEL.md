@@ -31,6 +31,12 @@ workspaces
 - Document links and graph edges reference document IDs and carry their own `workspace_id`.
 - SQLite connections from sqlx enforce foreign keys. Tests that depend on this should assert the rejection.
 
+## Documents
+
+`documents` follows the conventions above: a UUID `id`, a required `workspace_id` with `ON DELETE RESTRICT`, a non-empty `title`, and `content`, which holds Tiptap (ProseMirror) JSON as text. SQLite checks that `content` is valid JSON, and Rust additionally requires a root node of type `doc` and limits titles to 200 characters and content to 5 MB. The stored text is returned exactly as saved so formatting round-trips. `created_at` and `updated_at` are UTC ISO 8601 strings set by SQLite.
+
+Documents are read and written only through the `list_documents`, `get_document`, `create_document`, and `update_document` commands in `src-tauri/src/documents.rs`. The webview never sends a workspace ID. Rust resolves the active workspace, and every query filters by it, so an ID from another workspace returns `not_found` exactly like an ID that does not exist.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -44,3 +50,4 @@ workspaces
 | --------- | ------------------------------------------------------------------------------ |
 | 0001      | `workspaces` and the seeded Personal workspace                                 |
 | 0002      | `app_state`, pointing at the Personal workspace for existing and new databases |
+| 0003      | `documents`, owned by a workspace, with Tiptap JSON content                    |

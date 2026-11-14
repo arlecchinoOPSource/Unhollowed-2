@@ -21,6 +21,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0002_active_workspace.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "Create workspace documents",
+            sql: include_str!("../migrations/0003_documents.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -78,95 +84,30 @@ pub async fn active_workspace(pool: &SqlitePool) -> Result<Workspace, DatabaseEr
     Ok(Workspace { id, name })
 }
 
+/// Returns the open workspace database, or a typed error if it is not ready.
+pub async fn pool(instances: &DbInstances) -> Result<SqlitePool, DatabaseError> {
+    let instances = instances.0.read().await;
+    let Some(DbPool::Sqlite(pool)) = instances.get(DATABASE) else {
+        return Err(DatabaseError::DatabaseUnavailable);
+    };
+    Ok(pool.clone())
+}
+
 #[tauri::command]
 pub async fn database_status(
     instances: State<'_, DbInstances>,
 ) -> Result<DatabaseStatus, DatabaseError> {
-    let pool = {
-        let instances = instances.0.read().await;
-        let Some(DbPool::Sqlite(pool)) = instances.get(DATABASE) else {
-            return Err(DatabaseError::DatabaseUnavailable);
-        };
-        pool.clone()
-    };
+    let pool = pool(&instances).await?;
     active_workspace(&pool).await.map(DatabaseStatus::from)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{active_workspace, migrations, DatabaseError, Workspace};
-    use sqlx::{
-        migrate::Migrator,
-        sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-        SqlitePool,
+    use crate::test_support::{
+        add_workspace, memory_pool, migrated_pool, migrator, TempDatabase, DEFAULT_WORKSPACE,
+        OTHER_WORKSPACE,
     };
-    use std::path::{Path, PathBuf};
-
-    const DEFAULT_WORKSPACE: &str = "00000000-0000-4000-8000-000000000001";
-
-    async fn migrator(up_to: i64) -> Migrator {
-        let mut migrator = Migrator::new(Path::new(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/migrations"
-        )))
-        .await
-        .unwrap();
-        let kept: Vec<_> = migrator
-            .migrations
-            .iter()
-            .filter(|migration| migration.version <= up_to)
-            .cloned()
-            .collect();
-        migrator.migrations = kept.into();
-        migrator
-    }
-
-    async fn memory_pool() -> SqlitePool {
-        SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .unwrap()
-    }
-
-    /// A disposable on-disk database that is removed when the test ends.
-    struct TempDatabase(PathBuf);
-
-    impl TempDatabase {
-        fn new(name: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "unhollowed-2-{name}-{}.sqlite3",
-                std::process::id()
-            ));
-            let database = Self(path);
-            database.remove();
-            database
-        }
-
-        async fn open(&self) -> SqlitePool {
-            SqlitePool::connect_with(
-                SqliteConnectOptions::new()
-                    .filename(&self.0)
-                    .create_if_missing(true),
-            )
-            .await
-            .unwrap()
-        }
-
-        fn remove(&self) {
-            for suffix in ["", "-wal", "-shm"] {
-                let mut file = self.0.clone().into_os_string();
-                file.push(suffix);
-                let _ = std::fs::remove_file(file);
-            }
-        }
-    }
-
-    impl Drop for TempDatabase {
-        fn drop(&mut self) {
-            self.remove();
-        }
-    }
 
     fn personal() -> Workspace {
         Workspace {
@@ -217,12 +158,7 @@ mod tests {
             // A Phase 0 database only has migration 1 applied.
             let pool = database.open().await;
             migrator(1).await.run(&pool).await.unwrap();
-            sqlx::query("INSERT INTO workspaces (id, name) VALUES (?, ?)")
-                .bind("00000000-0000-4000-8000-000000000002")
-                .bind("Existing")
-                .execute(&pool)
-                .await
-                .unwrap();
+            add_workspace(&pool, OTHER_WORKSPACE, "Existing").await;
             assert!(active_workspace(&pool).await.is_err());
             pool.close().await;
 
@@ -240,10 +176,7 @@ mod tests {
                 workspaces,
                 vec![
                     (DEFAULT_WORKSPACE.into(), "Personal".into()),
-                    (
-                        "00000000-0000-4000-8000-000000000002".into(),
-                        "Existing".into()
-                    ),
+                    (OTHER_WORKSPACE.into(), "Existing".into()),
                 ]
             );
             let applied: Vec<(i64, bool)> =
@@ -251,7 +184,11 @@ mod tests {
                     .fetch_all(&pool)
                     .await
                     .unwrap();
-            assert_eq!(applied, vec![(1, true), (2, true)]);
+            let expected: Vec<(i64, bool)> = migrations()
+                .iter()
+                .map(|migration| (migration.version, true))
+                .collect();
+            assert_eq!(applied, expected);
             pool.close().await;
         });
     }
@@ -259,8 +196,7 @@ mod tests {
     #[test]
     fn active_workspace_must_reference_an_existing_workspace() {
         tauri::async_runtime::block_on(async {
-            let pool = memory_pool().await;
-            migrator(i64::MAX).await.run(&pool).await.unwrap();
+            let pool = migrated_pool().await;
 
             assert!(
                 sqlx::query("UPDATE app_state SET active_workspace_id = 'missing'")

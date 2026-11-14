@@ -1,6 +1,6 @@
 # Unhollowed 2
 
-A free, local-first desktop workspace by Arlecchino for connecting documents, projects, and personal routines. The current scaffold includes Home, feature previews, appearance settings, and a local SQLite workspace.
+A free, local-first desktop workspace by Arlecchino for connecting documents, projects, and personal routines. The current build includes Home, local documents with a rich-text editor, feature previews, appearance settings, and a local SQLite workspace.
 
 Built with Tauri 2, Rust, SQLite, React, TypeScript, and Vite. GitHub Issues and milestones track upcoming work.
 
@@ -44,7 +44,7 @@ The workspace uses a stable UUID stored as text, and `app_state` records which w
 
 ## Phase 1
 
-1. Implement document creation and editing with Tiptap JSON, typed Rust commands, and migrations keyed by workspace.
+1. Add document links and the graph view on top of the local documents.
 2. Add persistence tests covering database reopen, migration upgrades, and write failures.
 3. Validate Windows development, WebView2 startup, and installer behavior on Windows. Add repeatable native smoke coverage for both platforms.
 
