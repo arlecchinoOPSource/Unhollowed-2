@@ -9,7 +9,10 @@ export function Workspace() {
   const { pathname } = useLocation();
   const { theme, toggleTheme } = useTheme();
   const title =
-    pages.find(({ path }) => path === pathname)?.title ?? "Workspace";
+    pages.find(
+      ({ path }) =>
+        path === pathname || (path !== "/" && pathname.startsWith(`${path}/`)),
+    )?.title ?? "Workspace";
 
   return (
     <div className="workspace">
@@ -22,7 +25,7 @@ export function Workspace() {
         </Link>
         <nav aria-label="Workspace">
           {pages.map(({ path, title, icon: Icon }) => (
-            <NavLink to={path} end key={path}>
+            <NavLink to={path} end={path !== "/projects"} key={path}>
               <Icon size={17} aria-hidden="true" />
               {title}
             </NavLink>

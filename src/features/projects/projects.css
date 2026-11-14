@@ -1,0 +1,187 @@
+.project-page-top,
+.project-card-top,
+.project-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.project-page-top {
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
+.project-primary,
+.project-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-back {
+  margin-bottom: 18px;
+}
+
+.projects-empty,
+.project-card,
+.project-details {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.projects-empty svg,
+.project-card svg {
+  color: var(--accent);
+}
+
+.project-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));
+  gap: 14px;
+}
+
+.project-card {
+  color: var(--text);
+  text-decoration: none;
+  display: block;
+  height: 100%;
+  overflow-wrap: anywhere;
+}
+
+a.project-card:hover {
+  border-color: var(--accent);
+}
+
+.project-card h2,
+.projects-empty h2 {
+  margin: 12px 0 6px;
+}
+
+.project-card p {
+  margin-bottom: 4px;
+}
+
+a.project-card p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.project-status {
+  background: var(--selection);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.project-filters,
+.project-details,
+.project-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: flex-start;
+}
+
+.project-filters,
+.project-details {
+  margin-bottom: 18px;
+}
+
+.project-filters label:first-child {
+  flex: 1 1 240px;
+}
+
+.projects-view label,
+.project-dialog label {
+  display: grid;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.projects-view :is(input, select),
+.project-dialog :is(input, textarea) {
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.project-dialog textarea {
+  resize: vertical;
+}
+
+.project-details dl,
+.project-details dd {
+  margin: 0;
+}
+
+.project-details dt {
+  font-weight: 600;
+}
+
+.project-details dd {
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.project-description {
+  white-space: pre-wrap;
+}
+
+.project-dialog {
+  width: min(510px, calc(100% - 32px));
+  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.project-dialog::backdrop {
+  background: rgb(0 0 0 / 44%);
+}
+
+.project-dialog fieldset {
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.project-dialog label span {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.project-actions {
+  justify-content: flex-end;
+}
+
+.project-actions button {
+  margin: 0;
+}
+
+.project-secondary {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
