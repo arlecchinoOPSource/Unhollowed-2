@@ -2,6 +2,7 @@
 
 mod database;
 mod documents;
+mod projects;
 #[cfg(test)]
 mod test_support;
 
@@ -13,7 +14,13 @@ fn main() {
             documents::list_documents,
             documents::get_document,
             documents::create_document,
-            documents::update_document
+            documents::update_document,
+            projects::list_projects,
+            projects::get_project,
+            projects::create_project,
+            projects::update_project,
+            projects::change_project_status,
+            projects::archive_project
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Unhollowed 2");

@@ -37,6 +37,12 @@ workspaces
 
 Documents are read and written only through the `list_documents`, `get_document`, `create_document`, and `update_document` commands in `src-tauri/src/documents.rs`. The webview never sends a workspace ID. Rust resolves the active workspace, and every query filters by it, so an ID from another workspace returns `not_found` exactly like an ID that does not exist.
 
+## Projects
+
+`projects` stores a workspace-owned UUID, name, optional description, status, optional local calendar dates in `YYYY-MM-DD` form, and UTC creation and update timestamps. New projects start as planned. Archiving is a status change, so the project keeps its ID and stays available through the Archived filter. Rust validates dates and requires the target date to be on or after the start date when both are present.
+
+Project commands resolve the active workspace in Rust. Reads and changes match the project ID and workspace ID together. Future feature records can reference the stable project ID under the ownership rules above.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -51,3 +57,4 @@ Documents are read and written only through the `list_documents`, `get_document`
 | 0001      | `workspaces` and the seeded Personal workspace                                 |
 | 0002      | `app_state`, pointing at the Personal workspace for existing and new databases |
 | 0003      | `documents`, owned by a workspace, with Tiptap JSON content                    |
+| 0004      | `projects`, owned by a workspace, with status and optional dates               |
