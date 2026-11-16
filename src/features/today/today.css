@@ -1,0 +1,75 @@
+.task-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.task-tabs a {
+  padding: 5px 14px;
+  border-radius: 7px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.task-tabs a[aria-current="page"] {
+  background: var(--selection);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.task-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-group {
+  margin-bottom: 22px;
+}
+
+.task-group h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-row {
+  row-gap: 8px;
+}
+
+.task-done .issue-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.task-state,
+.task-overdue {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.task-reschedule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.task-reschedule button,
+.task-reschedule input {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.task-undated {
+  margin-top: 18px;
+}

@@ -692,3 +692,72 @@ fn serializes_the_shape_the_webview_expects() {
         assert_eq!(input.due_date.as_deref(), Some("2026-12-01"));
     });
 }
+
+#[test]
+fn rescheduling_changes_only_the_due_date() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        add_workspace(&pool, OTHER_WORKSPACE, "Other").await;
+        let issue = create(
+            &pool,
+            DEFAULT_WORKSPACE,
+            IssueFields {
+                title: "Call plumber".into(),
+                description: Some(DESCRIPTION.into()),
+                priority: Some("high".into()),
+                start_date: Some("2026-11-10".into()),
+                due_date: Some("2026-11-16".into()),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+        let id = &issue.summary.id;
+        let started = set_status(&pool, DEFAULT_WORKSPACE, id, "in_progress")
+            .await
+            .unwrap();
+
+        let moved = set_due_date(&pool, DEFAULT_WORKSPACE, id, Some("2026-11-18"))
+            .await
+            .unwrap();
+        assert_eq!(moved.summary.due_date.as_deref(), Some("2026-11-18"));
+        assert!(moved.summary.updated_at >= started.summary.updated_at);
+        // Identity and every other field are preserved.
+        assert_eq!(moved.summary.id, issue.summary.id);
+        assert_eq!(moved.summary.number, issue.summary.number);
+        assert_eq!(moved.summary.title, "Call plumber");
+        assert_eq!(moved.description, DESCRIPTION);
+        assert_eq!(moved.summary.priority, "high");
+        assert_eq!(moved.summary.status, "in_progress");
+        assert_eq!(moved.summary.start_date.as_deref(), Some("2026-11-10"));
+        assert_eq!(moved.summary.created_at, issue.summary.created_at);
+
+        pause();
+        assert_eq!(
+            set_due_date(&pool, DEFAULT_WORKSPACE, id, Some("2026-11-18"))
+                .await
+                .unwrap(),
+            moved
+        );
+        for (date, error) in [
+            ("2026-11-09", IssueError::InvalidDateRange),
+            ("2026-02-30", IssueError::InvalidDate),
+            ("tomorrow", IssueError::InvalidDate),
+        ] {
+            assert_eq!(
+                set_due_date(&pool, DEFAULT_WORKSPACE, id, Some(date)).await,
+                Err(error)
+            );
+        }
+        assert_eq!(
+            set_due_date(&pool, OTHER_WORKSPACE, id, Some("2026-12-01")).await,
+            Err(IssueError::NotFound)
+        );
+        assert_eq!(get(&pool, DEFAULT_WORKSPACE, id).await.unwrap(), moved);
+
+        let cleared = set_due_date(&pool, DEFAULT_WORKSPACE, id, None)
+            .await
+            .unwrap();
+        assert_eq!(cleared.summary.due_date, None);
+    });
+}

@@ -44,6 +44,7 @@ fn main() {
             issues::set_issue_project,
             issues::set_issue_labels,
             issues::set_issue_milestone,
+            issues::set_issue_due_date,
             labels::list_labels,
             labels::create_label,
             labels::update_label,
