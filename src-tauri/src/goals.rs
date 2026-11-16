@@ -112,7 +112,11 @@ const ROLLUP: &str = "COUNT(CASE WHEN i.status <> 'canceled' THEN 1 END) AS tota
          COUNT(CASE WHEN i.status = 'blocked' THEN 1 END) AS blocked,
          COUNT(CASE WHEN i.status = 'canceled' THEN 1 END) AS canceled";
 
-async fn load(db: &SqlitePool, workspace: &str, project: &str) -> Result<ProjectGoals, GoalError> {
+pub(crate) async fn load(
+    db: &SqlitePool,
+    workspace: &str,
+    project: &str,
+) -> Result<ProjectGoals, GoalError> {
     let mut tx = db.begin().await?;
     let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM projects WHERE id = ? AND workspace_id = ?)",

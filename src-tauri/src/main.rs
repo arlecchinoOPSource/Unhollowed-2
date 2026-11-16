@@ -8,6 +8,8 @@ mod issues;
 mod labels;
 mod milestones;
 mod overview;
+#[cfg(test)]
+mod perf_tests;
 mod portability;
 mod projects;
 mod relationships;

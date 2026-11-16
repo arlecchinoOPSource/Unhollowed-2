@@ -147,11 +147,10 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
                 const count = overview.statuses[statusKeys[status]];
                 return (
                   <li key={status}>
-                    <Link
-                      to={`${issues}?state=all&status=${status}`}
-                      aria-label={`${issueStatuses[status]}: ${count} ${count === 1 ? "issue" : "issues"}`}
-                    >
-                      <StatusBadge status={status} />
+                    {/* The name starts with the visible text ("To Do 3"),
+                        so voice control can target what is on screen. */}
+                    <Link to={`${issues}?state=all&status=${status}`}>
+                      <StatusBadge status={status} />{" "}
                       <span className="overview-bar-track" aria-hidden="true">
                         {count > 0 && (
                           <span
@@ -161,6 +160,9 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
                         )}
                       </span>
                       <span className="overview-count">{count}</span>
+                      <span className="visually-hidden">
+                        {count === 1 ? " issue" : " issues"}
+                      </span>
                     </Link>
                   </li>
                 );

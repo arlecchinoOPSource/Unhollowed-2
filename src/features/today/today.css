@@ -62,7 +62,7 @@
 .task-reschedule button,
 .task-reschedule input {
   padding: 4px 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-line);
   border-radius: 7px;
   background: var(--surface);
   color: var(--text);

@@ -6,6 +6,8 @@
   align-items: start;
   overflow-x: auto;
   padding-bottom: 8px;
+  /* Contains visually hidden text, which would otherwise widen the page. */
+  position: relative;
 }
 
 .issue-board[aria-busy="true"] {
