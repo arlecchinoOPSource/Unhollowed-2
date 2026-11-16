@@ -21,6 +21,7 @@ import { isTauri } from "../../database/status";
 import { LabelBadges } from "../labels/LabelParts";
 import { readFilters, resetFilters, toQuery, writeFilters } from "./filters";
 import { PriorityBadge, RepeatMark, StatusBadge } from "./IssueBadges";
+import { SavedViewBar } from "../views/SavedViewBar";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssueReferences } from "./useIssueReferences";
 import "./board.css";
@@ -75,7 +76,12 @@ export function IssueBoard({ projectId }: { projectId?: string }) {
   const base = { ...toQuery(filters, today, projectId), state: "all" as const };
   delete base.statuses;
   const queryKey = JSON.stringify(base);
-  const { projects, labels, milestones } = useIssueReferences(desktop);
+  const {
+    projects,
+    labels,
+    milestones,
+    loaded: referencesLoaded,
+  } = useIssueReferences(desktop);
   const [columns, setColumns] = useState<Columns | null>(null);
   const [loadedKey, setLoadedKey] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -249,15 +255,29 @@ export function IssueBoard({ projectId }: { projectId?: string }) {
 
   return (
     <div className="issue-board-view">
+      {!projectId && (
+        <SavedViewBar
+          kind="board"
+          projects={projects}
+          labels={labels}
+          milestones={milestones}
+          referencesLoaded={referencesLoaded}
+        />
+      )}
       <IssueFilterBar
         filters={filters}
         onChange={(changes) =>
-          setParams(writeFilters({ ...filters, ...changes }), {
-            replace: true,
-          })
+          setParams(
+            writeFilters({ ...filters, ...changes }, params.get("view")),
+            {
+              replace: true,
+            },
+          )
         }
         onReset={() =>
-          setParams(writeFilters(resetFilters(filters)), { replace: true })
+          setParams(writeFilters(resetFilters(filters), params.get("view")), {
+            replace: true,
+          })
         }
         projectId={projectId}
         projects={projects}

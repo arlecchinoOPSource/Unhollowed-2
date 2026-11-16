@@ -150,6 +150,16 @@ A recurring issue is a series of ordinary issues, one per occurrence. Only one o
 - **Next occurrence contents.** The next occurrence copies the title, description, priority, project, and active (not archived) labels. It keeps the milestone only if the milestone is still open, and shifts any start date by the same number of days as the due date. It starts as To Do with its own ID and number.
 - **Editing and stopping.** Changing the rule starts a new series anchored on the issue's current due date and stops the old one, so past occurrences keep their original schedule. Stopping sets `stopped_at`, and existing occurrences remain. Rescheduling one occurrence does not move the series: later occurrences follow the anchor's schedule.
 
+## Saved views
+
+`saved_views` stores a workspace-owned name (1 to 80 characters, unique per workspace ignoring case through a Rust-computed `name_key`) and a versioned JSON `config`: `{ "version": 1, "view": "list" | "board", "filters": { ... } }`. The filters are the list's URL filters (`ViewFilters` in `src-tauri/src/saved_views.rs`): state, text, status, priority, project or `inbox`, due preset, labels and label match, milestone or `none`, sort, and direction.
+
+- **Versioning.** `config_version` records the format. Rust accepts only version 1 and rejects unknown fields (`deny_unknown_fields`) or values outside the shared filter model (`invalid_config`). A later format can migrate rows by version. A stored view that cannot be read is left out of `list_saved_views` instead of hiding the others.
+- **Relative rules stay relative.** Due filters are stored as presets such as `overdue` or `week` and resolve against the local date each time the view opens. Resolved dates are never stored.
+- **Navigation.** Views appear under **Saved views** in the sidebar and open the list or board with their filters in the URL plus `view=<id>`. Changing filters keeps the ID, so **Update view** saves the changes back. **Revert changes**, **Rename**, **Delete** (which removes only the view), and **Save as new view** are also available.
+- **Unavailable references.** Projects, labels, and milestones a view refers to may later be deleted or belong to another workspace. When names have loaded and a referenced record no longer exists, the list or board says so and offers **Remove unavailable filters**. Archived labels and projects still exist and still match.
+- **Integrations.** Only list and board filters can be saved, because they are the shared query model. Calendar and Today/Upcoming settings are not saved as views.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -172,3 +182,4 @@ A recurring issue is a series of ordinary issues, one per occurrence. Only one o
 | 0009      | Project missions, objectives, and objective-to-issue links                     |
 | 0010      | Workspace-scoped issue relationships                                           |
 | 0011      | `issue_recurrences` and occurrence identity on issues                          |
+| 0012      | `saved_views` with versioned filter configuration                              |

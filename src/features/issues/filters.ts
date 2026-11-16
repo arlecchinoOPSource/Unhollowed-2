@@ -1,3 +1,4 @@
+import type { ViewFilters } from "../../database/savedViews";
 import {
   issuePriorities,
   issueStatuses,
@@ -78,9 +79,16 @@ export function readFilters(params: URLSearchParams): ListFilters {
   };
 }
 
-/** Writes only values that differ from the defaults, keeping URLs short. */
-export function writeFilters(filters: ListFilters): URLSearchParams {
+/**
+ * Writes only values that differ from the defaults, keeping URLs short.
+ * `view` keeps the open saved view's ID, so editing filters does not lose it.
+ */
+export function writeFilters(
+  filters: ListFilters,
+  view?: string | null,
+): URLSearchParams {
   const params = new URLSearchParams();
+  if (view) params.set("view", view);
   if (filters.state !== "open") params.set("state", filters.state);
   if (filters.text) params.set("q", filters.text);
   if (filters.status) params.set("status", filters.status);
@@ -183,4 +191,35 @@ export function toQuery(
       break;
   }
   return query;
+}
+
+/** The list filters as stored in a saved view. */
+export function toViewFilters(filters: ListFilters): ViewFilters {
+  return { ...filters, labels: [...filters.labels] };
+}
+
+/**
+ * The URL for a saved view's filters. Reading stored values through the
+ * same parser as the URL drops anything this build does not understand.
+ */
+export function viewParams(view: ViewFilters, id: string): URLSearchParams {
+  const params = new URLSearchParams({
+    state: view.state,
+    q: view.text,
+    status: view.status,
+    priority: view.priority,
+    project: view.project,
+    due: view.due,
+    labels: view.labels.join(","),
+    match: view.labelMatch,
+    milestone: view.milestone,
+    sort: view.sort,
+    dir: view.direction,
+  });
+  return writeFilters(readFilters(params), id);
+}
+
+/** Whether two filter sets would produce the same URL. */
+export function sameFilters(a: ListFilters, b: ListFilters): boolean {
+  return writeFilters(a).toString() === writeFilters(b).toString();
 }

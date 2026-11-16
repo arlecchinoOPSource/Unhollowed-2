@@ -8,6 +8,7 @@ mod labels;
 mod milestones;
 mod projects;
 mod relationships;
+mod saved_views;
 #[cfg(test)]
 mod test_support;
 
@@ -47,6 +48,11 @@ fn main() {
             issues::set_issue_due_date,
             issues::set_issue_recurrence,
             issues::get_issue_recurrence,
+            saved_views::list_saved_views,
+            saved_views::get_saved_view,
+            saved_views::create_saved_view,
+            saved_views::update_saved_view,
+            saved_views::delete_saved_view,
             labels::list_labels,
             labels::create_label,
             labels::update_label,
