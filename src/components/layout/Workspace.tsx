@@ -1,12 +1,28 @@
 import { Moon, PanelLeft, Search, Sun } from "lucide-react";
-import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { pages } from "../../app/pages";
+import { isTauri } from "../../database/status";
+import { isIssueShortcut } from "../../features/issues/issueKeyboard";
 import { useTheme } from "../../stores/theme";
 
 export function Workspace() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    function capture(event: KeyboardEvent) {
+      if (!isIssueShortcut(event, "KeyN")) return;
+      event.preventDefault();
+      const input = document.getElementById("new-issue-title");
+      if (input) input.focus();
+      else void navigate("/issues", { state: { focusNewIssue: true } });
+    }
+    window.addEventListener("keydown", capture);
+    return () => window.removeEventListener("keydown", capture);
+  }, [navigate]);
   const { theme, toggleTheme } = useTheme();
   const title =
     pages.find(

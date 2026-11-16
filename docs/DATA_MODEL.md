@@ -97,6 +97,14 @@ Invalid values return `invalid_filter`. Every query is scoped to the active work
 - **Counts and progress.** `list_milestones` derives `openCount` (open issues), `completedCount` (done), and `canceledCount` (canceled) from the milestone's issues when it is read, so counts follow completion, reopening, reassignment, and project moves without stored totals. Progress is completed out of open plus completed. Canceled issues are shown separately and do not count. A milestone with no open or completed issues shows "No issues yet" instead of a percentage.
 - `IssueFilter.milestoneIds` and `noMilestone` filter issues by milestone, in the same way as `projectIds` and `inbox`.
 
+## Missions and objectives
+
+Missions are broad project goals. Objectives describe measurable outcomes and may reference one mission in the same project. Milestones remain independent checkpoints. Objectives may link to multiple issues in their project, and issues may contribute to multiple objectives. Moving an issue to another project or to the Inbox clears its objective links. Progress counts Done issues against all linked issues except Canceled. Blocked issues count toward the total and empty objectives display no progress bar.
+
+## Issue relationships
+
+Parent links run from child to parent, with at most one parent per issue. Blocking links run from blocker to blocked issue. Related links are symmetric and stored once in stable UUID order. SQLite foreign keys enforce workspace membership. Writes validate cycles within each directed graph while holding SQLite's writer lock. Closing an issue preserves its links and status remains visible on linked records. Only Done children count as complete. Closing a parent has no effect on its children.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -116,3 +124,5 @@ Invalid values return `invalid_filter`. Every query is scoped to the active work
 | 0006      | `issues.search_text` for literal, case-insensitive issue search                |
 | 0007      | `labels` and `issue_labels`, with unique links and archived-label rules        |
 | 0008      | `milestones` and `issues.milestone_id`, with project compatibility triggers    |
+| 0009      | Project missions, objectives, and objective-to-issue links                     |
+| 0010      | Workspace-scoped issue relationships                                           |

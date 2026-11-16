@@ -162,6 +162,11 @@ function ProjectDetails({ id }: { id: string }) {
               <h2>Milestones</h2>
               <p>Plan checkpoints and track progress for this project.</p>
             </Link>
+            <Link className="project-card" to={`/projects/${id}/goals`}>
+              <Flag size={19} aria-hidden="true" />
+              <h2>Missions &amp; objectives</h2>
+              <p>Define project goals and connect them to issues.</p>
+            </Link>
             {sections.map(({ title, icon: Icon }) => (
               <section className="project-card" key={title}>
                 <Icon size={19} aria-hidden="true" />

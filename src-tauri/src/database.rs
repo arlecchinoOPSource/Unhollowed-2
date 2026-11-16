@@ -57,6 +57,18 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0008_milestones.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "Create project missions and objectives",
+            sql: include_str!("../migrations/0009_project_goals.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "Create issue relationships",
+            sql: include_str!("../migrations/0010_issue_relationships.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

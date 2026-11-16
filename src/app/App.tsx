@@ -1,3 +1,4 @@
+import { ProjectGoalsPage } from "../features/goals/ProjectGoals";
 import { Link, Route, Routes } from "react-router";
 import { Workspace } from "../components/layout/Workspace";
 import { Documents } from "../features/documents/Documents";
@@ -19,6 +20,7 @@ export function App() {
         <Route path="/documents" element={<Documents />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
+        <Route path="/projects/:id/goals" element={<ProjectGoalsPage />} />
         <Route path="/projects/:id/issues" element={<ProjectIssues />} />
         <Route path="/issues" element={<Issues />} />
         <Route path="/issues/labels" element={<Labels />} />

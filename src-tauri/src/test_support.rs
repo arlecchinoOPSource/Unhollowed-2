@@ -91,3 +91,31 @@ impl Drop for TempDatabase {
         self.remove();
     }
 }
+
+pub async fn add_project(pool: &SqlitePool, workspace: &str, name: &str) -> String {
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query("INSERT INTO projects (id, workspace_id, name) VALUES (?, ?, ?)")
+        .bind(&id)
+        .bind(workspace)
+        .bind(name)
+        .execute(pool)
+        .await
+        .unwrap();
+    id
+}
+
+pub async fn add_issue(pool: &SqlitePool, workspace: &str, project: Option<&str>) -> String {
+    crate::issues::create(
+        pool,
+        workspace,
+        crate::issues::IssueFields {
+            title: "Sample issue".into(),
+            ..Default::default()
+        },
+        project,
+    )
+    .await
+    .unwrap()
+    .summary
+    .id
+}

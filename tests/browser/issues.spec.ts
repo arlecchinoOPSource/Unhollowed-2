@@ -5,6 +5,8 @@ import type {
   IssueQuery,
   IssueStatus,
 } from "../../src/database/issues";
+import type { ProjectGoals } from "../../src/database/goals";
+import type { RelationKind } from "../../src/database/relationships";
 import type { Label, LabelInput } from "../../src/database/labels";
 import type { Milestone, MilestoneInput } from "../../src/database/milestones";
 import type { Project } from "../../src/database/projects";
@@ -46,6 +48,8 @@ test.beforeEach(async ({ page }) => {
     const issues: Issue[] = [];
     const labels: Label[] = [];
     const milestones: Milestone[] = [];
+    const goals: ProjectGoals = { missions: [], objectives: [], links: [] };
+    const relationships: { child: string; parent: string }[] = [];
     let seeded = false;
     const seed = () =>
       (
@@ -115,6 +119,8 @@ test.beforeEach(async ({ page }) => {
             query?: IssueQuery;
             labelIds?: string[];
             milestoneId?: string | null;
+            otherId?: string;
+            kind?: RelationKind;
           } = {},
         ) => {
           if (!seeded) {
@@ -130,6 +136,82 @@ test.beforeEach(async ({ page }) => {
               if (!project) throw { code: "not_found" };
               return project;
             }
+            case "list_project_goals":
+              return structuredClone({
+                ...goals,
+                objectives: goals.objectives.map((objective) => {
+                  const linked = goals.links
+                    .filter(([id]) => id === objective.id)
+                    .map(([, id]) => find(id));
+                  return {
+                    ...objective,
+                    total: linked.filter((issue) => issue.status !== "canceled")
+                      .length,
+                    completed: linked.filter((issue) => issue.status === "done")
+                      .length,
+                  };
+                }),
+              });
+            case "save_project_mission": {
+              const input = args.input as unknown as {
+                title: string;
+                description: string;
+              };
+              goals.missions.push({ id: "sample-mission", ...input });
+              return;
+            }
+            case "save_project_objective": {
+              const { issueIds, ...input } = args.input as unknown as {
+                title: string;
+                description: string;
+                missionId: string | null;
+                issueIds: string[];
+              };
+              goals.objectives.push({
+                id: "sample-objective",
+                ...input,
+                completed: 0,
+                total: 0,
+              });
+              goals.links.push(
+                ...issueIds.map((id): [string, string] => [
+                  "sample-objective",
+                  id,
+                ]),
+              );
+              return;
+            }
+            case "list_issues":
+              return structuredClone(
+                issues.filter(
+                  (issue) =>
+                    !args.projectId || issue.projectId === args.projectId,
+                ),
+              );
+            case "list_issue_relationships":
+              return relationships
+                .filter(
+                  (edge) => edge.child === args.id || edge.parent === args.id,
+                )
+                .map((edge) => {
+                  const isChild = edge.child === args.id;
+                  const { id, title, number, status } = find(
+                    isChild ? edge.parent : edge.child,
+                  );
+                  return {
+                    id,
+                    title,
+                    number,
+                    status,
+                    kind: isChild ? "parent" : "child",
+                  };
+                });
+            case "add_issue_relationship":
+              if (args.kind === "child" && args.id && args.otherId) {
+                relationships.push({ parent: args.id, child: args.otherId });
+                return;
+              }
+              throw { code: "cycle" };
             case "query_issues": {
               // Mirrors the backend's filter, sort, and paging rules.
               const q = args.query!;
@@ -1035,4 +1117,122 @@ test("plans milestones, links compatible issues, and updates progress", async ({
   await expect(
     page.getByRole("list", { name: "Closed milestones" }).getByRole("heading"),
   ).toHaveText(["Opening night"]);
+});
+
+test("creates project goals with optional issue and mission links", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedIssues: [
+        { title: "Publish brief", projectId: "project-1", status: "done" },
+      ],
+    }),
+  );
+  await page.goto("/projects/project-1");
+  await page.getByRole("link", { name: /Missions & objectives/ }).click();
+  await expect(page.getByText("No objectives yet.")).toBeVisible();
+  await page.getByRole("button", { name: "New mission" }).click();
+  await page.getByLabel("Title").fill("Launch studio");
+  await page.getByRole("button", { name: "Save mission" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Launch studio" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "New objective" }).click();
+  await page.getByLabel("Title").fill("Publish the launch brief");
+  await page
+    .getByRole("combobox", { name: "Mission", exact: true })
+    .selectOption("sample-mission");
+  await page.getByRole("checkbox", { name: /Publish brief/ }).check();
+  await page.getByRole("button", { name: "Save objective" }).click();
+  await expect(page.getByText("1 of 1 issues done")).toBeVisible();
+  await page.getByRole("link", { name: /ISS-1 Publish brief/ }).click();
+  await expect(page.getByLabel("Issue title")).toHaveValue("Publish brief");
+  await page.getByRole("link", { name: "Missions & objectives" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Publish the launch brief" }),
+  ).toBeVisible();
+});
+
+test("shows child progress and navigates from a closed sub-issue to its parent", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedIssues: [
+        { title: "Plan launch" },
+        { title: "Publish brief", status: "done" },
+      ],
+    }),
+  );
+  await page.goto("/issues/seed-1");
+  await page.getByRole("button", { name: "Add relationship" }).click();
+  const relationships = page.getByRole("region", { name: "Relationships" });
+  await relationships.getByLabel("Relationship").selectOption("child");
+  await relationships
+    .getByRole("combobox", { name: "Issue", exact: true })
+    .selectOption("seed-2");
+  await relationships
+    .getByRole("button", { name: "Save relationship" })
+    .click();
+  await expect(relationships.getByText("1 of 1 sub-issues done")).toBeVisible();
+  await relationships
+    .getByRole("link", { name: "ISS-2 Publish brief" })
+    .click();
+  await expect(page.getByLabel("Issue title")).toHaveValue("Publish brief");
+  await relationships.getByRole("link", { name: "ISS-1 Plan launch" }).click();
+  await expect(page.getByLabel("Issue title")).toHaveValue("Plan launch");
+});
+
+test("supports keyboard capture, search, issue navigation and completion", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.keyboard.press("Alt+Shift+KeyN");
+  const capture = page.getByLabel("New issue");
+  await expect(capture).toBeFocused();
+  await createIssue(page, "First keyboard issue");
+  await createIssue(page, "Second keyboard issue");
+  await capture.press("Alt+Shift+KeyF");
+  await expect(capture).toBeFocused();
+  await capture.press("Escape");
+  await expect(page.getByRole("button", { name: /Open 2/ })).toBeFocused();
+  await page.keyboard.press("Alt+Shift+KeyF");
+  const search = page.getByLabel("Search issues");
+  await expect(search).toBeFocused();
+  await search.fill("keyboard issue");
+  await search.press("Escape");
+  await expect(page.getByRole("button", { name: /Open 2/ })).toBeFocused();
+  const first = page.getByRole("link", { name: "First keyboard issue" });
+  const second = page.getByRole("link", { name: "Second keyboard issue" });
+  await second.focus();
+  await second.press("ArrowDown");
+  await expect(first).toBeFocused();
+  await first.press("Enter");
+  await expect(page.getByLabel("Issue title")).toHaveValue(
+    "First keyboard issue",
+  );
+  const complete = page.getByRole("button", { name: "Mark complete" });
+  await complete.focus();
+  await complete.press("Space");
+  await expect(
+    page.getByRole("button", { name: "Reopen issue" }),
+  ).toBeFocused();
+});
+
+test("leaves modal keyboard handling and focus restoration to the dialog", async ({
+  page,
+}) => {
+  await page.goto("/projects");
+  const create = page.getByRole("button", { name: "Create project" });
+  await create.click();
+  const modal = page.getByRole("dialog");
+  const name = modal.getByRole("textbox", { name: "Project name" });
+  await expect(name).toBeFocused();
+  await name.press("Alt+Shift+KeyN");
+  await expect(modal).toBeVisible();
+  await expect(page).toHaveURL(/\/projects$/);
+  await name.press("Escape");
+  await expect(modal).toBeHidden();
+  await expect(create).toBeFocused();
 });
