@@ -1,12 +1,17 @@
-use crate::database::DatabaseError;
+use crate::database::{active_workspace, pool, DatabaseError};
 use crate::documents::{is_rich_text, EMPTY_CONTENT};
 use crate::projects::valid_date;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqliteExecutor, SqlitePool};
+use tauri::State;
+use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
 const MAX_TITLE_CHARS: usize = 200;
 const PRIORITIES: [&str; 5] = ["none", "low", "medium", "high", "urgent"];
+/// Done and canceled are closed. The others are open.
+const STATUSES: [&str; 5] = ["todo", "in_progress", "blocked", "done", "canceled"];
+const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
 /// The list form of an issue. It leaves out the description, which can be
 /// large rich text.
@@ -226,6 +231,195 @@ pub async fn create(
     .map_err(storage_failed)?;
     transaction.commit().await.map_err(storage_failed)?;
     Ok(issue)
+}
+
+/// Replaces the editable fields. Status and project are left unchanged.
+pub async fn update(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+    fields: IssueFields,
+) -> Result<Issue, IssueError> {
+    let fields = fields.validate()?;
+    sqlx::query_as(&format!(
+        "UPDATE issues SET title = ?, description = ?, priority = ?, start_date = ?, due_date = ?,
+             updated_at = {NOW}
+         WHERE id = ? AND workspace_id = ? RETURNING {FIELDS}"
+    ))
+    .bind(fields.title)
+    .bind(fields.description)
+    .bind(fields.priority)
+    .bind(fields.start_date)
+    .bind(fields.due_date)
+    .bind(id)
+    .bind(workspace)
+    .fetch_optional(pool)
+    .await
+    .map_err(storage_failed)?
+    .ok_or(IssueError::NotFound)
+}
+
+/// Moves an issue to any status.
+///
+/// Entering done records `completed_at` once. Any other status clears it.
+/// Repeating the current status changes nothing, so retries keep timestamps.
+/// SQLite evaluates every right-hand side against the row before the update.
+pub async fn set_status(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+    status: &str,
+) -> Result<Issue, IssueError> {
+    if !STATUSES.contains(&status) {
+        return Err(IssueError::InvalidStatus);
+    }
+    sqlx::query_as(&format!(
+        "UPDATE issues SET
+             status = ?1,
+             completed_at = CASE WHEN ?1 = 'done' THEN coalesce(completed_at, {NOW}) END,
+             updated_at = CASE WHEN status = ?1 THEN updated_at ELSE {NOW} END
+         WHERE id = ?2 AND workspace_id = ?3 RETURNING {FIELDS}"
+    ))
+    .bind(status)
+    .bind(id)
+    .bind(workspace)
+    .fetch_optional(pool)
+    .await
+    .map_err(storage_failed)?
+    .ok_or(IssueError::NotFound)
+}
+
+/// Returns a done or canceled issue to To Do. An open issue keeps its status.
+pub async fn reopen(pool: &SqlitePool, workspace: &str, id: &str) -> Result<Issue, IssueError> {
+    sqlx::query_as(&format!(
+        "UPDATE issues SET
+             status = CASE WHEN closed THEN 'todo' ELSE status END,
+             completed_at = NULL,
+             updated_at = CASE WHEN closed THEN {NOW} ELSE updated_at END
+         WHERE id = ? AND workspace_id = ? RETURNING {FIELDS}"
+    ))
+    .bind(id)
+    .bind(workspace)
+    .fetch_optional(pool)
+    .await
+    .map_err(storage_failed)?
+    .ok_or(IssueError::NotFound)
+}
+
+/// Assigns the issue to a project in the same workspace, or to the Inbox when
+/// `project` is `None`. The issue keeps its ID and number.
+pub async fn set_project(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+    project: Option<&str>,
+) -> Result<Issue, IssueError> {
+    if let Some(project) = project {
+        ensure_project(pool, workspace, project).await?;
+    }
+    sqlx::query_as(&format!(
+        "UPDATE issues SET
+             project_id = ?1,
+             updated_at = CASE WHEN project_id IS ?1 THEN updated_at ELSE {NOW} END
+         WHERE id = ?2 AND workspace_id = ?3 RETURNING {FIELDS}"
+    ))
+    .bind(project)
+    .bind(id)
+    .bind(workspace)
+    .fetch_optional(pool)
+    .await
+    .map_err(storage_failed)?
+    .ok_or(IssueError::NotFound)
+}
+
+/// The open database and the active workspace that every command is scoped to.
+/// The webview never supplies a workspace ID.
+async fn scope(instances: &DbInstances) -> Result<(SqlitePool, String), IssueError> {
+    let pool = pool(instances).await?;
+    let workspace = active_workspace(&pool).await?;
+    Ok((pool, workspace.id))
+}
+
+#[tauri::command]
+pub async fn list_issues(
+    instances: State<'_, DbInstances>,
+    project_id: Option<String>,
+) -> Result<Vec<IssueSummary>, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    list(&pool, &workspace, project_id.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn get_issue(instances: State<'_, DbInstances>, id: String) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    get(&pool, &workspace, &id).await
+}
+
+#[tauri::command]
+pub async fn create_issue(
+    instances: State<'_, DbInstances>,
+    input: IssueFields,
+    project_id: Option<String>,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    create(&pool, &workspace, input, project_id.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn update_issue(
+    instances: State<'_, DbInstances>,
+    id: String,
+    input: IssueFields,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    update(&pool, &workspace, &id, input).await
+}
+
+#[tauri::command]
+pub async fn change_issue_status(
+    instances: State<'_, DbInstances>,
+    id: String,
+    status: String,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_status(&pool, &workspace, &id, &status).await
+}
+
+#[tauri::command]
+pub async fn complete_issue(
+    instances: State<'_, DbInstances>,
+    id: String,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_status(&pool, &workspace, &id, "done").await
+}
+
+#[tauri::command]
+pub async fn cancel_issue(
+    instances: State<'_, DbInstances>,
+    id: String,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_status(&pool, &workspace, &id, "canceled").await
+}
+
+#[tauri::command]
+pub async fn reopen_issue(
+    instances: State<'_, DbInstances>,
+    id: String,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    reopen(&pool, &workspace, &id).await
+}
+
+#[tauri::command]
+pub async fn set_issue_project(
+    instances: State<'_, DbInstances>,
+    id: String,
+    project_id: Option<String>,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_project(&pool, &workspace, &id, project_id.as_deref()).await
 }
 
 #[cfg(test)]
