@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added typed issue commands to create, list, edit, complete, cancel, reopen, and move issues between projects and the Inbox, with idempotent lifecycle timestamps.
 - Added the issue data model: migration 5 with per-workspace ISS numbers allocated in a transaction, optional same-workspace projects, Tiptap descriptions, and a derived closed state.
 - Added workspace-scoped projects with creation, editing, search, status filters, and archiving.
 

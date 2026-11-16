@@ -2,8 +2,6 @@
 
 mod database;
 mod documents;
-// The IPC commands that use this module arrive with U2-007.
-#[allow(dead_code)]
 mod issues;
 mod projects;
 #[cfg(test)]
@@ -23,7 +21,16 @@ fn main() {
             projects::create_project,
             projects::update_project,
             projects::change_project_status,
-            projects::archive_project
+            projects::archive_project,
+            issues::list_issues,
+            issues::get_issue,
+            issues::create_issue,
+            issues::update_issue,
+            issues::change_issue_status,
+            issues::complete_issue,
+            issues::cancel_issue,
+            issues::reopen_issue,
+            issues::set_issue_project
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Unhollowed 2");
