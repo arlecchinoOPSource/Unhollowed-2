@@ -43,6 +43,18 @@ Documents are read and written only through the `list_documents`, `get_document`
 
 Project commands resolve the active workspace in Rust. Reads and changes match the project ID and workspace ID together. Future feature records can reference the stable project ID under the ownership rules above.
 
+## Issues
+
+`issues` stores a workspace-owned UUID, a readable `number`, an optional `project_id`, a title of 1 to 200 characters, a Tiptap JSON `description`, status, priority, optional `start_date` and `due_date` in `YYYY-MM-DD` form, `completed_at`, and UTC creation and update timestamps. The interface shows the number as `ISS-<number>`.
+
+- **Numbers.** `issue_counters` holds the last number issued per workspace. `create` in `src-tauri/src/issues.rs` increments it and inserts the issue in one transaction, so concurrent creates get distinct numbers and a failed create does not use one. Numbers are unique per workspace, only increase, and are never reused after an issue moves to another project or is deleted.
+- **Statuses.** `todo`, `in_progress`, `blocked`, `done`, and `canceled`. The `closed` column is generated from status and is true for done and canceled issues. `completed_at` may be set only while the status is done.
+- **Priorities.** `none`, `low`, `medium`, `high`, and `urgent`.
+- **Projects.** An issue with no project is in the workspace Inbox. The project must belong to the issue's workspace. Rust checks this in each write, and triggers reject cross-workspace links. Deleting a project moves its issues to the Inbox (`ON DELETE SET NULL`) without changing their IDs or numbers.
+- **Descriptions** follow the document content rules: valid JSON with a `doc` root, up to 5 MB.
+
+Indexes lead with `workspace_id` for workspace and project lists.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -58,3 +70,4 @@ Project commands resolve the active workspace in Rust. Reads and changes match t
 | 0002      | `app_state`, pointing at the Personal workspace for existing and new databases |
 | 0003      | `documents`, owned by a workspace, with Tiptap JSON content                    |
 | 0004      | `projects`, owned by a workspace, with status and optional dates               |
+| 0005      | `issues` and `issue_counters`, with per-workspace numbers and optional project |
