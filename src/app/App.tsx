@@ -2,6 +2,7 @@ import { ProjectGoalsPage } from "../features/goals/ProjectGoals";
 import { Link, Route, Routes } from "react-router";
 import { Workspace } from "../components/layout/Workspace";
 import { Documents } from "../features/documents/Documents";
+import { IssueCalendar } from "../features/calendar/IssueCalendar";
 import { Home } from "../features/home/Home";
 import { TodayPage, UpcomingPage } from "../features/today/TaskViews";
 import { IssueDetail } from "../features/issues/IssueDetail";
@@ -25,6 +26,7 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="/today" element={<TodayPage />} />
         <Route path="/today/upcoming" element={<UpcomingPage />} />
+        <Route path="/calendar" element={<IssueCalendar />} />
         <Route path="/documents" element={<Documents />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
@@ -39,7 +41,13 @@ export function App() {
         {features
           .filter(
             ({ path }) =>
-              !["/today", "/documents", "/projects", "/issues"].includes(path),
+              ![
+                "/today",
+                "/documents",
+                "/projects",
+                "/issues",
+                "/calendar",
+              ].includes(path),
           )
           .map(({ path, title, description }) => (
             <Route
