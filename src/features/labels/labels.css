@@ -90,7 +90,7 @@
   font-weight: 400;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-line);
   border-radius: 8px;
   padding: 8px 10px;
 }

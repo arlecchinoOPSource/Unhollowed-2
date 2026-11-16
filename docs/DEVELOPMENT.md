@@ -9,7 +9,7 @@ npm ci
 npm run desktop
 ```
 
-For the browser-only preview, run `npm run dev`. Use `npx playwright install chromium` once and `npm run test:browser` for browser smoke tests.
+For the browser-only preview, run `npm run dev`. Use `npx playwright install chromium` once and `npm run test:browser` for browser smoke tests. The browser tests include automated accessibility checks in light and dark mode. [Performance and accessibility](PERFORMANCE.md) explains them and the opt-in timing fixtures.
 
 Run these commands from the project root to reproduce Quick CI after installing the platform prerequisites and npm dependencies.
 

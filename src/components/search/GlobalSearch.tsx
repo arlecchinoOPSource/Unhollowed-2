@@ -13,6 +13,8 @@ interface Option {
   label: string;
   detail: string;
   to: string;
+  /** A link to the full list, offered as the group's last option. */
+  more?: boolean;
 }
 
 /**
@@ -112,6 +114,8 @@ export function GlobalSearch() {
     total: number;
     more?: { label: string; to: string };
     options: Option[];
+    /** Matches beyond the cap when the group has no "See all" option. */
+    hidden: number;
   }[] = data
     ? [
         {
@@ -158,7 +162,27 @@ export function GlobalSearch() {
             to: `/issues?state=all&milestone=${milestone.id}`,
           })),
         },
-      ].filter((group) => group.options.length > 0)
+      ]
+        .filter((group) => group.options.length > 0)
+        .map((group) => ({
+          ...group,
+          // "See all" is an option too, so arrow keys reach it and a
+          // listbox holds nothing but options.
+          options:
+            group.more && group.total > group.options.length
+              ? [
+                  ...group.options,
+                  {
+                    id: `more-${group.title}`,
+                    label: group.more.label,
+                    detail: "",
+                    to: group.more.to,
+                    more: true,
+                  },
+                ]
+              : group.options,
+          hidden: group.more ? 0 : group.total - group.options.length,
+        }))
     : [];
   const options = groups.flatMap((group) => group.options);
   const current = options[Math.min(active, options.length - 1)];
@@ -246,18 +270,26 @@ export function GlobalSearch() {
             </p>
             <div id="global-search-results" role="listbox" aria-label="Results">
               {groups.map(
-                ({ title, icon: Icon, total, more, options: items }) => (
+                ({ title, icon: Icon, total, hidden, options: items }) => (
                   <div
                     role="group"
                     aria-labelledby={`global-search-${title}`}
                     key={title}
                   >
+                    {/* Names the group through aria-labelledby. Hidden so
+                        the listbox owns only options. */}
                     <div
                       className="global-search-group"
                       id={`global-search-${title}`}
+                      aria-hidden="true"
                     >
-                      <Icon size={14} aria-hidden="true" /> {title}
+                      <Icon size={14} /> {title}
                       <span className="issue-count">{total}</span>
+                      {hidden > 0 && (
+                        <span className="global-search-detail">
+                          , {hidden} more not shown. Refine the search.
+                        </span>
+                      )}
                     </div>
                     {items.map((option) => (
                       <div
@@ -265,31 +297,22 @@ export function GlobalSearch() {
                         id={option.id}
                         role="option"
                         aria-selected={option === current}
-                        className="global-search-option"
+                        className={
+                          option.more
+                            ? "global-search-option global-search-more"
+                            : "global-search-option"
+                        }
                         onMouseMove={() => setActive(options.indexOf(option))}
                         onClick={() => go(option.to)}
                       >
                         <span>{option.label}</span>
-                        <span className="global-search-detail">
-                          {option.detail}
-                        </span>
+                        {option.detail && (
+                          <span className="global-search-detail">
+                            {option.detail}
+                          </span>
+                        )}
                       </div>
                     ))}
-                    {more && total > items.length && (
-                      <button
-                        type="button"
-                        className="global-search-more"
-                        onClick={() => go(more.to)}
-                      >
-                        {more.label}
-                      </button>
-                    )}
-                    {!more && total > items.length && (
-                      <p className="global-search-detail global-search-more">
-                        {total - items.length} more not shown. Refine the
-                        search.
-                      </p>
-                    )}
                   </div>
                 ),
               )}

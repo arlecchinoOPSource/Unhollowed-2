@@ -6,7 +6,9 @@
   --text: #212121;
   --muted: #58565d;
   --line: #dfdee4;
-  --accent: #5263cf;
+  /* Borders that identify form fields, at least 3:1 on every surface. */
+  --control-line: #85838c;
+  --accent: #4c5ecd;
   --selection: #e8eafd;
   --periwinkle: #7d8dfd;
   --yellow: #fbf1aa;
@@ -23,6 +25,7 @@
   --text: #f7f7f7;
   --muted: #c3bfc5;
   --line: #454248;
+  --control-line: #8c8890;
   --accent: #aab4ff;
   --selection: #393a52;
 }
@@ -48,7 +51,24 @@ button:disabled {
   cursor: default;
   color: var(--muted);
 }
+/* Libraries such as the calendar animate drags. Honor reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* Chrome moves focus into a date field's parts and its picker button, where
+   only :focus-within matches the field, so ring the whole field. */
+input[type="date"]:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -301,7 +321,7 @@ p {
   margin-bottom: 12px;
   padding: 4px 0;
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--control-line);
   background: transparent;
   color: var(--text);
   font: 400 28px/1.2 var(--editorial);
@@ -341,6 +361,11 @@ p {
   outline: none;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+.ProseMirror:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+  border-radius: 4px;
 }
 .ProseMirror p {
   color: var(--text);
