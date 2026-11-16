@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added saved issue views: save list or board filters under a name, open them from the sidebar, update, rename, or delete them, and see when a view refers to a project, label, or milestone that no longer exists. Configurations are versioned, and due rules stay relative. Adds migration 12.
 - Added recurring issues: daily, weekly, and monthly repeats every 1 to 99 units, anchored on the due date with month-end clamping. Completing or canceling an occurrence creates the next one atomically and only once, skipping missed dates. Repeats can be edited and stopped from the issue page. Adds migration 11.
 - Replaced the Calendar placeholder with an issue calendar: a keyboard-navigable month grid of issues by due date, a project filter, drag or typed rescheduling, and creating an issue on a chosen day.
 - Added Today and Upcoming views of open issues by local due date, with overdue issues in Today, date or project grouping, quick completion, rescheduling through `set_issue_due_date`, and refresh at local midnight or when the app resumes.

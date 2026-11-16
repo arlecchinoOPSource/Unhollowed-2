@@ -9,6 +9,7 @@ import type {
 import type { ProjectGoals } from "../../src/database/goals";
 import type { RelationKind } from "../../src/database/relationships";
 import type { Label, LabelInput } from "../../src/database/labels";
+import type { SavedView, ViewConfig } from "../../src/database/savedViews";
 import type { Milestone, MilestoneInput } from "../../src/database/milestones";
 import type { Project } from "../../src/database/projects";
 
@@ -48,6 +49,8 @@ test.beforeEach(async ({ page }) => {
     // first IPC call.
     const issues: Issue[] = [];
     const labels: Label[] = [];
+    // Saved views, optionally seeded through window.__seedViews.
+    const views: SavedView[] = [];
     const milestones: Milestone[] = [];
     const goals: ProjectGoals = { missions: [], objectives: [], links: [] };
     const relationships: { child: string; parent: string }[] = [];
@@ -205,6 +208,10 @@ test.beforeEach(async ({ page }) => {
           if (!seeded) {
             seeded = true;
             issues.push(...seed());
+            views.push(
+              ...((window as unknown as { __seedViews?: SavedView[] })
+                .__seedViews ?? []),
+            );
           }
           const hold = held.get(command);
           if (hold) {
@@ -366,6 +373,45 @@ test.beforeEach(async ({ page }) => {
               });
               await delayedList;
               return snapshot;
+            }
+            case "list_saved_views":
+              return structuredClone(
+                [...views].sort((a, b) => a.name.localeCompare(b.name)),
+              );
+            case "create_saved_view":
+            case "update_saved_view": {
+              const { name, config } = args as unknown as {
+                name: string;
+                config: ViewConfig;
+              };
+              const trimmed = name.trim();
+              if (
+                views.some(
+                  (view) =>
+                    view.id !== args.id &&
+                    view.name.toLowerCase() === trimmed.toLowerCase(),
+                )
+              )
+                throw { code: "duplicate_name" };
+              const existing = views.find((view) => view.id === args.id);
+              if (command === "update_saved_view" && !existing)
+                throw { code: "not_found" };
+              const view: SavedView = existing ?? {
+                id: `view-${views.length + 1}`,
+                name: trimmed,
+                config,
+                createdAt: now(),
+                updatedAt: now(),
+              };
+              Object.assign(view, { name: trimmed, config, updatedAt: now() });
+              if (!existing) views.push(view);
+              return structuredClone(view);
+            }
+            case "delete_saved_view": {
+              const index = views.findIndex((view) => view.id === args.id);
+              if (index < 0) throw { code: "not_found" };
+              views.splice(index, 1);
+              return null;
             }
             case "list_labels":
               return structuredClone(
@@ -1917,5 +1963,135 @@ test.describe("Recurring issues", () => {
     await expect(
       page.getByRole("list", { name: "All issues" }).getByRole("listitem"),
     ).toHaveCount(3);
+  });
+});
+
+test.describe("Saved views", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("saves, opens from the sidebar, updates, renames, and deletes a view", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
+    await seedIssues(page, [
+      { title: "Late and urgent", priority: "urgent", dueDate: "2026-11-10" },
+      { title: "Late but low", priority: "low", dueDate: "2026-11-09" },
+      { title: "Not due", priority: "urgent" },
+    ]);
+    await page.goto("/issues?priority=urgent&due=overdue");
+    const titles = page
+      .getByRole("list", { name: "Open issues" })
+      .getByRole("link", { name: /^(Late and urgent|Late but low|Not due)$/ });
+    await expect(titles).toHaveText(["Late and urgent"]);
+
+    await page.getByRole("button", { name: "Save view" }).click();
+    await expect(page.getByLabel("View name")).toBeFocused();
+    await page.getByLabel("View name").fill("Urgent overdue");
+    await page.getByLabel("View name").press("Enter");
+    await expect(page.getByText("Saved view Urgent overdue.")).toBeVisible();
+    await expect(page).toHaveURL(/view=view-1/);
+    const sidebar = page.getByRole("region", { name: "Saved views" });
+    const link = sidebar.getByRole("link", { name: "Urgent overdue" });
+    await expect(link).toHaveAttribute("aria-current", "page");
+
+    // Opening the view restores its filters, with the due rule still relative.
+    // Navigate inside the app: a reload would reset the in-memory IPC state.
+    await page
+      .getByRole("navigation", { name: "Workspace" })
+      .getByRole("link", { name: "Home" })
+      .click();
+    await page
+      .getByRole("region", { name: "Saved views" })
+      .getByRole("link", { name: "Urgent overdue" })
+      .click();
+    await expect(page).toHaveURL(/due=overdue/);
+    await expect(titles).toHaveText(["Late and urgent"]);
+    await expect(page.getByText("View: Urgent overdue")).toBeVisible();
+
+    // Edit the filters and save them back.
+    const update = page.getByRole("button", { name: "Update view" });
+    await expect(update).toHaveAttribute("aria-disabled", "true");
+    await page.getByRole("combobox", { name: /^Priority/ }).selectOption("");
+    await expect(page.getByText("(changed)")).toBeVisible();
+    await expect(titles).toHaveText(["Late but low", "Late and urgent"]);
+    await update.click();
+    await expect(page.getByText("Updated view Urgent overdue.")).toBeVisible();
+    await expect(page.getByText("(changed)")).toHaveCount(0);
+
+    // Rename, then delete.
+    await page.getByRole("button", { name: "Rename" }).click();
+    await page.getByLabel("New view name").fill("Overdue");
+    await page.getByRole("button", { name: "Rename" }).click();
+    await expect(page.getByText("Renamed the view to Overdue.")).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Overdue" })).toBeVisible();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(
+      page.getByText("Delete Overdue? This removes only the saved view"),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Delete view" }).click();
+    await expect(page.getByText("Deleted view Overdue.")).toBeVisible();
+    await expect(sidebar).toHaveCount(0);
+    await expect(page).not.toHaveURL(/view=/);
+    // The issues are untouched.
+    await expect(titles).toHaveText(["Late but low", "Late and urgent"]);
+  });
+
+  test("reports references that no longer exist and can drop them", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      Object.assign(window, {
+        __seedViews: [
+          {
+            id: "view-stale",
+            name: "Stale view",
+            createdAt: "2026-11-01T00:00:00Z",
+            updatedAt: "2026-11-01T00:00:00Z",
+            config: {
+              version: 1,
+              view: "board",
+              filters: {
+                state: "",
+                text: "",
+                status: "",
+                priority: "",
+                project: "project-gone",
+                due: "",
+                labels: ["label-gone"],
+                labelMatch: "",
+                milestone: "",
+                sort: "",
+                direction: "",
+              },
+            },
+          },
+        ],
+      });
+    });
+    await seedIssues(page, [{ title: "Visible issue" }]);
+    await page.goto("/");
+    await page
+      .getByRole("region", { name: "Saved views" })
+      .getByRole("link", { name: "Stale view" })
+      .click();
+    await expect(page).toHaveURL(/\/issues\/board\?/);
+    await expect(page.getByRole("alert")).toContainText(
+      "This view refers to a project and a label that are no longer available",
+    );
+    await page
+      .getByRole("button", { name: "Remove unavailable filters" })
+      .click();
+    await expect(
+      page.getByText(
+        "Removed the unavailable filters. Update the view to keep this.",
+      ),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/view=view-stale/);
+    await expect(
+      page.getByRole("link", { name: "Visible issue" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Update view" }).click();
+    await expect(page.getByText("Updated view Stale view.")).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
   });
 });

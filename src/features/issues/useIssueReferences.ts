@@ -11,6 +11,8 @@ export function useIssueReferences(enabled: boolean) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
+  // True once all three loaded, so callers can tell "missing" from "loading".
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!enabled) return;
@@ -20,13 +22,19 @@ export function useIssueReferences(enabled: boolean) {
       (value: T) => {
         if (current) set(value);
       };
-    listProjects().then(keep(setProjects), () => undefined);
-    listLabels().then(keep(setLabels), () => undefined);
-    listMilestones().then(keep(setMilestones), () => undefined);
+    const all = [
+      listProjects().then(keep(setProjects)),
+      listLabels().then(keep(setLabels)),
+      listMilestones().then(keep(setMilestones)),
+    ];
+    Promise.all(all).then(
+      () => keep(setLoaded)(true),
+      () => undefined,
+    );
     return () => {
       current = false;
     };
   }, [enabled]);
 
-  return { projects, labels, milestones };
+  return { projects, labels, milestones, loaded };
 }

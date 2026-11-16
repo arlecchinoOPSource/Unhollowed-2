@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { pages } from "../../app/pages";
 import { isTauri } from "../../database/status";
 import { isIssueShortcut } from "../../features/issues/issueKeyboard";
+import { SidebarViews } from "../../features/views/SidebarViews";
 import { useTheme } from "../../stores/theme";
 
 export function Workspace() {
@@ -47,6 +48,7 @@ export function Workspace() {
             </NavLink>
           ))}
         </nav>
+        <SidebarViews />
       </aside>
       <div className="workspace-body">
         <header>

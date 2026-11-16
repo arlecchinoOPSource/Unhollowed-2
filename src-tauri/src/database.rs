@@ -75,6 +75,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0011_recurring_issues.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "Create saved issue views",
+            sql: include_str!("../migrations/0012_saved_views.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
