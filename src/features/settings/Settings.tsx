@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { isTauri, readDatabaseStatus } from "../../database/status";
+import { DataSettings } from "./DataSettings";
 
 export function Settings() {
   const desktop = isTauri();
@@ -38,6 +39,7 @@ export function Settings() {
         )}
         <p role="status">{message}</p>
       </section>
+      {desktop && <DataSettings />}
     </>
   );
 }

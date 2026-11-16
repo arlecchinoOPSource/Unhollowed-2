@@ -31,6 +31,7 @@ import { LabelBadges } from "../labels/LabelParts";
 import { PriorityBadge, RepeatMark, StatusBadge } from "./IssueBadges";
 import { SavedViewBar } from "../views/SavedViewBar";
 import { IssueFilterBar } from "./IssueFilterBar";
+import { ExportCsvButton } from "./ExportCsvButton";
 import { useIssueReferences } from "./useIssueReferences";
 import { isIssueShortcut } from "./issueKeyboard";
 import "./issues.css";
@@ -385,23 +386,26 @@ export function IssueList({ projectId }: { projectId?: string }) {
         onSearchKeyDown={leaveField}
       />
 
-      <div
-        ref={filterGroup}
-        className="issue-filters"
-        role="group"
-        aria-label="Show issues"
-      >
-        {(Object.keys(states) as State[]).map((value) => (
-          <button
-            type="button"
-            key={value}
-            aria-pressed={filters.state === value}
-            onClick={() => update({ state: value })}
-          >
-            {states[value]}
-            {counts && <span className="issue-count">{counts[value]}</span>}
-          </button>
-        ))}
+      <div className="issue-list-tools">
+        <div
+          ref={filterGroup}
+          className="issue-filters"
+          role="group"
+          aria-label="Show issues"
+        >
+          {(Object.keys(states) as State[]).map((value) => (
+            <button
+              type="button"
+              key={value}
+              aria-pressed={filters.state === value}
+              onClick={() => update({ state: value })}
+            >
+              {states[value]}
+              {counts && <span className="issue-count">{counts[value]}</span>}
+            </button>
+          ))}
+        </div>
+        {desktop && <ExportCsvButton query={query} />}
       </div>
       {loadError && (
         <div role="alert">

@@ -8,6 +8,7 @@ mod issues;
 mod labels;
 mod milestones;
 mod overview;
+mod portability;
 mod projects;
 mod relationships;
 mod saved_views;
@@ -18,6 +19,9 @@ mod test_support;
 fn main() {
     tauri::Builder::default()
         .plugin(database::plugin())
+        // Used only from Rust to ask where to save exports. The webview has no
+        // dialog permissions.
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             database::database_status,
             relationships::list_issue_relationships,
@@ -69,6 +73,10 @@ fn main() {
             document_links::get_document_usage,
             overview::get_project_overview,
             search::search_workspace,
+            portability::export_project_data,
+            portability::export_issues_csv,
+            portability::preview_import,
+            portability::import_project_data,
             labels::list_labels,
             labels::create_label,
             labels::update_label,
