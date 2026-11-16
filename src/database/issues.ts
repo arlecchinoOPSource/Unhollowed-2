@@ -48,6 +48,8 @@ export interface IssueSummary {
   closed: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Label IDs, including archived labels the issue already had. */
+  labelIds: string[];
 }
 
 export interface Issue extends IssueSummary {
@@ -91,6 +93,10 @@ export interface IssueFilter {
   dueAfter?: string;
   dueBefore?: string;
   undated?: "include" | "exclude" | "only";
+  /** Issues with these labels. Archived labels still match. */
+  labelIds?: string[];
+  /** `any` (default) matches one of the labels, `all` every label. */
+  labelMatch?: "any" | "all";
 }
 
 export type IssueSortField =
@@ -160,6 +166,11 @@ export function setIssueProject(
   return write(() => invoke("set_issue_project", { id, projectId }));
 }
 
+/** Replaces the issue's labels. Archived labels can stay but not be added. */
+export function setIssueLabels(id: string, labelIds: string[]): Promise<Issue> {
+  return write(() => invoke("set_issue_labels", { id, labelIds }));
+}
+
 export function issueErrorCode(error: unknown): string | null {
   return typeof error === "object" &&
     error !== null &&
@@ -187,6 +198,10 @@ export function issueError(error: unknown): string {
       return "The due date must be on or after the start date.";
     case "invalid_project":
       return "That project is unavailable in the current workspace.";
+    case "invalid_label":
+      return "That label is unavailable in the current workspace.";
+    case "label_archived":
+      return "Archived labels cannot be added. Restore the label first.";
     case "invalid_filter":
       return "These filters are not supported. Reset them and try again.";
     default:

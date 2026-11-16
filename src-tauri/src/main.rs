@@ -3,6 +3,7 @@
 mod database;
 mod documents;
 mod issues;
+mod labels;
 mod projects;
 #[cfg(test)]
 mod test_support;
@@ -31,7 +32,13 @@ fn main() {
             issues::complete_issue,
             issues::cancel_issue,
             issues::reopen_issue,
-            issues::set_issue_project
+            issues::set_issue_project,
+            issues::set_issue_labels,
+            labels::list_labels,
+            labels::create_label,
+            labels::update_label,
+            labels::archive_label,
+            labels::restore_label
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Unhollowed 2");

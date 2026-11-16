@@ -41,6 +41,9 @@ export interface ListFilters {
   /** A project ID, "inbox", or "" for any project. */
   project: string;
   due: DuePreset | "";
+  /** Label IDs. Archived labels can be chosen to find historical issues. */
+  labels: string[];
+  labelMatch: "any" | "all";
   sort: IssueSortField;
   direction: "asc" | "desc";
 }
@@ -62,6 +65,8 @@ export function readFilters(params: URLSearchParams): ListFilters {
     priority: pick(params.get("priority"), issuePriorities),
     project: params.get("project") ?? "",
     due: pick(params.get("due"), duePresets),
+    labels: (params.get("labels") ?? "").split(",").filter(Boolean),
+    labelMatch: params.get("match") === "all" ? "all" : "any",
     sort,
     direction:
       direction === "asc" || direction === "desc"
@@ -79,6 +84,8 @@ export function writeFilters(filters: ListFilters): URLSearchParams {
   if (filters.priority) params.set("priority", filters.priority);
   if (filters.project) params.set("project", filters.project);
   if (filters.due) params.set("due", filters.due);
+  if (filters.labels.length > 0) params.set("labels", filters.labels.join(","));
+  if (filters.labelMatch === "all") params.set("match", "all");
   if (filters.sort !== "updated") params.set("sort", filters.sort);
   if (filters.direction !== defaultDirection(filters.sort))
     params.set("dir", filters.direction);
@@ -94,6 +101,8 @@ export function resetFilters(filters: ListFilters): ListFilters {
     priority: "",
     project: "",
     due: "",
+    labels: [],
+    labelMatch: "any",
   };
 }
 
@@ -103,7 +112,8 @@ export function hasFilters(filters: ListFilters): boolean {
     filters.status ||
     filters.priority ||
     filters.project ||
-    filters.due,
+    filters.due ||
+    filters.labels.length > 0,
   );
 }
 
@@ -132,6 +142,8 @@ export function toQuery(
     state: filters.state,
     statuses: filters.status ? [filters.status] : [],
     priorities: filters.priority ? [filters.priority] : [],
+    labelIds: filters.labels,
+    labelMatch: filters.labelMatch,
     sort: filters.sort,
     direction: filters.direction,
   };

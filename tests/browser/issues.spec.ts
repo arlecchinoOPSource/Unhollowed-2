@@ -5,6 +5,7 @@ import type {
   IssueQuery,
   IssueStatus,
 } from "../../src/database/issues";
+import type { Label, LabelInput } from "../../src/database/labels";
 import type { Project } from "../../src/database/projects";
 
 test.beforeEach(async ({ page }) => {
@@ -32,6 +33,7 @@ test.beforeEach(async ({ page }) => {
     // init script. That script runs after this one, so seeds load on the
     // first IPC call.
     const issues: Issue[] = [];
+    const labels: Label[] = [];
     let seeded = false;
     const seed = () =>
       (
@@ -51,6 +53,7 @@ test.beforeEach(async ({ page }) => {
         closed: seed.status === "done" || seed.status === "canceled",
         createdAt: `2026-11-01T00:00:${String(index % 60).padStart(2, "0")}Z`,
         updatedAt: `2026-11-01T00:${String(index % 60).padStart(2, "0")}:00Z`,
+        labelIds: [],
         ...seed,
       }));
     let clock = 0;
@@ -97,6 +100,7 @@ test.beforeEach(async ({ page }) => {
             projectId?: string | null;
             status?: IssueStatus;
             query?: IssueQuery;
+            labelIds?: string[];
           } = {},
         ) => {
           if (!seeded) {
@@ -134,7 +138,11 @@ test.beforeEach(async ({ page }) => {
                     : issue.dueDate
                       ? (!q.dueAfter || issue.dueDate >= q.dueAfter) &&
                         (!q.dueBefore || issue.dueDate <= q.dueBefore)
-                      : q.undated !== "exclude"),
+                      : q.undated !== "exclude") &&
+                  (!q.labelIds?.length ||
+                    (q.labelMatch === "all"
+                      ? q.labelIds.every((id) => issue.labelIds.includes(id))
+                      : q.labelIds.some((id) => issue.labelIds.includes(id)))),
               );
               const open = matches.filter((issue) => !issue.closed).length;
               const inState = matches.filter(
@@ -172,6 +180,74 @@ test.beforeEach(async ({ page }) => {
               await delayedList;
               return snapshot;
             }
+            case "list_labels":
+              return structuredClone(
+                labels
+                  .map((label) => ({
+                    ...label,
+                    issueCount: issues.filter((issue) =>
+                      issue.labelIds.includes(label.id),
+                    ).length,
+                  }))
+                  .sort(
+                    (a, b) =>
+                      Number(a.archived) - Number(b.archived) ||
+                      a.name.localeCompare(b.name),
+                  ),
+              );
+            case "create_label":
+            case "update_label": {
+              const input = (args as unknown as { input: LabelInput }).input;
+              const name = input.name.trim();
+              if (
+                labels.some(
+                  (label) =>
+                    label.id !== args.id &&
+                    label.name.toLowerCase() === name.toLowerCase(),
+                )
+              )
+                throw { code: "duplicate_name" };
+              const existing = labels.find((label) => label.id === args.id);
+              if (command === "update_label" && !existing)
+                throw { code: "not_found" };
+              const label: Label = existing ?? {
+                id: `label-${labels.length + 1}`,
+                archived: false,
+                archivedAt: null,
+                issueCount: 0,
+                createdAt: now(),
+                updatedAt: now(),
+                name,
+                description: null,
+                color: input.color,
+              };
+              Object.assign(label, { ...input, name, updatedAt: now() });
+              if (!existing) labels.push(label);
+              return structuredClone(label);
+            }
+            case "archive_label":
+            case "restore_label": {
+              const label = labels.find((item) => item.id === args.id);
+              if (!label) throw { code: "not_found" };
+              label.archived = command === "archive_label";
+              label.archivedAt = label.archived ? now() : null;
+              return structuredClone(label);
+            }
+            case "set_issue_labels": {
+              const issue = find(args.id);
+              const wanted = [...new Set(args.labelIds ?? [])].sort();
+              for (const id of wanted) {
+                const label = labels.find((item) => item.id === id);
+                if (!label) throw { code: "invalid_label" };
+                if (label.archived && !issue.labelIds.includes(id))
+                  throw { code: "label_archived" };
+              }
+              if (wanted.join() !== issue.labelIds.join()) {
+                issue.labelIds = wanted;
+                issue.updatedAt = now();
+              }
+              return structuredClone(issue);
+            }
             case "get_issue":
               return structuredClone(find(args.id));
             case "create_issue": {
@@ -190,6 +266,7 @@ test.beforeEach(async ({ page }) => {
                 closed: false,
                 createdAt: time,
                 updatedAt: time,
+                labelIds: [],
               };
               issues.push(issue);
               return structuredClone(issue);
@@ -631,4 +708,117 @@ test("loads long lists in pages without repeating issues", async ({ page }) => {
   ).toBeHidden();
   const keys = await items.locator(".issue-key").allTextContents();
   expect(new Set(keys).size).toBe(120);
+});
+
+test("creates labels, assigns several, filters by them, and keeps archived labels visible", async ({
+  page,
+}) => {
+  await seedIssues(page, [{ title: "Fix sink" }, { title: "Read paper" }]);
+  await page.goto("/issues");
+  await page.getByRole("link", { name: "Manage labels" }).first().click();
+  await expect(page).toHaveURL(/\/issues\/labels$/);
+  await expect(
+    page.getByRole("heading", { name: "No labels yet" }),
+  ).toBeVisible();
+
+  const create = page.getByRole("form", { name: "Create a label" });
+  for (const [name, color] of [
+    ["Home", "green"],
+    ["Urgent errand", "red"],
+    ["Reading", "teal"],
+  ]) {
+    await create.getByLabel("Label name").fill(name);
+    await create.getByLabel("Color").selectOption(color);
+    await create.getByRole("button", { name: "Create label" }).click();
+    await expect(page.getByText(`Created label ${name}.`)).toBeVisible();
+    // Focus returns to the empty name field for the next label.
+    await expect(create.getByLabel("Label name")).toBeFocused();
+  }
+  await create.getByLabel("Label name").fill("home");
+  await create.getByRole("button", { name: "Create label" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "A label with this name already exists. Archived labels keep their names.",
+  );
+
+  // Rename and recolor inline.
+  await page.getByRole("button", { name: "Edit Urgent errand" }).click();
+  const edit = page.getByRole("form", { name: "Edit Urgent errand" });
+  await expect(edit.getByLabel("Label name")).toBeFocused();
+  await edit.getByLabel("Label name").fill("Errand");
+  await edit.getByLabel("Color").selectOption("orange");
+  await edit.getByRole("button", { name: "Save label" }).click();
+  await expect(page.getByText("Saved label Errand.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit Errand" })).toBeFocused();
+
+  // Assign two labels with the keyboard.
+  await page.getByRole("link", { name: "All issues" }).click();
+  await page.getByRole("link", { name: "Fix sink" }).click();
+  const picker = page.getByRole("group", { name: "Labels" });
+  await picker.getByRole("checkbox", { name: /Home/ }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByText("Labels updated.")).toBeVisible();
+  await picker.getByRole("checkbox", { name: /Errand/ }).focus();
+  await page.keyboard.press("Space");
+  await expect(picker.getByRole("checkbox", { name: /Errand/ })).toBeChecked();
+  await expect(picker.getByRole("checkbox", { name: /Errand/ })).toBeFocused();
+  await page.getByRole("link", { name: "All issues" }).click();
+  const row = page.getByRole("listitem").filter({ hasText: "Fix sink" });
+  await expect(row.getByRole("list", { name: "Labels" })).toHaveText(
+    /Errand\s*Home/,
+  );
+
+  // Filter by any or all labels.
+  await page.getByText("Labels", { exact: true }).click();
+  const filter = page.getByRole("group", {
+    name: "Show issues with these labels",
+  });
+  // These checkboxes follow the URL, which updates just after the click.
+  for (const name of [/Home/, /Reading/]) {
+    await filter.getByRole("checkbox", { name }).click();
+    await expect(filter.getByRole("checkbox", { name })).toBeChecked();
+  }
+  const titles = page
+    .getByRole("list", { name: "Open issues" })
+    .getByRole("link", { name: /^(Fix sink|Read paper)$/ });
+  await expect(titles).toHaveText(["Fix sink"]);
+  await page.getByLabel("Match all selected labels").click();
+  await expect(page.getByText("No issues match these filters.")).toBeVisible();
+  await expect(page).toHaveURL(/match=all/);
+  await page.getByRole("button", { name: "Reset filters" }).click();
+  await expect(titles).toHaveCount(2);
+
+  // Archive: the badge stays on the issue and says so in text.
+  await page.getByRole("link", { name: "Manage labels" }).first().click();
+  await page.getByRole("button", { name: "Archive Home" }).click();
+  await expect(
+    page.getByRole("button", { name: "Restore Home" }),
+  ).toBeFocused();
+  await page.getByRole("link", { name: "All issues" }).click();
+  await expect(row.getByText("archived")).toBeVisible();
+  // It is not offered for new assignment.
+  await page.getByRole("link", { name: "Read paper" }).click();
+  await expect(
+    page
+      .getByRole("group", { name: "Labels" })
+      .getByRole("checkbox", { name: /Home/ }),
+  ).toHaveCount(0);
+  // It can still be removed from the issue that has it.
+  await page.getByRole("link", { name: "All issues" }).click();
+  await page.getByRole("link", { name: "Fix sink" }).click();
+  const archived = page
+    .getByRole("group", { name: "Labels" })
+    .getByRole("checkbox", { name: /Home/ });
+  await expect(archived).toBeChecked();
+  await archived.focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByText("Labels updated.")).toBeVisible();
+  // It stays listed and focused, but cannot be added back while archived.
+  await expect(archived).not.toBeChecked();
+  await expect(archived).toBeFocused();
+  await expect(archived).toHaveAttribute("aria-disabled", "true");
+  await page.keyboard.press("Space");
+  await expect(archived).not.toBeChecked();
+  await expect(
+    page.getByText("Archived labels can be removed but not added."),
+  ).toBeVisible();
 });

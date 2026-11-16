@@ -41,6 +41,10 @@ pub struct IssueFilter {
     pub due_before: Option<String>,
     /// `include` (the default), `exclude`, or `only` issues without a due date.
     pub undated: Option<String>,
+    /// Issues carrying these labels. Archived labels still match.
+    pub label_ids: Vec<String>,
+    /// `any` (the default) matches at least one label, `all` every label.
+    pub label_match: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -116,6 +120,8 @@ struct ValidQuery {
     due_after: Option<String>,
     due_before: Option<String>,
     undated: Undated,
+    label_ids: Vec<String>,
+    match_all_labels: bool,
     order: String,
     limit: u32,
     offset: u32,
@@ -149,6 +155,7 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
     if filter.statuses.len() > MAX_LIST_ITEMS
         || filter.priorities.len() > MAX_LIST_ITEMS
         || filter.project_ids.len() > MAX_LIST_ITEMS
+        || filter.label_ids.len() > MAX_LIST_ITEMS
         || !filter
             .statuses
             .iter()
@@ -180,6 +187,15 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
     {
         return Err(invalid());
     }
+
+    let match_all_labels = match filter.label_match.as_deref() {
+        None | Some("any") => false,
+        Some("all") => true,
+        Some(_) => return Err(invalid()),
+    };
+    let mut label_ids = filter.label_ids;
+    label_ids.sort();
+    label_ids.dedup();
 
     let field = sort.as_deref().unwrap_or("updated");
     let expression = match field {
@@ -223,6 +239,8 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
         due_after: filter.due_after,
         due_before: filter.due_before,
         undated,
+        label_ids,
+        match_all_labels,
         order,
         limit,
         offset,
@@ -283,6 +301,21 @@ fn push_filters(
                 builder.push(" OR project_id IS NULL");
             }
             builder.push(")");
+        }
+    }
+    if !query.label_ids.is_empty() {
+        builder.push(if query.match_all_labels {
+            " AND (SELECT count(*) FROM issue_labels WHERE issue_id = issues.id AND label_id IN ("
+        } else {
+            " AND EXISTS (SELECT 1 FROM issue_labels WHERE issue_id = issues.id AND label_id IN ("
+        });
+        let mut list = builder.separated(", ");
+        for id in &query.label_ids {
+            list.push_bind(id.clone());
+        }
+        list.push_unseparated("))");
+        if query.match_all_labels {
+            builder.push(" = ").push_bind(query.label_ids.len() as i64);
         }
     }
     if let Undated::Only = query.undated {
