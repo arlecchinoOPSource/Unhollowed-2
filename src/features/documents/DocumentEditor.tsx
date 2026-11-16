@@ -1,9 +1,9 @@
 import { EditorContent } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
-import {
-  FormattingToolbar,
-  useRichTextEditor,
-} from "../../components/editor/RichText";
+import { useRichTextEditor } from "../../components/editor/RichText";
+import { DocumentToolbar } from "./editor/DocumentToolbar";
+import { documentExtensions, readDocument } from "./editor/schema";
+import "./editor/word.css";
 import {
   getDocument,
   updateDocument,
@@ -29,19 +29,29 @@ export function DocumentEditor({
   onSaved: (summary: DocumentSummary) => void;
 }) {
   const [document, setDocument] = useState<WorkspaceDocument | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState("");
 
   useEffect(() => {
     let current = true;
     getDocument(id)
-      .then((loaded) => current && setDocument(loaded))
-      .catch(() => current && setFailed(true));
+      .then((loaded) => {
+        if (!current) return;
+        try {
+          readDocument(loaded.content);
+          setDocument(loaded);
+        } catch {
+          setFailure(
+            "This document uses an unsupported or damaged format. Its saved content has been preserved.",
+          );
+        }
+      })
+      .catch(() => current && setFailure("Could not open this document."));
     return () => {
       current = false;
     };
   }, [id]);
 
-  if (failed) return <p role="alert">Could not open this document.</p>;
+  if (failure) return <p role="alert">{failure}</p>;
   if (!document) return <p role="status">Opening document…</p>;
   return <EditorBody document={document} onSaved={onSaved} />;
 }
@@ -71,6 +81,7 @@ function EditorBody({
       latest.current.content = content;
       schedule();
     },
+    documentExtensions,
   );
 
   // Saves run one after another so an older write can never land last.
@@ -131,7 +142,7 @@ function EditorBody({
           schedule();
         }}
       />
-      <FormattingToolbar editor={editor} />
+      {editor && <DocumentToolbar editor={editor} />}
       <EditorContent editor={editor} className="editor" />
       <p role="status" className="save-status">
         {saveMessages[saveState]}
