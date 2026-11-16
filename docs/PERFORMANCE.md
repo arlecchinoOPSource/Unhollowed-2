@@ -84,6 +84,6 @@ Reduced motion: the app's own CSS has no animations or transitions. A global `pr
 
 ## Gaps
 
-- **Relationship picker at large sizes.** Adding a relationship loads every issue and renders one `<select>` option per issue: 42 ms backend and 80 ms rendering at 2,000 to 5,000 issues, and slow to scan by keyboard. It meets the target at the representative size. A searchable picker backed by `query_issues` would remove the full load. This is proposed as a follow-up issue rather than built speculatively here.
+- **Relationship picker at large sizes.** Adding a relationship loads every issue and renders one `<select>` option per issue: 42 ms backend and 80 ms rendering at 2,000 to 5,000 issues, and slow to scan by keyboard. It meets the target at the representative size. A searchable picker backed by `query_issues` would remove the full load. This is tracked in #52 rather than built speculatively here.
 - **Native WebKit.** The rendering and accessibility checks run in Chromium. The macOS app uses WebKit, so check focus rings, date fields, and contrast in the native smoke test.
 - **Screen readers.** Automated checks do not replace a pass with VoiceOver, which has not been run.
