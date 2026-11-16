@@ -28,7 +28,7 @@ import {
   type State,
 } from "./filters";
 import { LabelBadges } from "../labels/LabelParts";
-import { PriorityBadge, StatusBadge } from "./IssueBadges";
+import { PriorityBadge, RepeatMark, StatusBadge } from "./IssueBadges";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssueReferences } from "./useIssueReferences";
 import { isIssueShortcut } from "./issueKeyboard";
@@ -473,6 +473,7 @@ export function IssueList({ projectId }: { projectId?: string }) {
                       Due <time dateTime={issue.dueDate}>{issue.dueDate}</time>
                     </span>
                   )}
+                  {issue.recurring && <RepeatMark />}
                   {issue.milestoneId &&
                     milestoneTitles.has(issue.milestoneId) && (
                       <span className="issue-milestone">

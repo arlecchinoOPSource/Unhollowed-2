@@ -202,8 +202,8 @@ pub async fn remove_issue_relationship(
 mod tests {
     use super::*;
     use crate::test_support::{
-        add_issue, add_workspace, migrated_pool, migrator, TempDatabase, DEFAULT_WORKSPACE,
-        OTHER_WORKSPACE,
+        add_issue, add_issue_before_upgrade, add_workspace, migrated_pool, migrator, TempDatabase,
+        DEFAULT_WORKSPACE, OTHER_WORKSPACE,
     };
 
     #[test]
@@ -278,8 +278,8 @@ mod tests {
             let fixture = TempDatabase::new("relationships-concurrent");
             let db = fixture.open().await;
             migrator(9).await.run(&db).await.unwrap();
-            let a = add_issue(&db, DEFAULT_WORKSPACE, None).await;
-            let b = add_issue(&db, DEFAULT_WORKSPACE, None).await;
+            let a = add_issue_before_upgrade(&db, DEFAULT_WORKSPACE, None).await;
+            let b = add_issue_before_upgrade(&db, DEFAULT_WORKSPACE, None).await;
             migrator(10).await.run(&db).await.unwrap();
             assert!(list(&db, DEFAULT_WORKSPACE, &a).await.unwrap().is_empty());
             let forward = tauri::async_runtime::spawn({

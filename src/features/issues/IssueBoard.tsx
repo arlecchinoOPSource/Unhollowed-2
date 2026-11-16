@@ -20,7 +20,7 @@ import {
 import { isTauri } from "../../database/status";
 import { LabelBadges } from "../labels/LabelParts";
 import { readFilters, resetFilters, toQuery, writeFilters } from "./filters";
-import { PriorityBadge, StatusBadge } from "./IssueBadges";
+import { PriorityBadge, RepeatMark, StatusBadge } from "./IssueBadges";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssueReferences } from "./useIssueReferences";
 import "./board.css";
@@ -356,6 +356,7 @@ export function IssueBoard({ projectId }: { projectId?: string }) {
                               </time>
                             </span>
                           )}
+                          {issue.recurring && <RepeatMark />}
                           <LabelBadges
                             ids={issue.labelIds}
                             labels={labelsById}

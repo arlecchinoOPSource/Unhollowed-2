@@ -119,3 +119,35 @@ pub async fn add_issue(pool: &SqlitePool, workspace: &str, project: Option<&str>
     .summary
     .id
 }
+
+/// Inserts an issue using only the columns of migration 5, for tests that
+/// seed data before upgrading. `crate::issues::create` returns columns from
+/// the newest migrations, so it cannot run against an older schema.
+pub async fn add_issue_before_upgrade(
+    pool: &SqlitePool,
+    workspace: &str,
+    project: Option<&str>,
+) -> String {
+    let id = uuid::Uuid::new_v4().to_string();
+    let number: i64 = sqlx::query_scalar(
+        "INSERT INTO issue_counters (workspace_id, last_number) VALUES (?, 1)
+         ON CONFLICT (workspace_id) DO UPDATE SET last_number = last_number + 1
+         RETURNING last_number",
+    )
+    .bind(workspace)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO issues (id, workspace_id, number, project_id, title, description)
+         VALUES (?, ?, ?, ?, 'Sample issue', '{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}')",
+    )
+    .bind(&id)
+    .bind(workspace)
+    .bind(number)
+    .bind(project)
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}

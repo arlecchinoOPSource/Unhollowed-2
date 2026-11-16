@@ -8,10 +8,12 @@ use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
 mod query;
+mod recurrence;
 pub(crate) use query::search_text;
 #[cfg(test)]
 pub use query::IssueFilter;
 pub use query::{query, IssuePage, IssueQuery};
+pub use recurrence::{recurrence_for, set_rule, Recurrence, RecurrenceInput};
 
 const MAX_TITLE_CHARS: usize = 200;
 pub(crate) const PRIORITIES: [&str; 5] = ["none", "low", "medium", "high", "urgent"];
@@ -40,6 +42,10 @@ pub struct IssueSummary {
     pub updated_at: String,
     /// At most one milestone: a workspace one or one for the issue's project.
     pub milestone_id: Option<String>,
+    /// The series this issue is an occurrence of, if any.
+    pub recurrence_id: Option<String>,
+    /// True while the issue's series is active (not stopped).
+    pub recurring: bool,
     /// IDs of the issue's labels, including archived ones.
     #[sqlx(try_from = "String")]
     pub label_ids: LabelIds,
@@ -104,6 +110,10 @@ pub enum IssueError {
     InvalidMilestone,
     /// A closed milestone cannot gain issues. Existing links remain.
     MilestoneClosed,
+    /// The repeat frequency or interval is not supported.
+    InvalidRecurrence,
+    /// A repeat rule is anchored on a due date, so the issue needs one.
+    RecurrenceNeedsDueDate,
     StorageFailed,
 }
 
@@ -175,7 +185,9 @@ impl IssueFields {
 macro_rules! summary_fields {
     () => {
         "id, number, project_id, title, status, priority, start_date, due_date, \
-         completed_at, closed, created_at, updated_at, milestone_id, \
+         completed_at, closed, created_at, updated_at, milestone_id, recurrence_id, \
+         EXISTS (SELECT 1 FROM issue_recurrences AS r WHERE r.id = issues.recurrence_id \
+                 AND r.stopped_at IS NULL) AS recurring, \
          (SELECT json_group_array(label_id) FROM (SELECT label_id FROM issue_labels \
           WHERE issue_id = issues.id ORDER BY label_id)) AS label_ids"
     };
@@ -312,29 +324,57 @@ pub async fn update(
 /// Entering done records `completed_at` once. Any other status clears it.
 /// Repeating the current status changes nothing, so retries keep timestamps.
 /// SQLite evaluates every right-hand side against the row before the update.
+#[cfg(test)]
 pub async fn set_status(
     pool: &SqlitePool,
     workspace: &str,
     id: &str,
     status: &str,
 ) -> Result<Issue, IssueError> {
+    set_status_on(pool, workspace, id, status, None).await
+}
+
+/// Like [`set_status`], and when a recurring issue enters Done or Canceled
+/// it also creates the next occurrence in the same transaction. `today` is
+/// the user's local date, used to skip missed occurrence dates.
+pub async fn set_status_on(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+    status: &str,
+    today: Option<&str>,
+) -> Result<Issue, IssueError> {
     if !STATUSES.contains(&status) {
         return Err(IssueError::InvalidStatus);
     }
-    sqlx::query_as(&format!(
+    recurrence::valid_today(today)?;
+    let mut transaction = pool.begin().await.map_err(storage_failed)?;
+    recurrence::lock(&mut transaction, workspace, id).await?;
+    let (was_closed,): (bool,) =
+        sqlx::query_as("SELECT closed FROM issues WHERE id = ? AND workspace_id = ?")
+            .bind(id)
+            .bind(workspace)
+            .fetch_one(&mut *transaction)
+            .await
+            .map_err(storage_failed)?;
+    sqlx::query(&format!(
         "UPDATE issues SET
              status = ?1,
              completed_at = CASE WHEN ?1 = 'done' THEN coalesce(completed_at, {NOW}) END,
              updated_at = CASE WHEN status = ?1 THEN updated_at ELSE {NOW} END
-         WHERE id = ?2 AND workspace_id = ?3 RETURNING {FIELDS}"
+         WHERE id = ?2 AND workspace_id = ?3"
     ))
     .bind(status)
     .bind(id)
     .bind(workspace)
-    .fetch_optional(pool)
+    .execute(&mut *transaction)
     .await
-    .map_err(storage_failed)?
-    .ok_or(IssueError::NotFound)
+    .map_err(storage_failed)?;
+    if !was_closed && matches!(status, "done" | "canceled") {
+        recurrence::advance(&mut transaction, workspace, id, today).await?;
+    }
+    transaction.commit().await.map_err(storage_failed)?;
+    get(pool, workspace, id).await
 }
 
 /// Returns a done or canceled issue to To Do. An open issue keeps its status.
@@ -659,27 +699,49 @@ pub async fn change_issue_status(
     instances: State<'_, DbInstances>,
     id: String,
     status: String,
+    today: Option<String>,
 ) -> Result<Issue, IssueError> {
     let (pool, workspace) = scope(&instances).await?;
-    set_status(&pool, &workspace, &id, &status).await
+    set_status_on(&pool, &workspace, &id, &status, today.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn set_issue_recurrence(
+    instances: State<'_, DbInstances>,
+    id: String,
+    rule: Option<RecurrenceInput>,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_rule(&pool, &workspace, &id, rule).await
+}
+
+#[tauri::command]
+pub async fn get_issue_recurrence(
+    instances: State<'_, DbInstances>,
+    id: String,
+) -> Result<Option<Recurrence>, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    recurrence_for(&pool, &workspace, &id).await
 }
 
 #[tauri::command]
 pub async fn complete_issue(
     instances: State<'_, DbInstances>,
     id: String,
+    today: Option<String>,
 ) -> Result<Issue, IssueError> {
     let (pool, workspace) = scope(&instances).await?;
-    set_status(&pool, &workspace, &id, "done").await
+    set_status_on(&pool, &workspace, &id, "done", today.as_deref()).await
 }
 
 #[tauri::command]
 pub async fn cancel_issue(
     instances: State<'_, DbInstances>,
     id: String,
+    today: Option<String>,
 ) -> Result<Issue, IssueError> {
     let (pool, workspace) = scope(&instances).await?;
-    set_status(&pool, &workspace, &id, "canceled").await
+    set_status_on(&pool, &workspace, &id, "canceled", today.as_deref()).await
 }
 
 #[tauri::command]
