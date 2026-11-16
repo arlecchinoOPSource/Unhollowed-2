@@ -7,6 +7,7 @@ mod goals;
 mod issues;
 mod labels;
 mod milestones;
+mod overview;
 mod projects;
 mod relationships;
 mod saved_views;
@@ -61,6 +62,7 @@ fn main() {
             document_links::link_project_document,
             document_links::unlink_project_document,
             document_links::get_document_usage,
+            overview::get_project_overview,
             labels::list_labels,
             labels::create_label,
             labels::update_label,

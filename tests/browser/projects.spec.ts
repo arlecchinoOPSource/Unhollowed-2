@@ -40,6 +40,28 @@ test.beforeEach(async ({ page }) => {
           if (command === "list_documents") return [];
           if (command === "list_project_documents")
             return { direct: [], viaIssues: [] };
+          if (command === "get_project_overview")
+            return {
+              project,
+              total: 0,
+              open: 0,
+              closed: 0,
+              statuses: {
+                todo: 0,
+                inProgress: 0,
+                blocked: 0,
+                done: 0,
+                canceled: 0,
+              },
+              completion: null,
+              overdueCount: 0,
+              overdue: [],
+              upcomingCount: 0,
+              upcoming: [],
+              undatedOpen: 0,
+              milestones: [],
+              activity: [],
+            };
           if (command === "create_project" && args.input) {
             project = {
               ...args.input,

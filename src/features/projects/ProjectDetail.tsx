@@ -1,4 +1,4 @@
-import { ArrowLeft, Flag, LayoutDashboard, ListTodo } from "lucide-react";
+import { ArrowLeft, Flag, ListTodo } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -12,8 +12,7 @@ import {
 } from "../../database/projects";
 import { ProjectDocuments } from "../documents/LinkedDocuments";
 import { ProjectDialog } from "./ProjectDialog";
-
-const sections = [{ title: "Dashboard", icon: LayoutDashboard }];
+import { ProjectOverview } from "./ProjectOverview";
 
 export function ProjectDetail() {
   const { id } = useParams();
@@ -140,6 +139,7 @@ function ProjectDetails({ id }: { id: string }) {
             </dl>
           </div>
           <p role="status">{saving ? "Saving status…" : message}</p>
+          <ProjectOverview projectId={id} />
           <div className="project-grid">
             <Link className="project-card" to={`/projects/${id}/issues`}>
               <ListTodo size={19} aria-hidden="true" />
@@ -159,13 +159,6 @@ function ProjectDetails({ id }: { id: string }) {
               <h2>Missions &amp; objectives</h2>
               <p>Define project goals and connect them to issues.</p>
             </Link>
-            {sections.map(({ title, icon: Icon }) => (
-              <section className="project-card" key={title}>
-                <Icon size={19} aria-hidden="true" />
-                <h2>{title}</h2>
-                <p>Planned for a future release.</p>
-              </section>
-            ))}
           </div>
           <div className="project-documents">
             <ProjectDocuments

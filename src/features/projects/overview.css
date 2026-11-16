@@ -1,0 +1,142 @@
+.project-overview {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 18px;
+}
+
+.project-overview h2,
+.project-overview h3,
+.project-overview p {
+  margin: 0;
+}
+
+.overview-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 12px;
+}
+
+.overview-tile {
+  display: grid;
+  gap: 2px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.overview-tile:hover {
+  border-color: var(--accent);
+}
+
+.overview-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.overview-number {
+  font: 400 30px/1.1 var(--editorial);
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.overview-grid > section {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.overview-grid ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Single-series bars: one hue, value and label in text ink beside them. */
+.overview-bars a {
+  display: grid;
+  grid-template-columns: 8.5em minmax(0, 1fr) 2.5em;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.overview-bars a:hover .overview-bar,
+.overview-bars a:focus-visible .overview-bar {
+  opacity: 0.8;
+}
+
+.overview-bar-track {
+  height: 8px;
+}
+
+.overview-bar {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+}
+
+.overview-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-activity li {
+  display: grid;
+  gap: 1px;
+  overflow-wrap: anywhere;
+}
+
+.overview-issues li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 10px;
+  overflow-wrap: anywhere;
+}
+
+.overview-issues time,
+.overview-activity time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.overview-kind {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.overview-milestones li {
+  display: grid;
+  gap: 4px;
+}
+
+.overview-milestones progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--accent);
+}
