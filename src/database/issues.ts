@@ -50,6 +50,10 @@ export interface IssueSummary {
   updatedAt: string;
   /** At most one: a workspace milestone or one for the issue's project. */
   milestoneId: string | null;
+  /** The repeat series this issue is an occurrence of, if any. */
+  recurrenceId: string | null;
+  /** True while the issue's series is active. */
+  recurring: boolean;
   /** Label IDs, including archived labels the issue already had. */
   labelIds: string[];
 }
@@ -149,15 +153,66 @@ export function updateIssue(id: string, input: IssueFields): Promise<Issue> {
   return write(() => invoke("update_issue", { id, input }));
 }
 
+/**
+ * The local date sent with status changes. When a recurring issue closes,
+ * the backend skips occurrence dates that are already in the past.
+ */
+function localToday(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 export function changeIssueStatus(
   id: string,
   status: IssueStatus,
 ): Promise<Issue> {
-  return write(() => invoke("change_issue_status", { id, status }));
+  return write(() =>
+    invoke("change_issue_status", { id, status, today: localToday() }),
+  );
 }
 
 export function completeIssue(id: string): Promise<Issue> {
-  return write(() => invoke("complete_issue", { id }));
+  return write(() => invoke("complete_issue", { id, today: localToday() }));
+}
+
+export const repeatFrequencies = {
+  daily: { label: "Daily", unit: "day", units: "days" },
+  weekly: { label: "Weekly", unit: "week", units: "weeks" },
+  monthly: { label: "Monthly", unit: "month", units: "months" },
+} as const;
+
+export type RepeatFrequency = keyof typeof repeatFrequencies;
+
+export interface RepeatRule {
+  frequency: RepeatFrequency;
+  /** Every N days, weeks, or months, from 1 to 99. */
+  interval: number;
+}
+
+export interface Recurrence extends RepeatRule {
+  id: string;
+  /** The due date of the series' first occurrence. */
+  anchorDate: string;
+  stopped: boolean;
+  stoppedAt: string | null;
+  /** The newest occurrence, which the next completion builds on. */
+  latestIssueId: string;
+  latestNumber: number;
+  latestDueDate: string | null;
+  latestClosed: boolean;
+}
+
+/** Sets or changes the repeat rule, or stops repeating with `null`. */
+export function setIssueRecurrence(
+  id: string,
+  rule: RepeatRule | null,
+): Promise<Issue> {
+  return write(() => invoke("set_issue_recurrence", { id, rule }));
+}
+
+export function getIssueRecurrence(id: string): Promise<Recurrence | null> {
+  return read(() => invoke("get_issue_recurrence", { id }));
 }
 
 export function reopenIssue(id: string): Promise<Issue> {
@@ -230,6 +285,10 @@ export function issueError(error: unknown): string {
       return "That milestone does not apply to this issue's project.";
     case "milestone_closed":
       return "Closed milestones cannot gain issues. Reopen the milestone first.";
+    case "invalid_recurrence":
+      return "Choose daily, weekly, or monthly, every 1 to 99.";
+    case "recurrence_needs_due_date":
+      return "Set a due date first. Repeats start from the due date.";
     case "invalid_filter":
       return "These filters are not supported. Reset them and try again.";
     default:

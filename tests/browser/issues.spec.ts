@@ -4,6 +4,7 @@ import type {
   IssueFields,
   IssueQuery,
   IssueStatus,
+  RepeatRule,
 } from "../../src/database/issues";
 import type { ProjectGoals } from "../../src/database/goals";
 import type { RelationKind } from "../../src/database/relationships";
@@ -71,6 +72,8 @@ test.beforeEach(async ({ page }) => {
         updatedAt: `2026-11-01T00:${String(index % 60).padStart(2, "0")}:00Z`,
         labelIds: [],
         milestoneId: null,
+        recurrenceId: null,
+        recurring: false,
         ...seed,
       }));
     let clock = 0;
@@ -115,13 +118,70 @@ test.beforeEach(async ({ page }) => {
       if (!issue) throw { code: "not_found" };
       return issue;
     };
-    const setStatus = (issue: Issue, status: IssueStatus) => {
+    // Recurring series, following the backend rules: dates come from the
+    // anchor, missed dates are skipped, and only one next occurrence exists.
+    const series = new Map<
+      string,
+      {
+        frequency: RepeatRule["frequency"];
+        interval: number;
+        anchor: string;
+        stopped: boolean;
+      }
+    >();
+    const occurrence = new Map<string, number>();
+    const dayMs = 86_400_000;
+    const occurrenceDate = (id: string, index: number) => {
+      const rule = series.get(id)!;
+      const [y, m, d] = rule.anchor.split("-").map(Number);
+      let date: Date;
+      if (rule.frequency === "monthly") {
+        const months = m - 1 + index * rule.interval;
+        const last = new Date(Date.UTC(y, months + 1, 0)).getUTCDate();
+        date = new Date(Date.UTC(y, months, Math.min(d, last)));
+      } else {
+        const step = rule.frequency === "weekly" ? 7 : 1;
+        date = new Date(
+          Date.UTC(y, m - 1, d) + index * rule.interval * step * dayMs,
+        );
+      }
+      return date.toISOString().slice(0, 10);
+    };
+    const advance = (issue: Issue, today?: string) => {
+      const id = issue.recurrenceId;
+      if (!id || series.get(id)?.stopped) return;
+      const index = occurrence.get(issue.id) ?? 0;
+      const later = issues.some(
+        (other) =>
+          other.recurrenceId === id && (occurrence.get(other.id) ?? 0) > index,
+      );
+      if (later) return;
+      let next = index + 1;
+      while (today && occurrenceDate(id, next) < today) next += 1;
+      const time = now();
+      const created: Issue = {
+        ...structuredClone(issue),
+        id: `issue-${issues.length + 1}`,
+        number: issues.length + 1,
+        status: "todo",
+        closed: false,
+        completedAt: null,
+        dueDate: occurrenceDate(id, next),
+        createdAt: time,
+        updatedAt: time,
+      };
+      occurrence.set(created.id, next);
+      issues.push(created);
+    };
+    const setStatus = (issue: Issue, status: IssueStatus, today?: string) => {
       if (issue.status === status) return issue;
+      const wasClosed = issue.closed;
       issue.status = status;
       issue.closed = status === "done" || status === "canceled";
       issue.completedAt =
         status === "done" ? (issue.completedAt ?? now()) : null;
       issue.updatedAt = now();
+      if (!wasClosed && issue.closed) advance(issue, today);
       return issue;
     };
     Object.assign(window, {
@@ -138,6 +198,8 @@ test.beforeEach(async ({ page }) => {
             milestoneId?: string | null;
             otherId?: string;
             kind?: RelationKind;
+            today?: string;
+            rule?: RepeatRule | null;
           } = {},
         ) => {
           if (!seeded) {
@@ -393,6 +455,8 @@ test.beforeEach(async ({ page }) => {
                 updatedAt: time,
                 labelIds: [],
                 milestoneId: null,
+                recurrenceId: null,
+                recurring: false,
               };
               issues.push(issue);
               return structuredClone(issue);
@@ -415,9 +479,67 @@ test.beforeEach(async ({ page }) => {
               return structuredClone(issue);
             }
             case "change_issue_status":
-              return structuredClone(setStatus(find(args.id), args.status!));
+              return structuredClone(
+                setStatus(find(args.id), args.status!, args.today),
+              );
             case "complete_issue":
-              return structuredClone(setStatus(find(args.id), "done"));
+              return structuredClone(
+                setStatus(find(args.id), "done", args.today),
+              );
+            case "set_issue_recurrence": {
+              const issue = find(args.id);
+              const rule = args.rule ?? null;
+              const current = issue.recurrenceId
+                ? series.get(issue.recurrenceId)
+                : undefined;
+              if (rule === null) {
+                if (current) current.stopped = true;
+              } else if (
+                !current ||
+                current.stopped ||
+                current.frequency !== rule.frequency ||
+                current.interval !== rule.interval
+              ) {
+                if (!issue.dueDate) throw { code: "recurrence_needs_due_date" };
+                if (current) current.stopped = true;
+                const id = `series-${series.size + 1}`;
+                series.set(id, {
+                  ...rule,
+                  anchor: issue.dueDate,
+                  stopped: false,
+                });
+                issue.recurrenceId = id;
+                occurrence.set(issue.id, 0);
+              }
+              for (const item of issues)
+                item.recurring = Boolean(
+                  item.recurrenceId && !series.get(item.recurrenceId)?.stopped,
+                );
+              return structuredClone(issue);
+            }
+            case "get_issue_recurrence": {
+              const issue = find(args.id);
+              const rule = issue.recurrenceId && series.get(issue.recurrenceId);
+              if (!rule) return null;
+              const latest = issues
+                .filter((item) => item.recurrenceId === issue.recurrenceId)
+                .sort(
+                  (a, b) =>
+                    (occurrence.get(b.id) ?? 0) - (occurrence.get(a.id) ?? 0),
+                )[0];
+              return {
+                id: issue.recurrenceId,
+                frequency: rule.frequency,
+                interval: rule.interval,
+                anchorDate: rule.anchor,
+                stopped: rule.stopped,
+                stoppedAt: null,
+                latestIssueId: latest.id,
+                latestNumber: latest.number,
+                latestDueDate: latest.dueDate,
+                latestClosed: latest.closed,
+              };
+            }
             case "reopen_issue": {
               const issue = find(args.id);
               return structuredClone(
@@ -1730,5 +1852,70 @@ test.describe("Calendar", () => {
     await expect(page.getByLabel("Due date", { exact: true })).toHaveValue(
       "2026-11-17",
     );
+  });
+});
+
+test.describe("Recurring issues", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("repeats an issue, creates the next occurrence on completion, and stops", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
+    await seedIssues(page, [
+      { title: "Water ferns", dueDate: "2026-11-16" },
+      { title: "Someday" },
+    ]);
+    await page.goto("/issues");
+
+    // A repeat needs a due date.
+    await page.getByRole("link", { name: "Someday" }).click();
+    await expect(page.getByLabel("Issue title")).toHaveValue("Someday");
+    const repeat = page.getByRole("group", { name: "Repeat" });
+    await repeat.getByLabel("Frequency").selectOption("daily");
+    await expect(
+      repeat.getByText(
+        "Set a due date first. Repeats start from the due date.",
+      ),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "All issues" }).click();
+
+    await page.getByRole("link", { name: "Water ferns" }).click();
+    await expect(page.getByLabel("Issue title")).toHaveValue("Water ferns");
+    await expect(repeat.getByText("Does not repeat").first()).toBeVisible();
+    await repeat.getByLabel("Frequency").selectOption("weekly");
+    await repeat.getByLabel("Every").fill("2");
+    await repeat.getByRole("button", { name: "Save repeat" }).click();
+    await expect(page.getByText("Repeat saved.")).toBeVisible();
+    await expect(repeat.getByText("Repeats every 2 weeks")).toBeVisible();
+
+    // Completing creates the next occurrence, two weeks after the anchor.
+    await page.getByRole("button", { name: "Mark complete" }).click();
+    await expect(page.getByText("Issue completed.")).toBeVisible();
+    await expect(repeat.getByText(/Next occurrence:/)).toContainText("ISS-3");
+    await repeat.getByRole("link", { name: "ISS-3" }).click();
+    await expect(page.getByLabel("Issue title")).toHaveValue("Water ferns");
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue(
+      "2026-11-30",
+    );
+
+    // The new occurrence shows as repeating in the list.
+    await page.getByRole("link", { name: "All issues" }).click();
+    const row = page.getByRole("listitem").filter({ hasText: "ISS-3" });
+    await expect(row.getByText("Repeats")).toBeAttached();
+
+    // Stopping keeps the occurrence and creates no more.
+    await row.getByRole("link", { name: "Water ferns" }).click();
+    await repeat.getByLabel("Frequency").selectOption("");
+    await repeat.getByRole("button", { name: "Stop repeating" }).click();
+    await expect(page.getByText("This issue no longer repeats.")).toBeVisible();
+    await expect(repeat.getByText("Stopped repeating")).toBeVisible();
+    await page.getByRole("button", { name: "Mark complete" }).click();
+    await expect(page.getByText("Issue completed.")).toBeVisible();
+    await page.getByRole("link", { name: "All issues" }).click();
+    await page.getByRole("button", { name: /^All/ }).click();
+    await expect(
+      page.getByRole("list", { name: "All issues" }).getByRole("listitem"),
+    ).toHaveCount(3);
   });
 });

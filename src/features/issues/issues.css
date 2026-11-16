@@ -423,3 +423,48 @@
 .issue-relationships form > .action {
   margin-right: 8px;
 }
+
+.issue-repeat {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.issue-repeat-form fieldset {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.issue-repeat-form legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.issue-repeat-form p {
+  margin: 0;
+}
+
+.issue-repeat-summary {
+  color: var(--text);
+}
+
+.issue-repeat-interval {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+.issue-repeat-interval input {
+  width: 5em;
+}
+
+.issue-repeat-form .action {
+  justify-self: start;
+  margin: 0;
+}

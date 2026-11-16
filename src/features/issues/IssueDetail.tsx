@@ -34,7 +34,9 @@ import {
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
 import { LabelPicker } from "../labels/LabelParts";
+import { useLocalToday } from "../today/useLocalToday";
 import { StatusBadge } from "./IssueBadges";
+import { IssueRepeat } from "./IssueRepeat";
 import { IssueRelationships } from "./IssueRelationships";
 import "./issues.css";
 
@@ -168,6 +170,7 @@ function IssueEditor({
   const [failed, setFailed] = useState(Boolean(recovered));
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const today = useLocalToday();
   const draft = useRef(recovered ?? draftOf(initial));
   const saved = useRef(initial);
   const dirty = useRef(Boolean(recovered));
@@ -512,6 +515,20 @@ function IssueEditor({
             }
           />
         </label>
+        <IssueRepeat
+          issue={issue}
+          today={today}
+          onSaved={(result, text) => {
+            saved.current = result;
+            setIssue(result);
+            setError("");
+            setMessage(text);
+          }}
+          onError={(text) => {
+            setMessage("");
+            setError(text);
+          }}
+        />
         <dl>
           <div>
             <dt>Created</dt>

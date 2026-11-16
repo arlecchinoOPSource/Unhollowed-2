@@ -45,6 +45,8 @@ fn main() {
             issues::set_issue_labels,
             issues::set_issue_milestone,
             issues::set_issue_due_date,
+            issues::set_issue_recurrence,
+            issues::get_issue_recurrence,
             labels::list_labels,
             labels::create_label,
             labels::update_label,

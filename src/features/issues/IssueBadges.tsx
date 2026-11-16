@@ -5,6 +5,7 @@ import {
   CircleDot,
   CircleX,
   Minus,
+  Repeat,
   SignalHigh,
   SignalLow,
   SignalMedium,
@@ -51,6 +52,16 @@ export function PriorityBadge({ priority }: { priority: IssuePriority }) {
     <span className={`issue-priority issue-priority-${priority}`}>
       <Icon size={14} aria-hidden="true" />
       {issuePriorities[priority]}
+    </span>
+  );
+}
+
+/** Marks an issue whose repeat series is active. */
+export function RepeatMark() {
+  return (
+    <span className="issue-repeat" title="Repeats">
+      <Repeat size={13} aria-hidden="true" />
+      <span className="visually-hidden">Repeats</span>
     </span>
   );
 }

@@ -12,7 +12,7 @@ import {
   type IssueSummary,
 } from "../../database/issues";
 import { isTauri } from "../../database/status";
-import { PriorityBadge } from "../issues/IssueBadges";
+import { PriorityBadge, RepeatMark } from "../issues/IssueBadges";
 import { useIssueReferences } from "../issues/useIssueReferences";
 import { addDays, dayLabel } from "./dates";
 import { useLocalToday } from "./useLocalToday";
@@ -519,6 +519,7 @@ function TaskRow({
           <PriorityBadge priority={issue.priority} />
         )}
         {projectName && <span>{projectName}</span>}
+        {issue.recurring && <RepeatMark />}
         {showDate && (
           <span className={overdue ? "task-overdue" : undefined}>
             {overdue ? "Overdue, due " : "Due "}

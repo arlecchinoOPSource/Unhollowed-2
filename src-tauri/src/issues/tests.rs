@@ -669,6 +669,8 @@ fn serializes_the_shape_the_webview_expects() {
                 "number",
                 "priority",
                 "projectId",
+                "recurrenceId",
+                "recurring",
                 "startDate",
                 "status",
                 "title",

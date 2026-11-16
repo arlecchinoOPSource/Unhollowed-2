@@ -134,6 +134,22 @@ The board (`/issues/board` and `/projects/:id/board`) has no records of its own.
 - Dragging an issue chip to another day, or editing its date, reschedules through `set_issue_due_date`, so the issue keeps its identity. Changes show immediately. Only the newest change to an issue applies its reply, and a rejected change returns the issue to its previous day with an explanation.
 - The calendar does not use the bundled FullCalendar packages. FullCalendar injects its styles at run time, which the production CSP (`style-src 'self'`) blocks, although the development CSP allows it.
 
+## Recurring issues
+
+A recurring issue is a series of ordinary issues, one per occurrence. Only one occurrence of a series is normally open at a time. Completing or canceling it creates the next one.
+
+- **Rule.** `issue_recurrences` stores the frequency (`daily`, `weekly`, or `monthly`), an interval of 1 to 99 (every N days, weeks, or months), the **anchor date**, and `stopped_at`. A rule can be set only on an issue with a due date, and that due date becomes the anchor of occurrence 0.
+- **Occurrence identity.** Each occurrence issue stores `recurrence_id` and `occurrence_index`, unique per series, so occurrence N exists at most once. Its scheduled date is always computed from the anchor, never from the previous occurrence:
+  - daily: anchor + N × interval days
+  - weekly: anchor + 7 × N × interval days (the anchor's weekday)
+  - monthly: anchor month + N × interval months, on the anchor's day of the month
+- **Month-end.** If the anchor's day does not exist in a month, the occurrence falls on that month's last day. Because each date is computed from the anchor, a series anchored on 31 January lands on 28 or 29 February, then back on 31 March, and never drifts to the 28th.
+- **Completion and missed dates.** Entering Done or Canceled creates the next occurrence in the same transaction as the status change. The next occurrence is the first scheduled date after the current one that is on or after the user's local today. Dates missed while an occurrence was late are skipped and create no issues, so a long absence leaves one current occurrence, not a backlog. The webview sends its local date with the completion. Without it, the next index is used.
+- **Idempotency.** No occurrence is created if the series already has a later occurrence or the rule is stopped. Repeating a completion, or completing again after a reopen, therefore creates nothing new.
+- **Reopen and cancel.** Reopening an occurrence does not remove a next occurrence that was already created. Canceling an occurrence skips it and creates the next one, like completion. **Stop repeating** ends the series instead.
+- **Next occurrence contents.** The next occurrence copies the title, description, priority, project, and active (not archived) labels. It keeps the milestone only if the milestone is still open, and shifts any start date by the same number of days as the due date. It starts as To Do with its own ID and number.
+- **Editing and stopping.** Changing the rule starts a new series anchored on the issue's current due date and stops the old one, so past occurrences keep their original schedule. Stopping sets `stopped_at`, and existing occurrences remain. Rescheduling one occurrence does not move the series: later occurrences follow the anchor's schedule.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -155,3 +171,4 @@ The board (`/issues/board` and `/projects/:id/board`) has no records of its own.
 | 0008      | `milestones` and `issues.milestone_id`, with project compatibility triggers    |
 | 0009      | Project missions, objectives, and objective-to-issue links                     |
 | 0010      | Workspace-scoped issue relationships                                           |
+| 0011      | `issue_recurrences` and occurrence identity on issues                          |

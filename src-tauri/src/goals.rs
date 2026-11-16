@@ -264,8 +264,8 @@ pub async fn save_project_objective(
 mod tests {
     use super::*;
     use crate::test_support::{
-        add_issue, add_project, add_workspace, memory_pool, migrator, DEFAULT_WORKSPACE,
-        OTHER_WORKSPACE,
+        add_issue_before_upgrade, add_project, add_workspace, memory_pool, migrator,
+        DEFAULT_WORKSPACE, OTHER_WORKSPACE,
     };
 
     fn text(title: &str) -> GoalText {
@@ -283,9 +283,10 @@ mod tests {
             add_workspace(&db, OTHER_WORKSPACE, "Other").await;
             let project = add_project(&db, DEFAULT_WORKSPACE, "Launch").await;
             let other = add_project(&db, OTHER_WORKSPACE, "Other launch").await;
-            let issue = add_issue(&db, DEFAULT_WORKSPACE, Some(&project)).await;
-            let other_issue = add_issue(&db, OTHER_WORKSPACE, Some(&other)).await;
-            migrator(9).await.run(&db).await.unwrap();
+            let issue = add_issue_before_upgrade(&db, DEFAULT_WORKSPACE, Some(&project)).await;
+            let other_issue = add_issue_before_upgrade(&db, OTHER_WORKSPACE, Some(&other)).await;
+            // Upgrade through every later migration, as a user's database would.
+            migrator(i64::MAX).await.run(&db).await.unwrap();
 
             let empty = load(&db, DEFAULT_WORKSPACE, &project).await.unwrap();
             assert!(empty.missions.is_empty() && empty.objectives.is_empty());
