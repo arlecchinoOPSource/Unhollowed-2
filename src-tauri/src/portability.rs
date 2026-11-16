@@ -285,27 +285,33 @@ fn dates_ok(start: &Option<String>, end: &Option<String>) -> bool {
 
 /// True when following `edges` from any node can return to it.
 fn has_cycle(edges: &HashMap<&str, Vec<&str>>) -> bool {
-    fn visit<'a>(
-        node: &'a str,
-        edges: &HashMap<&'a str, Vec<&'a str>>,
-        state: &mut HashMap<&'a str, u8>,
-    ) -> bool {
-        match state.get(node) {
-            Some(1) => return true,
-            Some(2) => return false,
-            _ => {}
+    let mut incoming = HashMap::<&str, usize>::new();
+    for (&source, targets) in edges {
+        incoming.entry(source).or_default();
+        for &target in targets {
+            *incoming.entry(target).or_default() += 1;
         }
-        state.insert(node, 1);
-        for next in edges.get(node).into_iter().flatten() {
-            if visit(next, edges, state) {
-                return true;
+    }
+
+    // Consume nodes without incoming edges. A remaining node is part of a
+    // cycle or depends on one. This uses no call stack per imported issue.
+    let mut ready: Vec<_> = incoming
+        .iter()
+        .filter(|(_, count)| **count == 0)
+        .map(|(&id, _)| id)
+        .collect();
+    let mut visited = 0;
+    while let Some(node) = ready.pop() {
+        visited += 1;
+        for target in edges.get(node).into_iter().flatten() {
+            let count = incoming.get_mut(target).expect("target counted above");
+            *count -= 1;
+            if *count == 0 {
+                ready.push(target);
             }
         }
-        state.insert(node, 2);
-        false
     }
-    let mut state = HashMap::new();
-    edges.keys().any(|node| visit(node, edges, &mut state))
+    visited != incoming.len()
 }
 
 /// Checks the whole file without touching the database. Returns every
@@ -837,7 +843,11 @@ pub async fn import(
 /// run as a formula is prefixed with an apostrophe.
 pub fn csv_field(value: &str) -> String {
     let mut value = value.to_owned();
-    if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+    if value.starts_with(['\t', '\r', '\n'])
+        || value
+            .trim_start()
+            .starts_with(['=', '+', '-', '@', '＝', '＋', '－', '＠'])
+    {
         value.insert(0, '\'');
     }
     if value.contains([',', '"', '\n', '\r']) {

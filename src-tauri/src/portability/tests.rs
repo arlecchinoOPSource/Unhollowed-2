@@ -484,7 +484,7 @@ fn csv_fields_are_quoted_and_protected_from_formulas() {
     assert_eq!(csv_field("a, b"), "\"a, b\"");
     assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
     assert_eq!(csv_field("two\nlines"), "\"two\nlines\"");
-    for formula in ["=SUM(A1)", "+1", "-1", "@cmd", "\tx"] {
+    for formula in ["=SUM(A1)", "+1", "-1", "@cmd", "\tx", "  =1", "＋1"] {
         assert!(csv_field(formula).starts_with('\''), "{formula:?}");
     }
     assert_eq!(csv_field("=1,2"), "\"'=1,2\"");
@@ -527,4 +527,16 @@ fn csv_export_follows_filters_and_includes_every_page() {
             .unwrap();
         assert_eq!(rows, 252);
     });
+}
+
+#[test]
+fn detects_cycles_in_large_import_graphs_without_recursion() {
+    let ids: Vec<_> = (0..50_000).map(|i| i.to_string()).collect();
+    let mut edges: HashMap<_, _> = ids
+        .windows(2)
+        .map(|pair| (pair[0].as_str(), vec![pair[1].as_str()]))
+        .collect();
+    assert!(!has_cycle(&edges));
+    edges.insert(ids.last().unwrap().as_str(), vec![ids[0].as_str()]);
+    assert!(has_cycle(&edges));
 }
