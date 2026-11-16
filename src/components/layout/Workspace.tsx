@@ -1,7 +1,8 @@
-import { Moon, PanelLeft, Search, Sun } from "lucide-react";
+import { Moon, PanelLeft, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { pages } from "../../app/pages";
+import { GlobalSearch } from "../search/GlobalSearch";
 import { isTauri } from "../../database/status";
 import { isIssueShortcut } from "../../features/issues/issueKeyboard";
 import { SidebarViews } from "../../features/views/SidebarViews";
@@ -63,9 +64,7 @@ export function Workspace() {
           </button>
           <span className="page-title">{title}</span>
           <div className="toolbar">
-            <button type="button" disabled title="Search is planned">
-              <Search size={16} /> Search
-            </button>
+            <GlobalSearch />
             <button
               type="button"
               aria-label={

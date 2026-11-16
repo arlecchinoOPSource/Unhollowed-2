@@ -9,9 +9,9 @@ use uuid::Uuid;
 
 mod query;
 mod recurrence;
-pub(crate) use query::search_text;
 #[cfg(test)]
 pub use query::IssueFilter;
+pub(crate) use query::{index_missing, search_text};
 pub use query::{query, IssuePage, IssueQuery};
 pub use recurrence::{add_days, recurrence_for, set_rule, Recurrence, RecurrenceInput};
 

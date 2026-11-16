@@ -370,7 +370,7 @@ fn push_filters(
 
 /// Computes `search_text` for rows saved before migration 6. Writes keep it
 /// current afterwards, so this finds nothing on later calls.
-async fn index_missing(pool: &SqlitePool, workspace: &str) -> Result<(), IssueError> {
+pub(crate) async fn index_missing(pool: &SqlitePool, workspace: &str) -> Result<(), IssueError> {
     let rows: Vec<(String, String, String)> = sqlx::query_as(
         "SELECT id, title, description FROM issues
          WHERE workspace_id = ? AND search_text IS NULL",

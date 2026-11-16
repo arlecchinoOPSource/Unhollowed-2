@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added workspace-wide search from the header (⌘K or Ctrl+K) across projects, issues, and milestones, with grouped and capped results, issue-number jumps, keyboard navigation, and protection against stale results.
 - Added progress rollups: objectives count their linked issues and sub-issues once each, missions roll up their objectives' issues without double counting, and objectives, missions, and milestones report blocked and canceled work alongside done ÷ non-canceled progress.
 - Added a project overview: completion that excludes canceled issues, open and closed totals, issues by status, overdue and coming-up work by local date, milestone progress, and recent activity labeled by its timestamps. Each number links to the matching issue list.
 - Added links from issues and projects to existing documents, with direct and issue-inherited project links shown separately, document pages that open from links and list what links to them, and unlinking that never changes the document. Adds migration 13.

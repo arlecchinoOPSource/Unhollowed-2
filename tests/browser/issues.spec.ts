@@ -579,6 +579,46 @@ test.beforeEach(async ({ page }) => {
                 activity,
               });
             }
+            case "search_workspace": {
+              const text = (args as { text: string }).text.trim().toLowerCase();
+              const number = /^(iss-|#)?(\d+)$/.exec(text)?.[2];
+              const matched = issues
+                .filter(
+                  (issue) =>
+                    issue.title.toLowerCase().includes(text) ||
+                    String(issue.number) === number,
+                )
+                .sort(
+                  (a, b) =>
+                    Number(String(b.number) === number) -
+                      Number(String(a.number) === number) ||
+                    Number(a.closed) - Number(b.closed),
+                );
+              const found = projects.filter((project) =>
+                project.name.toLowerCase().includes(text),
+              );
+              const hits = milestones.filter((milestone) =>
+                milestone.title.toLowerCase().includes(text),
+              );
+              return structuredClone({
+                projects: found.slice(0, 8).map(({ id, name, status }) => ({
+                  id,
+                  name,
+                  status,
+                })),
+                projectTotal: found.length,
+                issues: matched.slice(0, 8),
+                issueTotal: matched.length,
+                milestones: hits.slice(0, 8).map((milestone) => ({
+                  id: milestone.id,
+                  title: milestone.title,
+                  projectId: milestone.projectId,
+                  projectName: null,
+                  closed: milestone.closed,
+                })),
+                milestoneTotal: hits.length,
+              });
+            }
             case "list_saved_views":
               return structuredClone(
                 [...views].sort((a, b) => a.name.localeCompare(b.name)),
@@ -2504,4 +2544,77 @@ test.describe("Project overview", () => {
     await expect(overview.getByText("Nothing overdue.")).toBeVisible();
     await expect(overview.getByText("No activity yet.")).toBeVisible();
   });
+});
+
+test("searches the workspace from the header with keyboard navigation", async ({
+  page,
+}) => {
+  await seedIssues(page, [
+    { title: "Launch party", status: "done" },
+    { title: "Print launch posters", projectId: "project-1" },
+    { title: "Water plants" },
+  ]);
+  await page.goto("/issues");
+  await expect(page.getByRole("link", { name: "Water plants" })).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+K");
+  const dialog = page.getByRole("dialog", { name: "Search the workspace" });
+  const input = dialog.getByRole("combobox", {
+    name: "Search projects, issues, and milestones",
+  });
+  await expect(input).toBeFocused();
+  await expect(dialog.getByRole("status")).toContainText("Type to search");
+
+  await input.fill("launch");
+  const options = dialog.getByRole("option");
+  await expect(options).toHaveText([
+    /Studio launch/,
+    /ISS-2: Print launch posters/,
+    /ISS-1: Launch party/,
+  ]);
+  await expect(
+    dialog.getByRole("group", { name: /Issues/ }).getByRole("option"),
+  ).toHaveCount(2);
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(input).toHaveAttribute("aria-activedescendant", "issue-seed-2");
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByLabel("Issue title")).toHaveValue(
+    "Print launch posters",
+  );
+
+  // Issue numbers jump straight to the issue.
+  await page.getByRole("button", { name: "Search" }).click();
+  await input.fill("ISS-3");
+  await expect(options.first()).toHaveText(/ISS-3: Water plants/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Issue title")).toHaveValue("Water plants");
+
+  // No results, then a slow stale reply that must not replace newer results.
+  await page.keyboard.press("ControlOrMeta+K");
+  await input.fill("zebra");
+  await expect(dialog.getByRole("status")).toHaveText(
+    "No projects, issues, or milestones match “zebra”.",
+  );
+  await dispatch(page, "hold-command", "search_workspace");
+  await input.fill("water");
+  await expect(dialog.getByRole("status")).toHaveText("Searching…");
+  // Let the debounce pass so the "water" request is in flight and held.
+  await page.waitForTimeout(300);
+  await input.fill("launch");
+  await expect(options).toHaveCount(3);
+  await dispatch(page, "release-search_workspace");
+  await page.waitForTimeout(50);
+  await expect(options).toHaveCount(3);
+  await expect(options.first()).toHaveText(/Studio launch/);
+
+  // Escape closes and returns focus to the Search button.
+  await page.getByRole("option").first().waitFor();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Search" })).toBeFocused();
 });

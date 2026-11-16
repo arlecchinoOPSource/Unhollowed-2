@@ -11,6 +11,7 @@ mod overview;
 mod projects;
 mod relationships;
 mod saved_views;
+mod search;
 #[cfg(test)]
 mod test_support;
 
@@ -63,6 +64,7 @@ fn main() {
             document_links::unlink_project_document,
             document_links::get_document_usage,
             overview::get_project_overview,
+            search::search_workspace,
             labels::list_labels,
             labels::create_label,
             labels::update_label,

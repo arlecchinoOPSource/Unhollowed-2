@@ -192,6 +192,16 @@ Objectives, missions, and milestones summarize progress with the same rule as th
 - **What updates a rollup.** Completing, reopening, canceling, or blocking an issue. Linking or unlinking it. Adding or removing a parent relationship. Moving an issue to another project, which clears its objective links and stops it counting as a sub-issue.
 - **Milestones** keep their rules (completed ÷ open + completed) and now also report `blockedCount`, a subset of their open issues.
 
+## Workspace search
+
+`search_workspace` (`src-tauri/src/search.rs`) finds projects, issues, and milestones in the active workspace for the header's **Search** dialog (also ⌘K or Ctrl+K).
+
+- **Matching** is a literal, Unicode case-insensitive substring, as in issue search. Issues match their stored `search_text` (title and description), and `ISS-12`, `#12`, or `12` also finds issue 12. Projects (name, then description) and milestones (title, then description) are read through their workspace index and matched in Rust, because SQLite's `lower()` only folds ASCII.
+- **Ranking.** Projects: name prefix, then name, then description, with active before archived. Issues: exact number, then open before closed, then most recently updated. Milestones: open before closed, then match rank.
+- **Bounds.** Each group returns at most 8 results with its total. Empty or overly long text returns nothing.
+- **Indexes, from measurement.** All three queries use workspace-leading indexes (`projects_by_workspace`, `issues_by_workspace_number`, `milestones_by_workspace`), as a planner test asserts. A release build searching 5,000 issues, 300 projects, and 300 milestones in each of two workspaces took about 2.3 to 3.9 ms per search (`cargo test --release search::tests::measure -- --ignored --nocapture`), so no new index was added.
+- **Stale results.** The dialog waits 150 ms after typing and numbers each request. Replies to anything but the latest request are ignored.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
