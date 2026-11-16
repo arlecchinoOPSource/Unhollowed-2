@@ -2,6 +2,8 @@ import { Link, Route, Routes } from "react-router";
 import { Workspace } from "../components/layout/Workspace";
 import { Documents } from "../features/documents/Documents";
 import { Home } from "../features/home/Home";
+import { IssueDetail } from "../features/issues/IssueDetail";
+import { Issues, ProjectIssues } from "../features/issues/Issues";
 import { Projects } from "../features/projects/Projects";
 import { ProjectDetail } from "../features/projects/ProjectDetail";
 import { Settings } from "../features/settings/Settings";
@@ -15,8 +17,14 @@ export function App() {
         <Route path="/documents" element={<Documents />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
+        <Route path="/projects/:id/issues" element={<ProjectIssues />} />
+        <Route path="/issues" element={<Issues />} />
+        <Route path="/issues/:id" element={<IssueDetail />} />
         {features
-          .filter(({ path }) => path !== "/documents" && path !== "/projects")
+          .filter(
+            ({ path }) =>
+              !["/documents", "/projects", "/issues"].includes(path),
+          )
           .map(({ path, title, description }) => (
             <Route
               key={path}

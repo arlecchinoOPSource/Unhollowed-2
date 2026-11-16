@@ -644,3 +644,49 @@ fn every_change_rejects_missing_and_cross_workspace_issues() {
         );
     });
 }
+
+#[test]
+fn serializes_the_shape_the_webview_expects() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let issue = create(&pool, DEFAULT_WORKSPACE, fields("Shape"), None)
+            .await
+            .unwrap();
+        let value = serde_json::to_value(&issue).unwrap();
+        let mut keys: Vec<_> = value.as_object().unwrap().keys().cloned().collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            [
+                "closed",
+                "completedAt",
+                "createdAt",
+                "description",
+                "dueDate",
+                "id",
+                "number",
+                "priority",
+                "projectId",
+                "startDate",
+                "status",
+                "title",
+                "updatedAt",
+            ]
+        );
+        assert_eq!(value["closed"], false);
+        assert_eq!(value["number"], 1);
+        assert_eq!(
+            serde_json::to_value(IssueError::InvalidDateRange).unwrap(),
+            serde_json::json!({ "code": "invalid_date_range" })
+        );
+        let input: IssueFields = serde_json::from_value(serde_json::json!({
+            "title": "From the webview",
+            "description": null,
+            "priority": "low",
+            "startDate": null,
+            "dueDate": "2026-12-01",
+        }))
+        .unwrap();
+        assert_eq!(input.due_date.as_deref(), Some("2026-12-01"));
+    });
+}
