@@ -665,6 +665,7 @@ fn serializes_the_shape_the_webview_expects() {
                 "dueDate",
                 "id",
                 "labelIds",
+                "milestoneId",
                 "number",
                 "priority",
                 "projectId",

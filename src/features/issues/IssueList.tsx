@@ -3,6 +3,7 @@ import {
   ArrowUpNarrowWide,
   Circle,
   CircleCheck,
+  Flag,
   ListTodo,
   Plus,
   X,
@@ -22,6 +23,11 @@ import {
   type IssueSummary,
 } from "../../database/issues";
 import { listLabels, type Label } from "../../database/labels";
+import {
+  fitsIssue,
+  listMilestones,
+  type Milestone,
+} from "../../database/milestones";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
 import {
@@ -71,6 +77,7 @@ export function IssueList({ projectId }: { projectId?: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loadError, setLoadError] = useState("");
   const [request, setRequest] = useState(0);
   const [title, setTitle] = useState("");
@@ -107,6 +114,12 @@ export function IssueList({ projectId }: { projectId?: string }) {
     listLabels().then(
       (loaded) => {
         if (current) setLabels(loaded);
+      },
+      () => undefined,
+    );
+    listMilestones().then(
+      (loaded) => {
+        if (current) setMilestones(loaded);
       },
       () => undefined,
     );
@@ -291,6 +304,13 @@ export function IssueList({ projectId }: { projectId?: string }) {
 
   const projectNames = new Map(projects.map(({ id, name }) => [id, name]));
   const labelsById = new Map(labels.map((label) => [label.id, label]));
+  const milestoneTitles = new Map(
+    milestones.map(({ id, title }) => [id, title]),
+  );
+  // In a project's list, offer only milestones its issues can use.
+  const milestoneOptions = projectId
+    ? milestones.filter((milestone) => fitsIssue(milestone, projectId))
+    : milestones;
   const from = `${location.pathname}${location.search}`;
   const filtered = hasFilters(filters);
   const active: { label: string; clear: Partial<ListFilters> }[] = [];
@@ -325,6 +345,15 @@ export function IssueList({ projectId }: { projectId?: string }) {
     });
   if (filters.labels.length > 1 && filters.labelMatch === "all")
     active.push({ label: "Match all labels", clear: { labelMatch: "any" } });
+  if (filters.milestone)
+    active.push({
+      label: `Milestone: ${
+        filters.milestone === "none"
+          ? "None"
+          : (milestoneTitles.get(filters.milestone) ?? "Unavailable milestone")
+      }`,
+      clear: { milestone: "" },
+    });
   if (filters.due)
     active.push({
       label: `Due: ${duePresets[filters.due]}`,
@@ -441,6 +470,23 @@ export function IssueList({ projectId }: { projectId?: string }) {
             {Object.entries(duePresets).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Milestone
+          <select
+            value={filters.milestone}
+            onChange={(event) => update({ milestone: event.target.value })}
+          >
+            <option value="">Any milestone</option>
+            <option value="none">No milestone</option>
+            {milestoneOptions.map((milestone) => (
+              <option key={milestone.id} value={milestone.id}>
+                {milestone.closed
+                  ? `${milestone.title} (closed)`
+                  : milestone.title}
               </option>
             ))}
           </select>
@@ -641,6 +687,14 @@ export function IssueList({ projectId }: { projectId?: string }) {
                       Due <time dateTime={issue.dueDate}>{issue.dueDate}</time>
                     </span>
                   )}
+                  {issue.milestoneId &&
+                    milestoneTitles.has(issue.milestoneId) && (
+                      <span className="issue-milestone">
+                        <Flag size={13} aria-hidden="true" />
+                        <span className="visually-hidden">Milestone: </span>
+                        {milestoneTitles.get(issue.milestoneId)}
+                      </span>
+                    )}
                   <LabelBadges ids={issue.labelIds} labels={labelsById} />
                 </span>
               </li>

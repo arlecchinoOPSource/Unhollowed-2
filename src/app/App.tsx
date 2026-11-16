@@ -5,6 +5,7 @@ import { Home } from "../features/home/Home";
 import { IssueDetail } from "../features/issues/IssueDetail";
 import { Issues, ProjectIssues } from "../features/issues/Issues";
 import { Labels } from "../features/labels/Labels";
+import { Milestones } from "../features/milestones/Milestones";
 import { Projects } from "../features/projects/Projects";
 import { ProjectDetail } from "../features/projects/ProjectDetail";
 import { Settings } from "../features/settings/Settings";
@@ -21,6 +22,7 @@ export function App() {
         <Route path="/projects/:id/issues" element={<ProjectIssues />} />
         <Route path="/issues" element={<Issues />} />
         <Route path="/issues/labels" element={<Labels />} />
+        <Route path="/issues/milestones" element={<Milestones />} />
         <Route path="/issues/:id" element={<IssueDetail />} />
         {features
           .filter(

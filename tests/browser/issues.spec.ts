@@ -6,6 +6,7 @@ import type {
   IssueStatus,
 } from "../../src/database/issues";
 import type { Label, LabelInput } from "../../src/database/labels";
+import type { Milestone, MilestoneInput } from "../../src/database/milestones";
 import type { Project } from "../../src/database/projects";
 
 test.beforeEach(async ({ page }) => {
@@ -28,12 +29,23 @@ test.beforeEach(async ({ page }) => {
         createdAt: "2026-11-14T00:00:00Z",
         updatedAt: "2026-11-14T00:00:00Z",
       },
+      {
+        id: "project-2",
+        name: "Garden",
+        description: null,
+        status: "active",
+        startDate: null,
+        targetDate: null,
+        createdAt: "2026-11-14T00:00:00Z",
+        updatedAt: "2026-11-14T00:00:00Z",
+      },
     ];
     // Tests can preload issues by defining window.__seedIssues in their own
     // init script. That script runs after this one, so seeds load on the
     // first IPC call.
     const issues: Issue[] = [];
     const labels: Label[] = [];
+    const milestones: Milestone[] = [];
     let seeded = false;
     const seed = () =>
       (
@@ -54,6 +66,7 @@ test.beforeEach(async ({ page }) => {
         createdAt: `2026-11-01T00:00:${String(index % 60).padStart(2, "0")}Z`,
         updatedAt: `2026-11-01T00:${String(index % 60).padStart(2, "0")}:00Z`,
         labelIds: [],
+        milestoneId: null,
         ...seed,
       }));
     let clock = 0;
@@ -101,6 +114,7 @@ test.beforeEach(async ({ page }) => {
             status?: IssueStatus;
             query?: IssueQuery;
             labelIds?: string[];
+            milestoneId?: string | null;
           } = {},
         ) => {
           if (!seeded) {
@@ -142,7 +156,13 @@ test.beforeEach(async ({ page }) => {
                   (!q.labelIds?.length ||
                     (q.labelMatch === "all"
                       ? q.labelIds.every((id) => issue.labelIds.includes(id))
-                      : q.labelIds.some((id) => issue.labelIds.includes(id)))),
+                      : q.labelIds.some((id) =>
+                          issue.labelIds.includes(id),
+                        ))) &&
+                  (!(q.milestoneIds?.length || q.noMilestone) ||
+                    (issue.milestoneId
+                      ? (q.milestoneIds ?? []).includes(issue.milestoneId)
+                      : Boolean(q.noMilestone))),
               );
               const open = matches.filter((issue) => !issue.closed).length;
               const inState = matches.filter(
@@ -267,6 +287,7 @@ test.beforeEach(async ({ page }) => {
                 createdAt: time,
                 updatedAt: time,
                 labelIds: [],
+                milestoneId: null,
               };
               issues.push(issue);
               return structuredClone(issue);
@@ -305,8 +326,86 @@ test.beforeEach(async ({ page }) => {
                 !projects.some((item) => item.id === args.projectId)
               )
                 throw { code: "invalid_project" };
-              issue.projectId = args.projectId ?? null;
+              const target = args.projectId ?? null;
+              // A milestone for another project no longer applies.
+              const milestone = milestones.find(
+                (item) => item.id === issue.milestoneId,
+              );
+              if (milestone?.projectId && milestone.projectId !== target)
+                issue.milestoneId = null;
+              issue.projectId = target;
               issue.updatedAt = now();
+              return structuredClone(issue);
+            }
+            case "list_milestones":
+              return structuredClone(
+                milestones.map((milestone) => {
+                  const linked = issues.filter(
+                    (issue) => issue.milestoneId === milestone.id,
+                  );
+                  return {
+                    ...milestone,
+                    openCount: linked.filter((issue) => !issue.closed).length,
+                    completedCount: linked.filter(
+                      (issue) => issue.status === "done",
+                    ).length,
+                    canceledCount: linked.filter(
+                      (issue) => issue.status === "canceled",
+                    ).length,
+                  };
+                }),
+              );
+            case "create_milestone":
+            case "update_milestone": {
+              const input = (args as unknown as { input: MilestoneInput })
+                .input;
+              const existing = milestones.find((item) => item.id === args.id);
+              if (command === "update_milestone" && !existing)
+                throw { code: "not_found" };
+              const milestone: Milestone = existing ?? {
+                id: `milestone-${milestones.length + 1}`,
+                projectId: args.projectId ?? null,
+                closed: false,
+                closedAt: null,
+                openCount: 0,
+                completedCount: 0,
+                canceledCount: 0,
+                createdAt: now(),
+                updatedAt: now(),
+                title: "",
+                description: null,
+                dueDate: null,
+              };
+              Object.assign(milestone, input, { updatedAt: now() });
+              if (!existing) milestones.push(milestone);
+              return structuredClone(milestone);
+            }
+            case "close_milestone":
+            case "reopen_milestone": {
+              const milestone = milestones.find((item) => item.id === args.id);
+              if (!milestone) throw { code: "not_found" };
+              milestone.closed = command === "close_milestone";
+              milestone.closedAt = milestone.closed ? now() : null;
+              return structuredClone(milestone);
+            }
+            case "set_issue_milestone": {
+              const issue = find(args.id);
+              const id = args.milestoneId ?? null;
+              if (id) {
+                const milestone = milestones.find((item) => item.id === id);
+                if (
+                  !milestone ||
+                  (milestone.projectId &&
+                    milestone.projectId !== issue.projectId)
+                )
+                  throw { code: "invalid_milestone" };
+                if (milestone.closed && issue.milestoneId !== id)
+                  throw { code: "milestone_closed" };
+              }
+              if (issue.milestoneId !== id) {
+                issue.milestoneId = id;
+                issue.updatedAt = now();
+              }
               return structuredClone(issue);
             }
           }
@@ -821,4 +920,119 @@ test("creates labels, assigns several, filters by them, and keeps archived label
   await expect(
     page.getByText("Archived labels can be removed but not added."),
   ).toBeVisible();
+});
+
+test("plans milestones, links compatible issues, and updates progress", async ({
+  page,
+}) => {
+  await seedIssues(page, [
+    { title: "Print posters", projectId: "project-1" },
+    { title: "Book venue", projectId: "project-1" },
+    { title: "Plant tulips", projectId: "project-2" },
+  ]);
+  await page.goto("/issues");
+  await page.getByRole("link", { name: "Milestones" }).click();
+  await expect(page).toHaveURL(/\/issues\/milestones$/);
+  await expect(
+    page.getByRole("heading", { name: "No milestones yet" }),
+  ).toBeVisible();
+
+  const create = page.getByRole("form", { name: "Create a milestone" });
+  await create.getByLabel("Milestone title").fill("Opening night");
+  await create.getByLabel("Applies to").selectOption("project-1");
+  await create.getByLabel("Due date").fill("2026-12-20");
+  await create.getByRole("button", { name: "Create milestone" }).click();
+  await expect(
+    page.getByText("Created milestone Opening night."),
+  ).toBeVisible();
+  await expect(create.getByLabel("Milestone title")).toBeFocused();
+  await create.getByLabel("Milestone title").fill("Year review");
+  await create.getByRole("button", { name: "Create milestone" }).click();
+  await expect(page.getByText("Created milestone Year review.")).toBeVisible();
+
+  const opening = page
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("heading", { name: "Opening night" }) });
+  await expect(opening.getByText("No issues yet")).toBeVisible();
+  await expect(
+    opening.getByRole("link", { name: "Studio launch" }),
+  ).toBeVisible();
+
+  // Only compatible milestones are offered on an issue.
+  await page.getByRole("link", { name: "All issues" }).click();
+  await page.getByRole("link", { name: "Plant tulips" }).click();
+  await expect(page.getByLabel("Issue title")).toHaveValue("Plant tulips");
+  const milestone = page.getByRole("combobox", { name: /^Milestone/ });
+  await expect(milestone.getByRole("option")).toHaveText([
+    "No milestone",
+    "Year review (workspace)",
+  ]);
+  await page.getByRole("link", { name: "All issues" }).click();
+  for (const title of ["Print posters", "Book venue"]) {
+    await page.getByRole("link", { name: title }).click();
+    // Wait for the issue page: the list also has a Milestone filter.
+    await expect(page.getByLabel("Issue title")).toHaveValue(title);
+    await milestone.selectOption({ label: "Opening night" });
+    await expect(
+      page.getByText("Added to milestone Opening night."),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "All issues" }).click();
+  }
+
+  // Completing an issue updates progress.
+  await page
+    .getByRole("button", { name: "Complete ISS-1: Print posters" })
+    .click();
+  await expect(page.getByText("ISS-1 completed.")).toBeVisible();
+  await page.getByRole("link", { name: "Milestones" }).click();
+  await expect(
+    opening.getByText("1 of 2 complete (50%) · 1 open"),
+  ).toBeVisible();
+  await expect(
+    opening.getByRole("progressbar", { name: "Progress for Opening night" }),
+  ).toBeVisible();
+
+  // Filtering the list by milestone.
+  await opening
+    .getByRole("link", { name: "View issues in Opening night" })
+    .click();
+  const list = page.getByRole("list", { name: "All issues" });
+  await expect(
+    list.getByRole("link", {
+      name: /^(Print posters|Book venue|Plant tulips)$/,
+    }),
+  ).toHaveCount(2);
+  await expect(
+    page.getByRole("button", {
+      name: "Remove filter Milestone: Opening night",
+    }),
+  ).toBeVisible();
+
+  // Moving an issue to another project removes its project milestone.
+  await list.getByRole("link", { name: "Book venue" }).click();
+  await expect(page.getByLabel("Issue title")).toHaveValue("Book venue");
+  await page
+    .getByRole("combobox", { name: /^Project/ })
+    .selectOption("project-2");
+  await expect(
+    page.getByText(
+      "Moved to Garden. Removed milestone Opening night because it belongs to another project.",
+    ),
+  ).toBeVisible();
+  await expect(milestone).toHaveValue("");
+  await page.getByRole("link", { name: "All issues" }).click();
+  await page.getByRole("link", { name: "Milestones" }).click();
+  await expect(
+    opening.getByText("1 of 1 complete (100%) · 0 open"),
+  ).toBeVisible();
+
+  // Closing keeps the milestone on its issues.
+  await opening.getByRole("button", { name: "Close Opening night" }).click();
+  await expect(
+    page.getByText("Closed Opening night. Its issues keep the milestone."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Closed/ }).click();
+  await expect(
+    page.getByRole("list", { name: "Closed milestones" }).getByRole("heading"),
+  ).toHaveText(["Opening night"]);
 });

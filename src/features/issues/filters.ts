@@ -44,6 +44,8 @@ export interface ListFilters {
   /** Label IDs. Archived labels can be chosen to find historical issues. */
   labels: string[];
   labelMatch: "any" | "all";
+  /** A milestone ID, "none", or "" for any milestone. */
+  milestone: string;
   sort: IssueSortField;
   direction: "asc" | "desc";
 }
@@ -67,6 +69,7 @@ export function readFilters(params: URLSearchParams): ListFilters {
     due: pick(params.get("due"), duePresets),
     labels: (params.get("labels") ?? "").split(",").filter(Boolean),
     labelMatch: params.get("match") === "all" ? "all" : "any",
+    milestone: params.get("milestone") ?? "",
     sort,
     direction:
       direction === "asc" || direction === "desc"
@@ -86,6 +89,7 @@ export function writeFilters(filters: ListFilters): URLSearchParams {
   if (filters.due) params.set("due", filters.due);
   if (filters.labels.length > 0) params.set("labels", filters.labels.join(","));
   if (filters.labelMatch === "all") params.set("match", "all");
+  if (filters.milestone) params.set("milestone", filters.milestone);
   if (filters.sort !== "updated") params.set("sort", filters.sort);
   if (filters.direction !== defaultDirection(filters.sort))
     params.set("dir", filters.direction);
@@ -103,6 +107,7 @@ export function resetFilters(filters: ListFilters): ListFilters {
     due: "",
     labels: [],
     labelMatch: "any",
+    milestone: "",
   };
 }
 
@@ -113,7 +118,8 @@ export function hasFilters(filters: ListFilters): boolean {
     filters.priority ||
     filters.project ||
     filters.due ||
-    filters.labels.length > 0,
+    filters.labels.length > 0 ||
+    filters.milestone,
   );
 }
 
@@ -144,6 +150,11 @@ export function toQuery(
     priorities: filters.priority ? [filters.priority] : [],
     labelIds: filters.labels,
     labelMatch: filters.labelMatch,
+    milestoneIds:
+      filters.milestone && filters.milestone !== "none"
+        ? [filters.milestone]
+        : [],
+    noMilestone: filters.milestone === "none",
     sort: filters.sort,
     direction: filters.direction,
   };

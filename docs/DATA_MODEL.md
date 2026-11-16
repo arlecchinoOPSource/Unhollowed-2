@@ -85,6 +85,18 @@ Invalid values return `invalid_filter`. Every query is scoped to the active work
 - `IssueFilter.labelIds` matches issues with `any` (the default) or `all` of the labels in `labelMatch`. Archived labels still match.
 - Badges always show the label name, and archived labels say so in text. Each palette color has light and dark theme values with at least 3:1 contrast on that theme's surfaces, which `tests/unit/labels.test.tsx` checks against the theme tokens.
 
+## Milestones
+
+`milestones` stores workspace-owned checkpoints: a 1 to 200 character title, an optional plain-text description of up to 5,000 characters, an optional local `due_date`, an `open` or `closed` state with `closed_at`, and timestamps. `project_id` is NULL for a workspace milestone, or a project in the same workspace for a project milestone. The scope is chosen at creation and cannot change. `project_id` uses `ON DELETE RESTRICT`, so a project with milestones cannot be deleted until safe deletion (U2-025) defines what happens to them.
+
+`issues.milestone_id` holds at most one milestone per issue and is cleared if the milestone is deleted (`ON DELETE SET NULL`).
+
+- **Compatible links.** An issue can use any workspace milestone in its workspace, or a milestone for its own project. `set_issue_milestone` checks this, and triggers on `issues` reject incompatible links, including a project change that would leave one behind. Repeating the current milestone keeps `updated_at`.
+- **Project moves.** `set_issue_project` clears a milestone that belongs to another project in the same update. Workspace milestones stay, and moving back does not restore a cleared milestone.
+- **Closed milestones** keep their issues and counts but cannot gain new issues until reopened. Closing or reopening is idempotent.
+- **Counts and progress.** `list_milestones` derives `openCount` (open issues), `completedCount` (done), and `canceledCount` (canceled) from the milestone's issues when it is read, so counts follow completion, reopening, reassignment, and project moves without stored totals. Progress is completed out of open plus completed. Canceled issues are shown separately and do not count. A milestone with no open or completed issues shows "No issues yet" instead of a percentage.
+- `IssueFilter.milestoneIds` and `noMilestone` filter issues by milestone, in the same way as `projectIds` and `inbox`.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -103,3 +115,4 @@ Invalid values return `invalid_filter`. Every query is scoped to the active work
 | 0005      | `issues` and `issue_counters`, with per-workspace numbers and optional project |
 | 0006      | `issues.search_text` for literal, case-insensitive issue search                |
 | 0007      | `labels` and `issue_labels`, with unique links and archived-label rules        |
+| 0008      | `milestones` and `issues.milestone_id`, with project compatibility triggers    |

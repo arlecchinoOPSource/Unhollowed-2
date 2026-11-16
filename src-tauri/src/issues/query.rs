@@ -45,6 +45,10 @@ pub struct IssueFilter {
     pub label_ids: Vec<String>,
     /// `any` (the default) matches at least one label, `all` every label.
     pub label_match: Option<String>,
+    /// Issues in any of these milestones.
+    pub milestone_ids: Vec<String>,
+    /// Also match issues without a milestone.
+    pub no_milestone: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -122,6 +126,8 @@ struct ValidQuery {
     undated: Undated,
     label_ids: Vec<String>,
     match_all_labels: bool,
+    milestone_ids: Vec<String>,
+    no_milestone: bool,
     order: String,
     limit: u32,
     offset: u32,
@@ -156,6 +162,7 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
         || filter.priorities.len() > MAX_LIST_ITEMS
         || filter.project_ids.len() > MAX_LIST_ITEMS
         || filter.label_ids.len() > MAX_LIST_ITEMS
+        || filter.milestone_ids.len() > MAX_LIST_ITEMS
         || !filter
             .statuses
             .iter()
@@ -241,6 +248,8 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
         undated,
         label_ids,
         match_all_labels,
+        milestone_ids: filter.milestone_ids,
+        no_milestone: filter.no_milestone,
         order,
         limit,
         offset,
@@ -299,6 +308,24 @@ fn push_filters(
             list.push_unseparated(")");
             if inbox {
                 builder.push(" OR project_id IS NULL");
+            }
+            builder.push(")");
+        }
+    }
+    match (query.milestone_ids.is_empty(), query.no_milestone) {
+        (true, false) => {}
+        (true, true) => {
+            builder.push(" AND milestone_id IS NULL");
+        }
+        (false, none) => {
+            builder.push(" AND (milestone_id IN (");
+            let mut list = builder.separated(", ");
+            for id in &query.milestone_ids {
+                list.push_bind(id.clone());
+            }
+            list.push_unseparated(")");
+            if none {
+                builder.push(" OR milestone_id IS NULL");
             }
             builder.push(")");
         }

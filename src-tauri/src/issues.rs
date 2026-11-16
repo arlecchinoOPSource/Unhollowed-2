@@ -38,6 +38,8 @@ pub struct IssueSummary {
     pub closed: bool,
     pub created_at: String,
     pub updated_at: String,
+    /// At most one milestone: a workspace one or one for the issue's project.
+    pub milestone_id: Option<String>,
     /// IDs of the issue's labels, including archived ones.
     #[sqlx(try_from = "String")]
     pub label_ids: LabelIds,
@@ -98,6 +100,10 @@ pub enum IssueError {
     InvalidLabel,
     /// An archived label cannot be newly assigned. Existing links remain.
     LabelArchived,
+    /// The milestone is not in the workspace, or belongs to another project.
+    InvalidMilestone,
+    /// A closed milestone cannot gain issues. Existing links remain.
+    MilestoneClosed,
     StorageFailed,
 }
 
@@ -169,7 +175,7 @@ impl IssueFields {
 macro_rules! summary_fields {
     () => {
         "id, number, project_id, title, status, priority, start_date, due_date, \
-         completed_at, closed, created_at, updated_at, \
+         completed_at, closed, created_at, updated_at, milestone_id, \
          (SELECT json_group_array(label_id) FROM (SELECT label_id FROM issue_labels \
           WHERE issue_id = issues.id ORDER BY label_id)) AS label_ids"
     };
@@ -350,6 +356,9 @@ pub async fn reopen(pool: &SqlitePool, workspace: &str, id: &str) -> Result<Issu
 
 /// Assigns the issue to a project in the same workspace, or to the Inbox when
 /// `project` is `None`. The issue keeps its ID and number.
+///
+/// A milestone for another project no longer applies after the move, so it is
+/// cleared in the same update. Workspace milestones stay.
 pub async fn set_project(
     pool: &SqlitePool,
     workspace: &str,
@@ -362,10 +371,62 @@ pub async fn set_project(
     sqlx::query_as(&format!(
         "UPDATE issues SET
              project_id = ?1,
+             milestone_id = CASE WHEN milestone_id IN (
+                 SELECT id FROM milestones WHERE project_id IS NOT NULL AND project_id IS NOT ?1
+             ) THEN NULL ELSE milestone_id END,
              updated_at = CASE WHEN project_id IS ?1 THEN updated_at ELSE {NOW} END
          WHERE id = ?2 AND workspace_id = ?3 RETURNING {FIELDS}"
     ))
     .bind(project)
+    .bind(id)
+    .bind(workspace)
+    .fetch_optional(pool)
+    .await
+    .map_err(storage_failed)?
+    .ok_or(IssueError::NotFound)
+}
+
+/// Sets or clears the issue's milestone.
+///
+/// The milestone must be in the workspace and be a workspace milestone or one
+/// for the issue's project. Closed milestones cannot gain issues, but an issue
+/// already on one keeps it. Repeating the current milestone changes nothing.
+pub async fn set_milestone(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+    milestone: Option<&str>,
+) -> Result<Issue, IssueError> {
+    if let Some(milestone) = milestone {
+        let found: Option<(bool, bool, bool)> = sqlx::query_as(
+            "SELECT i.id IS NOT NULL,
+                    m.project_id IS NULL OR m.project_id IS i.project_id,
+                    m.state = 'closed' AND i.milestone_id IS NOT m.id
+             FROM milestones AS m
+             LEFT JOIN issues AS i ON i.id = ? AND i.workspace_id = m.workspace_id
+             WHERE m.id = ? AND m.workspace_id = ?",
+        )
+        .bind(id)
+        .bind(milestone)
+        .bind(workspace)
+        .fetch_optional(pool)
+        .await
+        .map_err(storage_failed)?;
+        match found {
+            None => return Err(IssueError::InvalidMilestone),
+            Some((false, _, _)) => return Err(IssueError::NotFound),
+            Some((_, false, _)) => return Err(IssueError::InvalidMilestone),
+            Some((_, _, true)) => return Err(IssueError::MilestoneClosed),
+            Some(_) => {}
+        }
+    }
+    sqlx::query_as(&format!(
+        "UPDATE issues SET
+             milestone_id = ?1,
+             updated_at = CASE WHEN milestone_id IS ?1 THEN updated_at ELSE {NOW} END
+         WHERE id = ?2 AND workspace_id = ?3 RETURNING {FIELDS}"
+    ))
+    .bind(milestone)
     .bind(id)
     .bind(workspace)
     .fetch_optional(pool)
@@ -491,6 +552,16 @@ pub async fn query_issues(
 ) -> Result<IssuePage, IssueError> {
     let (pool, workspace) = scope(&instances).await?;
     self::query(&pool, &workspace, query).await
+}
+
+#[tauri::command]
+pub async fn set_issue_milestone(
+    instances: State<'_, DbInstances>,
+    id: String,
+    milestone_id: Option<String>,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_milestone(&pool, &workspace, &id, milestone_id.as_deref()).await
 }
 
 #[tauri::command]

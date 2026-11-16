@@ -370,3 +370,15 @@
   gap: 8px;
   font-weight: 400 !important;
 }
+
+.issue-milestone {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.issue-page-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
