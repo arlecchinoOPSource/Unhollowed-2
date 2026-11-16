@@ -48,6 +48,8 @@ export interface IssueSummary {
   closed: boolean;
   createdAt: string;
   updatedAt: string;
+  /** At most one: a workspace milestone or one for the issue's project. */
+  milestoneId: string | null;
   /** Label IDs, including archived labels the issue already had. */
   labelIds: string[];
 }
@@ -97,6 +99,9 @@ export interface IssueFilter {
   labelIds?: string[];
   /** `any` (default) matches one of the labels, `all` every label. */
   labelMatch?: "any" | "all";
+  milestoneIds?: string[];
+  /** Also match issues without a milestone. */
+  noMilestone?: boolean;
 }
 
 export type IssueSortField =
@@ -166,6 +171,14 @@ export function setIssueProject(
   return write(() => invoke("set_issue_project", { id, projectId }));
 }
 
+/** Sets or clears the issue's milestone. */
+export function setIssueMilestone(
+  id: string,
+  milestoneId: string | null,
+): Promise<Issue> {
+  return write(() => invoke("set_issue_milestone", { id, milestoneId }));
+}
+
 /** Replaces the issue's labels. Archived labels can stay but not be added. */
 export function setIssueLabels(id: string, labelIds: string[]): Promise<Issue> {
   return write(() => invoke("set_issue_labels", { id, labelIds }));
@@ -202,6 +215,10 @@ export function issueError(error: unknown): string {
       return "That label is unavailable in the current workspace.";
     case "label_archived":
       return "Archived labels cannot be added. Restore the label first.";
+    case "invalid_milestone":
+      return "That milestone does not apply to this issue's project.";
+    case "milestone_closed":
+      return "Closed milestones cannot gain issues. Reopen the milestone first.";
     case "invalid_filter":
       return "These filters are not supported. Reset them and try again.";
     default:

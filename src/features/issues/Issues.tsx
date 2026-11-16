@@ -1,4 +1,4 @@
-import { ArrowLeft, Tags } from "lucide-react";
+import { ArrowLeft, Flag, Tags } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -17,9 +17,14 @@ export function Issues() {
           <h1>Issues</h1>
           <p>Review, update, and complete your work across every project.</p>
         </div>
-        <Link className="issue-manage" to="/issues/labels">
-          <Tags size={16} aria-hidden="true" /> Manage labels
-        </Link>
+        <span className="issue-page-links">
+          <Link className="issue-manage" to="/issues/milestones">
+            <Flag size={16} aria-hidden="true" /> Milestones
+          </Link>
+          <Link className="issue-manage" to="/issues/labels">
+            <Tags size={16} aria-hidden="true" /> Manage labels
+          </Link>
+        </span>
       </div>
       <IssueList />
     </section>

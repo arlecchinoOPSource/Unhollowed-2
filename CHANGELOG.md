@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added workspace and project milestones with due dates, close and reopen, a milestones overview with live open, completed, and canceled counts and progress, milestone assignment on issues that clears project milestones when an issue moves to another project, and milestone filtering. Adds migration 8.
 - Added workspace labels with colors and descriptions, a label management page with rename, recolor, archive, and restore, multi-label assignment on issues, label badges that do not rely on color, and any or all label filtering. Archived labels stay on existing issues. Adds migration 7.
 - Added issue search across titles and description text, combinable status, priority, project, and due date filters with removable chips and reset, sorting with stable tie-breaks, and paged results through `query_issues` and migration 6.
 - Added All Issues and issue detail pages with Open, Closed, and All filters, ISS numbers, status and priority indicators, quick completion and reopening, rich-text descriptions with autosave, properties, project links, and a project-scoped issue list.

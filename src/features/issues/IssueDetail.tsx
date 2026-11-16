@@ -18,6 +18,7 @@ import {
   issueStatuses,
   reopenIssue,
   setIssueLabels,
+  setIssueMilestone,
   setIssueProject,
   updateIssue,
   type Issue,
@@ -25,6 +26,11 @@ import {
   type IssueStatus,
 } from "../../database/issues";
 import { listLabels, type Label } from "../../database/labels";
+import {
+  fitsIssue,
+  listMilestones,
+  type Milestone,
+} from "../../database/milestones";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
 import { LabelPicker } from "../labels/LabelParts";
@@ -63,6 +69,7 @@ function IssueLoader({ id }: { id: string }) {
     issue: Issue;
     projects: Project[];
     labels: Label[];
+    milestones: Milestone[];
   }>();
   const [error, setError] = useState<{ message: string; missing: boolean }>();
   const [request, setRequest] = useState(0);
@@ -70,9 +77,14 @@ function IssueLoader({ id }: { id: string }) {
   useEffect(() => {
     if (!desktop) return;
     let current = true;
-    Promise.all([getIssue(id), listProjects(), listLabels()]).then(
-      ([issue, projects, labels]) => {
-        if (current) setLoaded({ issue, projects, labels });
+    Promise.all([
+      getIssue(id),
+      listProjects(),
+      listLabels(),
+      listMilestones(),
+    ]).then(
+      ([issue, projects, labels, milestones]) => {
+        if (current) setLoaded({ issue, projects, labels, milestones });
       },
       (cause) => {
         if (current)
@@ -119,6 +131,7 @@ function IssueLoader({ id }: { id: string }) {
           initial={loaded.issue}
           projects={loaded.projects}
           labels={loaded.labels}
+          milestones={loaded.milestones}
         />
       )}
     </section>
@@ -129,10 +142,12 @@ function IssueEditor({
   initial,
   projects,
   labels,
+  milestones,
 }: {
   initial: Issue;
   projects: Project[];
   labels: Label[];
+  milestones: Milestone[];
 }) {
   const id = initial.id;
   const [recovered] = useState(() => unsavedDrafts.get(id));
@@ -283,13 +298,40 @@ function IssueEditor({
   const projectName = issue.projectId && projectNames.get(issue.projectId);
 
   function changeProject(projectId: string | null) {
-    setIssue((current) => ({ ...current, projectId }));
+    const milestone = milestones.find(({ id }) => id === issue.milestoneId);
+    // The backend clears a milestone that belongs to another project.
+    const clears = milestone !== undefined && !fitsIssue(milestone, projectId);
+    setIssue((current) => ({
+      ...current,
+      projectId,
+      milestoneId: clears ? null : current.milestoneId,
+    }));
+    const moved = projectId
+      ? `Moved to ${projectNames.get(projectId) ?? "the project"}.`
+      : "Moved to the Inbox.";
     run(
       setIssueProject(id, projectId),
       () => undefined,
-      projectId
-        ? `Moved to ${projectNames.get(projectId) ?? "the project"}.`
-        : "Moved to the Inbox.",
+      clears
+        ? `${moved} Removed milestone ${milestone.title} because it belongs to another project.`
+        : moved,
+    );
+  }
+
+  // Milestones this issue can use, plus its current one even when closed.
+  const milestoneOptions = milestones.filter(
+    (milestone) =>
+      milestone.id === issue.milestoneId ||
+      (!milestone.closed && fitsIssue(milestone, issue.projectId)),
+  );
+
+  function changeMilestone(milestoneId: string | null) {
+    setIssue((current) => ({ ...current, milestoneId }));
+    const title = milestones.find(({ id }) => id === milestoneId)?.title;
+    run(
+      setIssueMilestone(id, milestoneId),
+      () => undefined,
+      title ? `Added to milestone ${title}.` : "Milestone removed.",
     );
   }
 
@@ -415,6 +457,24 @@ function IssueEditor({
             Open project {projectName}
           </Link>
         )}
+        <label>
+          Milestone
+          <select
+            value={issue.milestoneId ?? ""}
+            onChange={(event) => changeMilestone(event.target.value || null)}
+          >
+            <option value="">No milestone</option>
+            {milestoneOptions.map((milestone) => (
+              <option key={milestone.id} value={milestone.id}>
+                {milestone.closed
+                  ? `${milestone.title} (closed)`
+                  : milestone.projectId
+                    ? milestone.title
+                    : `${milestone.title} (workspace)`}
+              </option>
+            ))}
+          </select>
+        </label>
         <LabelPicker
           legend="Labels"
           labels={labels}

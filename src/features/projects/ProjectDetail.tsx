@@ -19,7 +19,6 @@ import {
 import { ProjectDialog } from "./ProjectDialog";
 
 const sections = [
-  { title: "Milestones", icon: Flag },
   { title: "Documents", icon: Notebook },
   { title: "Dashboard", icon: LayoutDashboard },
 ];
@@ -154,6 +153,14 @@ function ProjectDetails({ id }: { id: string }) {
               <ListTodo size={19} aria-hidden="true" />
               <h2>Issues</h2>
               <p>Review and update the work in this project.</p>
+            </Link>
+            <Link
+              className="project-card"
+              to={`/issues/milestones?project=${id}`}
+            >
+              <Flag size={19} aria-hidden="true" />
+              <h2>Milestones</h2>
+              <p>Plan checkpoints and track progress for this project.</p>
             </Link>
             {sections.map(({ title, icon: Icon }) => (
               <section className="project-card" key={title}>
