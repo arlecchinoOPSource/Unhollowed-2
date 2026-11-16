@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { ArrowUpRight, FolderKanban, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   createProject,
@@ -15,6 +15,14 @@ import "./projects.css";
 export function Projects() {
   const desktop = isTauri();
   const navigate = useNavigate();
+  const isCurrentScreen = useRef(false);
+
+  useLayoutEffect(() => {
+    isCurrentScreen.current = true;
+    return () => {
+      isCurrentScreen.current = false;
+    };
+  }, []);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState("");
   const [request, setRequest] = useState(0);
@@ -149,7 +157,9 @@ export function Projects() {
           onClose={() => setCreating(false)}
           save={async (input) => {
             const project = await createProject(input);
-            await navigate(`/projects/${project.id}`);
+            if (isCurrentScreen.current) {
+              await navigate(`/projects/${project.id}`);
+            }
           }}
         />
       )}

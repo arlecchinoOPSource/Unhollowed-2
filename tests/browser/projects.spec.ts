@@ -5,13 +5,23 @@ import type {
   ProjectStatus,
 } from "../../src/database/projects";
 
-test("creates, opens, edits, filters, and archives projects through the desktop interface", async ({
-  page,
-}) => {
+test.beforeEach(async ({ page }) => {
   // This exercises the UI with an in-memory substitute for Tauri IPC.
   // Rust tests and desktop smoke testing cover SQLite and the real IPC.
   await page.addInitScript(() => {
     let project: Project | undefined;
+    const deferred = new Map<string, Promise<void>>();
+    window.addEventListener("defer-project-save", (event) => {
+      const command = (event as CustomEvent<string>).detail;
+      deferred.set(
+        command,
+        new Promise((resolve) => {
+          window.addEventListener(`finish-${command}`, () => resolve(), {
+            once: true,
+          });
+        }),
+      );
+    });
     Object.assign(window, {
       __TAURI_INTERNALS__: {
         invoke: async (
@@ -22,6 +32,9 @@ test("creates, opens, edits, filters, and archives projects through the desktop 
             status?: ProjectStatus;
           } = {},
         ) => {
+          const wait = deferred.get(command);
+          deferred.delete(command);
+          await wait;
           if (command === "list_projects") return project ? [project] : [];
           if (command === "create_project" && args.input) {
             project = {
@@ -55,7 +68,11 @@ test("creates, opens, edits, filters, and archives projects through the desktop 
       isTauri: true,
     });
   });
+});
 
+test("creates, opens, edits, filters, and archives projects through the desktop interface", async ({
+  page,
+}) => {
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "Workspace" });
   await nav.getByRole("link", { name: "Projects" }).click();
@@ -96,10 +113,26 @@ test("creates, opens, edits, filters, and archives projects through the desktop 
   await expect(
     page.getByRole("heading", { name: "Studio opening", level: 1 }),
   ).toBeVisible();
-  await page.getByLabel("Project status").selectOption("active");
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent("defer-project-save", {
+        detail: "change_project_status",
+      }),
+    ),
+  );
+  const status = page.getByLabel("Project status");
+  await status.focus();
+  await status.selectOption("active");
+  await expect(page.getByRole("status")).toHaveText("Saving status…");
+  await expect(status).toBeFocused();
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("finish-change_project_status")),
+  );
   await expect(page.getByRole("status")).toHaveText(
     "Status updated to Active.",
   );
+  await expect(status).toBeFocused();
+  await expect(status).toHaveValue("active");
   await page.getByRole("link", { name: "All projects" }).click();
   await page.getByLabel("Search projects").fill("sample materials");
   await page.getByLabel("Filter by status").selectOption("planned");
@@ -116,5 +149,41 @@ test("creates, opens, edits, filters, and archives projects through the desktop 
   await page.getByLabel("Filter by status").selectOption("archived");
   await expect(
     page.getByRole("link", { name: /Studio opening/ }),
+  ).toBeVisible();
+});
+
+test("saves a new project without redirecting after the user goes back", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const projects = page
+    .getByRole("navigation", { name: "Workspace" })
+    .getByRole("link", { name: "Projects" });
+  await projects.click();
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent("defer-project-save", {
+        detail: "create_project",
+      }),
+    ),
+  );
+  await page.getByRole("button", { name: "Create project" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Project name").fill("Saved in the background");
+  await dialog.getByRole("button", { name: "Create project" }).click();
+  await expect(dialog.getByRole("button", { name: "Saving…" })).toBeVisible();
+
+  await page.goBack();
+  const home = page.getByRole("heading", { name: "Welcome to Unhollowed." });
+  await expect(home).toBeVisible();
+  await page.evaluate(async () => {
+    window.dispatchEvent(new Event("finish-create_project"));
+    // Let the save continuation and any resulting navigation run.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  });
+  await expect(home).toBeVisible();
+  await projects.click();
+  await expect(
+    page.getByRole("link", { name: /Saved in the background/ }),
   ).toBeVisible();
 });

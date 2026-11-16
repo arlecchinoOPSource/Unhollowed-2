@@ -109,10 +109,11 @@ function ProjectDetails({ id }: { id: string }) {
               Project status
               <select
                 value={project.status}
-                disabled={saving}
-                onChange={(event) =>
-                  void setStatus(event.target.value as ProjectStatus)
-                }
+                aria-disabled={saving}
+                onChange={(event) => {
+                  if (!saving)
+                    void setStatus(event.target.value as ProjectStatus);
+                }}
               >
                 {Object.entries(projectStatuses).map(([value, label]) => (
                   <option key={value} value={value}>
