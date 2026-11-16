@@ -99,6 +99,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0015_document_revisions.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 16,
+            description: "Add private document image assets",
+            sql: include_str!("../migrations/0016_document_assets.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

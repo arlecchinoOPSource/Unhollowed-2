@@ -1,3 +1,5 @@
+import { DocumentImage } from "./editor/DocumentImage";
+import { DocumentInsert } from "./editor/DocumentInsert";
 import { EditorContent } from "@tiptap/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRichTextEditor } from "../../components/editor/RichText";
@@ -108,6 +110,7 @@ function EditorBody({
   });
   const [title, setTitle] = useState(document.title);
   const [restoring, setRestoring] = useState(false);
+  const [assetError, setAssetError] = useState("");
   const [focusMode, setFocusMode] = useState(false);
   const focusControl = useRef<HTMLButtonElement>(null);
 
@@ -147,7 +150,17 @@ function EditorBody({
       latest.current = { ...latest.current, content };
       schedule();
     },
-    documentExtensions,
+    documentExtensions.map((extension) =>
+      extension.name === DocumentImage.name
+        ? DocumentImage.configure({
+            documentId: id,
+            onImageError: () =>
+              setAssetError(
+                "Could not paste this image. Try inserting a local image under 8 MiB.",
+              ),
+          })
+        : extension,
+    ),
   );
 
   function save() {
@@ -275,9 +288,11 @@ function EditorBody({
       {editor && !recovered && !restoring && (
         <>
           <DocumentToolbar editor={editor} />
+          <DocumentInsert editor={editor} documentId={id} />
           <DocumentNavigation editor={editor} />
         </>
       )}
+      {assetError && <p role="alert">{assetError}</p>}
       <EditorContent editor={editor} className="editor" />
       <p role="status" className="save-status">
         {restoring

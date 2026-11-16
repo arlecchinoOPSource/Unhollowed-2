@@ -27,6 +27,7 @@ async function setup(page: Page, version?: number) {
       createdAt: "",
     };
     const documents = [first, second];
+    let image = "";
     Object.assign(window, {
       isTauri: true,
       __TAURI_INTERNALS__: {
@@ -36,7 +37,13 @@ async function setup(page: Page, version?: number) {
             id,
             title,
             content,
-          }: { id?: string; title?: string; content?: string } = {},
+            data,
+          }: {
+            id?: string;
+            title?: string;
+            content?: string;
+            data?: string;
+          } = {},
         ) {
           const document = documents.find((item) => item.id === id);
           switch (command) {
@@ -46,6 +53,11 @@ async function setup(page: Page, version?: number) {
               return structuredClone(document);
             case "get_document_usage":
               return { projects: [], issues: [] };
+            case "store_document_image":
+              image = data ?? "";
+              return "image-1";
+            case "get_document_image":
+              return { mime: "image/png", data: image };
             case "update_document": {
               Object.assign(document!, { title, content });
               return structuredClone(document);
@@ -149,4 +161,38 @@ test("recovers a draft after reloading before the debounce expires", async ({
   await expect(editor).toHaveText("Recover these edits");
   await page.clock.fastForward(800);
   await expect(page.getByText("All changes saved")).toBeVisible();
+});
+
+test("persists a table and local image reference across document switches", async ({
+  page,
+}) => {
+  await setup(page);
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await page.getByText("Insert and tables", { exact: true }).click();
+  await page.getByRole("button", { name: "Insert table", exact: true }).click();
+  await expect(editor.locator("tr")).toHaveCount(3);
+  await page.getByRole("button", { name: "Add row", exact: true }).click();
+  await expect(editor.locator("tr")).toHaveCount(4);
+  await editor.press("ControlOrMeta+End");
+  await page.getByLabel("Insert image").setInputFiles({
+    name: "sample.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jL1sAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
+  const image = page.getByRole("img", { name: "sample" });
+  await expect(image).toBeVisible();
+  await expect
+    .poll(() =>
+      image.evaluate((element: HTMLImageElement) => element.naturalWidth),
+    )
+    .toBe(1);
+  await expect(page.getByText("All changes saved")).toBeVisible();
+  await page.getByRole("button", { name: "Second draft" }).click();
+  await expect(image).toHaveCount(0);
+  await page.getByRole("button", { name: "First draft" }).click();
+  await expect(editor.locator("tr")).toHaveCount(4);
+  await expect(image).toBeVisible();
 });

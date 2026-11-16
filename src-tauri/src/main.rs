@@ -33,6 +33,8 @@ fn main() {
             goals::save_project_mission,
             goals::save_project_objective,
             documents::list_documents,
+            documents::assets::store_document_image,
+            documents::assets::get_document_image,
             documents::get_document,
             documents::create_document,
             documents::update_document,

@@ -258,3 +258,91 @@
   max-width: 72ch;
   margin-inline: auto;
 }
+
+[data-writing-focus="true"] .document-insert {
+  display: none;
+}
+
+.document-editor .tableWrapper {
+  overflow-x: auto;
+  margin-block: 12px;
+}
+
+.document-editor table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.document-editor :is(th, td) {
+  position: relative;
+  min-width: 2em;
+  padding: 6px;
+  vertical-align: top;
+  border: 1px solid var(--control-line);
+}
+
+.document-editor :is(th, td) p:last-child {
+  margin-bottom: 0;
+}
+
+.document-editor th,
+.document-editor .u2-shade-neutral {
+  background: var(--sidebar);
+}
+
+.document-editor .u2-shade-accent,
+.document-editor .selectedCell {
+  background: var(--selection);
+}
+
+.document-editor .u2-alignment-left {
+  text-align: left;
+}
+.document-editor .u2-alignment-center {
+  text-align: center;
+}
+.document-editor .u2-alignment-right {
+  text-align: right;
+}
+.document-editor .u2-border-heavy {
+  border-width: 2px;
+}
+
+.document-editor .column-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -2px;
+  width: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.document-editor .resize-cursor {
+  cursor: col-resize;
+}
+
+.word-image figure {
+  margin: 12px 0;
+}
+.word-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.word-image figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+}
+.word-image-small {
+  width: 25%;
+}
+.word-image-medium {
+  width: 50%;
+}
+.word-image-center figure {
+  margin-inline: auto;
+}
+.word-image-right figure {
+  margin-inline-start: auto;
+}

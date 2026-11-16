@@ -1,3 +1,4 @@
+pub(crate) mod assets;
 pub(crate) mod revisions;
 
 use crate::database::{active_workspace, pool, DatabaseError};
