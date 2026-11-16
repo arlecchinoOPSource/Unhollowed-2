@@ -51,6 +51,10 @@ test.beforeEach(async ({ page }) => {
     const labels: Label[] = [];
     // Saved views, optionally seeded through window.__seedViews.
     const views: SavedView[] = [];
+    // Documents seeded through window.__seedDocuments, and their links.
+    const documents: { id: string; title: string; content: string }[] = [];
+    const issueDocuments: [string, string][] = [];
+    const projectDocuments: [string, string][] = [];
     const milestones: Milestone[] = [];
     const goals: ProjectGoals = { missions: [], objectives: [], links: [] };
     const relationships: { child: string; parent: string }[] = [];
@@ -211,6 +215,24 @@ test.beforeEach(async ({ page }) => {
             views.push(
               ...((window as unknown as { __seedViews?: SavedView[] })
                 .__seedViews ?? []),
+            );
+            documents.push(
+              ...(
+                (window as unknown as { __seedDocuments?: string[] })
+                  .__seedDocuments ?? []
+              ).map((title, index) => ({
+                id: `doc-${index + 1}`,
+                title,
+                content: JSON.stringify({
+                  type: "doc",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: `${title} body` }],
+                    },
+                  ],
+                }),
+              })),
             );
           }
           const hold = held.get(command);
@@ -373,6 +395,88 @@ test.beforeEach(async ({ page }) => {
               });
               await delayedList;
               return snapshot;
+            }
+            case "list_documents":
+              return documents.map(({ id, title }) => ({
+                id,
+                title,
+                updatedAt: "2026-11-01T00:00:00Z",
+              }));
+            case "get_document": {
+              const document = documents.find((item) => item.id === args.id);
+              if (!document) throw { code: "not_found" };
+              return {
+                ...document,
+                createdAt: "2026-11-01T00:00:00Z",
+                updatedAt: "2026-11-01T00:00:00Z",
+              };
+            }
+            case "list_issue_documents":
+            case "link_issue_document":
+            case "unlink_issue_document":
+            case "list_project_documents":
+            case "link_project_document":
+            case "unlink_project_document": {
+              const { issueId, documentId } = args as {
+                issueId?: string;
+                documentId?: string;
+              };
+              const forIssue = command.includes("issue");
+              const owner = forIssue ? issueId! : args.projectId!;
+              const links = forIssue ? issueDocuments : projectDocuments;
+              if (forIssue) find(owner);
+              if (command.startsWith("link")) {
+                if (!documents.some((item) => item.id === documentId))
+                  throw { code: "document_not_found" };
+                if (!links.some(([o, d]) => o === owner && d === documentId))
+                  links.push([owner, documentId!]);
+              }
+              if (command.startsWith("unlink")) {
+                const index = links.findIndex(
+                  ([o, d]) => o === owner && d === documentId,
+                );
+                if (index >= 0) links.splice(index, 1);
+              }
+              const summary = (id: string) => {
+                const document = documents.find((item) => item.id === id)!;
+                return {
+                  id,
+                  title: document.title,
+                  updatedAt: "2026-11-01T00:00:00Z",
+                };
+              };
+              const direct = links
+                .filter(([o]) => o === owner)
+                .map(([, d]) => summary(d))
+                .sort((a, b) => a.title.localeCompare(b.title));
+              if (forIssue) return direct;
+              const viaIssues = documents
+                .filter(({ id }) => !direct.some((item) => item.id === id))
+                .map(({ id }) => ({
+                  ...summary(id),
+                  issues: issueDocuments
+                    .filter(([, d]) => d === id)
+                    .map(([issue]) => issues.find((item) => item.id === issue)!)
+                    .filter((issue) => issue.projectId === owner)
+                    .map(({ id, number, title }) => ({ id, number, title })),
+                }))
+                .filter((document) => document.issues.length > 0);
+              return { direct, viaIssues };
+            }
+            case "get_document_usage": {
+              const documentId = (args as { documentId: string }).documentId;
+              return {
+                issues: issueDocuments
+                  .filter(([, d]) => d === documentId)
+                  .map(([issue]) => issues.find((item) => item.id === issue)!)
+                  .map(({ id, number, title }) => ({ id, number, title })),
+                projects: projectDocuments
+                  .filter(([, d]) => d === documentId)
+                  .map(([project]) =>
+                    projects.find((item) => item.id === project)!,
+                  )
+                  .map(({ id, name }) => ({ id, name })),
+              };
             }
             case "list_saved_views":
               return structuredClone(
@@ -2094,4 +2198,91 @@ test.describe("Saved views", () => {
     await expect(page.getByText("Updated view Stale view.")).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
   });
+});
+
+test("links documents to issues and projects and navigates both ways", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.assign(window, {
+      __seedDocuments: ["Launch brief", "Venue notes", "Unrelated"],
+    });
+  });
+  await seedIssues(page, [
+    { title: "Plan launch", projectId: "project-1" },
+    { title: "Book venue", projectId: "project-1" },
+  ]);
+  await page.goto("/issues");
+  await page.getByRole("link", { name: "Book venue" }).click();
+  await expect(page.getByLabel("Issue title")).toHaveValue("Book venue");
+  const linkedDocuments = page.getByRole("region", {
+    name: "Linked documents",
+  });
+  await expect(
+    linkedDocuments.getByText("No documents linked yet."),
+  ).toBeVisible();
+  await linkedDocuments
+    .getByLabel("Link a document")
+    .selectOption({ label: "Venue notes" });
+  await linkedDocuments
+    .getByRole("button", { name: "Link", exact: true })
+    .click();
+  await expect(page.getByText("Linked Venue notes.")).toBeVisible();
+
+  // To the document and back.
+  await linkedDocuments.getByRole("link", { name: "Venue notes" }).click();
+  await expect(page).toHaveURL(/\/documents\?doc=doc-2$/);
+  await expect(page.getByLabel("Document title")).toHaveValue("Venue notes");
+  const usage = page.getByRole("region", { name: "Linked from" });
+  await expect(
+    usage.getByRole("link", { name: "ISS-2: Book venue" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Back to ISS-2" }).click();
+  await expect(page.getByLabel("Issue title")).toHaveValue("Book venue");
+
+  // The project shows its own links separately from its issues' links.
+  await page.getByRole("link", { name: "Open project Studio launch" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Studio launch", level: 1 }),
+  ).toBeVisible();
+  const projectDocs = page.getByRole("region", {
+    name: "Documents",
+    exact: true,
+  });
+  await projectDocs
+    .getByLabel("Link a document")
+    .selectOption({ label: "Launch brief" });
+  await projectDocs.getByRole("button", { name: "Link", exact: true }).click();
+  await expect(page.getByText("Linked Launch brief.")).toBeVisible();
+  const inherited = page.getByRole("region", {
+    name: "From this project's issues",
+  });
+  await expect(
+    inherited.getByRole("link", { name: "Venue notes" }),
+  ).toBeVisible();
+  await expect(
+    inherited.getByRole("link", { name: "ISS-2: Book venue" }),
+  ).toBeVisible();
+  await expect(inherited.getByText("Launch brief")).toHaveCount(0);
+
+  // Unlinking removes only the link.
+  await projectDocs
+    .getByRole("button", { name: "Unlink Launch brief" })
+    .click();
+  await expect(
+    page.getByText("Unlinked Launch brief. The document itself is unchanged."),
+  ).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Workspace" })
+    .getByRole("link", { name: "Documents" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Launch brief" }),
+  ).toBeVisible();
+
+  // A link to a document that no longer exists says so.
+  await page.goto("/documents?doc=doc-missing");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Could not open this document.",
+  );
 });

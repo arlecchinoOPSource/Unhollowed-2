@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
   createDocument,
@@ -12,6 +13,9 @@ import { Documents } from "../../src/features/documents/Documents";
 vi.mock("../../src/database/status", () => ({
   isTauri: vi.fn(),
   readDatabaseStatus: vi.fn(),
+}));
+vi.mock("../../src/database/documentLinks", () => ({
+  getDocumentUsage: vi.fn(() => Promise.resolve({ issues: [], projects: [] })),
 }));
 vi.mock("../../src/database/documents", () => ({
   listDocuments: vi.fn(),
@@ -44,7 +48,11 @@ afterEach(cleanup);
 
 test("explains that documents need the desktop app in the browser", () => {
   vi.mocked(isTauri).mockReturnValue(false);
-  render(<Documents />);
+  render(
+    <MemoryRouter>
+      <Documents />
+    </MemoryRouter>,
+  );
   expect(screen.getByRole("heading", { name: "Documents" })).toBeVisible();
   expect(screen.getByText(/stored locally in the desktop app/)).toBeVisible();
   expect(listDocuments).not.toHaveBeenCalled();
@@ -53,7 +61,11 @@ test("explains that documents need the desktop app in the browser", () => {
 test("lists saved documents and reopens one with its formatting", async () => {
   vi.mocked(listDocuments).mockResolvedValue([stored]);
   vi.mocked(getDocument).mockResolvedValue(stored);
-  render(<Documents />);
+  render(
+    <MemoryRouter>
+      <Documents />
+    </MemoryRouter>,
+  );
   fireEvent.click(await screen.findByRole("button", { name: "Trip notes" }));
   expect(await screen.findByLabelText("Document title")).toHaveValue(
     "Trip notes",
@@ -76,7 +88,11 @@ test("creates a document and opens it in the editor", async () => {
     title: "Untitled",
     content: '{"type":"doc","content":[{"type":"paragraph"}]}',
   });
-  render(<Documents />);
+  render(
+    <MemoryRouter>
+      <Documents />
+    </MemoryRouter>,
+  );
   expect(await screen.findByText("No documents yet.")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: /New document/ }));
   expect(await screen.findByLabelText("Document title")).toHaveValue(
@@ -88,7 +104,11 @@ test("creates a document and opens it in the editor", async () => {
 test("reports a failed creation", async () => {
   vi.mocked(listDocuments).mockResolvedValue([]);
   vi.mocked(createDocument).mockRejectedValue({ code: "storage_failed" });
-  render(<Documents />);
+  render(
+    <MemoryRouter>
+      <Documents />
+    </MemoryRouter>,
+  );
   fireEvent.click(await screen.findByRole("button", { name: /New document/ }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Could not create a document.",

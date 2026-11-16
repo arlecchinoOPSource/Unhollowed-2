@@ -1,0 +1,99 @@
+.document-links {
+  display: grid;
+  gap: 10px;
+}
+
+.document-links h2,
+.document-links h3,
+.document-links p {
+  margin: 0;
+}
+
+.document-links ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.document-links li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  overflow-wrap: anywhere;
+}
+
+.document-links li svg {
+  color: var(--muted);
+}
+
+.document-links li button {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.document-links form {
+  display: grid;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.document-links form div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.document-links select {
+  min-width: 0;
+  flex: 1 1 160px;
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.document-links .action {
+  margin: 0;
+}
+
+.document-inherited {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.document-usage {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.document-usage h2,
+.document-usage p {
+  margin: 0;
+}
+
+.document-usage ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

@@ -226,3 +226,11 @@ a.project-card p {
 .projects-view progress {
   accent-color: var(--accent);
 }
+
+.project-documents {
+  margin-top: 18px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}

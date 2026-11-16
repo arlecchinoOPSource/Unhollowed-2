@@ -160,6 +160,15 @@ A recurring issue is a series of ordinary issues, one per occurrence. Only one o
 - **Unavailable references.** Projects, labels, and milestones a view refers to may later be deleted or belong to another workspace. When names have loaded and a referenced record no longer exists, the list or board says so and offers **Remove unavailable filters**. Archived labels and projects still exist and still match.
 - **Integrations.** Only list and board filters can be saved, because they are the shared query model. Calendar and Today/Upcoming settings are not saved as views.
 
+## Document links
+
+`issue_documents` and `project_documents` link issues and projects to existing documents by stable ID, each with its own `workspace_id` and a primary key on the pair, so a link exists at most once. Triggers require both ends to be in the link's workspace and forbid editing links in place.
+
+- **Content is never touched.** Linking and unlinking only add or remove link rows. They never read or write document content, so Tiptap JSON is preserved exactly. Linking an already linked document, or unlinking one that is not linked, changes nothing.
+- **Missing records.** A link cannot exist without both ends, so it is removed with its issue, project, or document (`ON DELETE CASCADE`). Unlinking removes only the link, never the document. Linking a document or owner outside the active workspace returns `document_not_found` or `not_found`. Opening `/documents?doc=<id>` for a document that no longer exists shows that it could not be opened.
+- **Direct and inherited.** A project page lists documents linked to the project, and separately **From this project's issues**: documents linked to its issues but not to the project, each with the issues that link it. Inherited entries follow the issue, so moving an issue out of the project removes them.
+- **Navigation.** The Documents page opens the document named by `?doc=<id>`. Links from issues and projects include a **Back to** link for their origin, and each document lists the issues and projects that link to it under **Linked from**.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -183,3 +192,4 @@ A recurring issue is a series of ordinary issues, one per occurrence. Only one o
 | 0010      | Workspace-scoped issue relationships                                           |
 | 0011      | `issue_recurrences` and occurrence identity on issues                          |
 | 0012      | `saved_views` with versioned filter configuration                              |
+| 0013      | `issue_documents` and `project_documents` links                                |

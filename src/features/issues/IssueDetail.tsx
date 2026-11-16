@@ -35,6 +35,7 @@ import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
 import { LabelPicker } from "../labels/LabelParts";
 import { useLocalToday } from "../today/useLocalToday";
+import { IssueDocuments } from "../documents/LinkedDocuments";
 import { StatusBadge } from "./IssueBadges";
 import { IssueRepeat } from "./IssueRepeat";
 import { IssueRelationships } from "./IssueRelationships";
@@ -401,6 +402,10 @@ function IssueEditor({
           </button>
         )}
         {error && <p role="alert">{error}</p>}
+        <IssueDocuments
+          issueId={id}
+          origin={{ from: `/issues/${id}`, fromLabel: issueKey(issue) }}
+        />
       </div>
       <section
         className="issue-properties"

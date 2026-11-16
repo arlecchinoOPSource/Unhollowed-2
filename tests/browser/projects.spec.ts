@@ -36,6 +36,10 @@ test.beforeEach(async ({ page }) => {
           deferred.delete(command);
           await wait;
           if (command === "list_projects") return project ? [project] : [];
+          // The project page also lists linked documents.
+          if (command === "list_documents") return [];
+          if (command === "list_project_documents")
+            return { direct: [], viaIssues: [] };
           if (command === "create_project" && args.input) {
             project = {
               ...args.input,
@@ -120,17 +124,16 @@ test("creates, opens, edits, filters, and archives projects through the desktop 
       }),
     ),
   );
+  // The page has more than one live region, so messages are found by text.
   const status = page.getByLabel("Project status");
   await status.focus();
   await status.selectOption("active");
-  await expect(page.getByRole("status")).toHaveText("Saving status…");
+  await expect(page.getByText("Saving status…")).toBeVisible();
   await expect(status).toBeFocused();
   await page.evaluate(() =>
     window.dispatchEvent(new Event("finish-change_project_status")),
   );
-  await expect(page.getByRole("status")).toHaveText(
-    "Status updated to Active.",
-  );
+  await expect(page.getByText("Status updated to Active.")).toBeVisible();
   await expect(status).toBeFocused();
   await expect(status).toHaveValue("active");
   await page.getByRole("link", { name: "All projects" }).click();
@@ -142,9 +145,7 @@ test("creates, opens, edits, filters, and archives projects through the desktop 
   await page.getByLabel("Filter by status").selectOption("active");
   await page.getByRole("link", { name: /Studio opening/ }).click();
   await page.getByLabel("Project status").selectOption("archived");
-  await expect(page.getByRole("status")).toHaveText(
-    "Status updated to Archived.",
-  );
+  await expect(page.getByText("Status updated to Archived.")).toBeVisible();
   await page.getByRole("link", { name: "All projects" }).click();
   await page.getByLabel("Filter by status").selectOption("archived");
   await expect(
