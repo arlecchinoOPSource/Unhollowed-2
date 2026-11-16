@@ -36,6 +36,11 @@ describe("local calendar dates", () => {
     expect(localDate(instant)).toBe("2026-11-17");
   });
 
+  test("preserves four-digit years below 0100", () => {
+    expect(addDays("0099-12-30", 1)).toBe("0099-12-31");
+    expect(addDays("0099-12-31", 1)).toBe("0100-01-01");
+  });
+
   test("count days across month, year, and leap-day boundaries", () => {
     inZone("America/New_York");
     expect(addDays("2026-11-30", 1)).toBe("2026-12-01");

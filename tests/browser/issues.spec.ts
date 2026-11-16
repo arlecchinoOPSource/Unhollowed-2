@@ -1480,6 +1480,27 @@ test.describe("Today and Upcoming", () => {
     await expect(page).toHaveURL(/\/today\?group=project$/);
   });
 
+  test("loads the last open issue after completing a row on the first page", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
+    await seedIssues(
+      page,
+      Array.from({ length: 101 }, (_, index) => ({
+        title: `Paged task ${index + 1}`,
+        dueDate: "2026-11-16",
+      })),
+    );
+    await page.goto("/today");
+    await expect(page.getByText("Showing 100 of 101")).toBeVisible();
+    await page.getByRole("button", { name: /^Complete ISS-1:/ }).click();
+    await expect(page.getByText("Showing 99 of 100")).toBeVisible();
+    await page.getByRole("button", { name: "Load more" }).click();
+    await expect(
+      page.getByRole("link", { name: "Paged task 101" }),
+    ).toBeVisible();
+  });
+
   test("completes in place and reschedules with immediate updates", async ({
     page,
   }) => {

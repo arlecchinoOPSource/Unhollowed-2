@@ -9,19 +9,19 @@
 
 /** The local calendar date `days` after `from`, as YYYY-MM-DD. */
 export function localDate(from: Date, days = 0): string {
-  const date = new Date(
-    from.getFullYear(),
-    from.getMonth(),
-    from.getDate() + days,
-  );
+  const date = new Date(from);
+  date.setDate(date.getDate() + days);
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${String(date.getFullYear()).padStart(4, "0")}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** Parses YYYY-MM-DD as local midnight on that date. */
 export function parseLocalDate(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day);
+  const date = new Date(0);
+  date.setFullYear(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+  return date;
 }
 
 /** The local date `days` after the YYYY-MM-DD `date`. */

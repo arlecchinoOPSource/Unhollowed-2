@@ -89,6 +89,12 @@ function TaskViews({ mode }: { mode: Mode }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const pendingFocus = useRef<number | null>(null);
   const nextOffset = useRef(0);
+  // Rescheduling can move a loaded row across the pagination boundary.
+  const restartPagination = useRef(false);
+  const latestKey = useRef(key);
+  useEffect(() => {
+    latestKey.current = key;
+  }, [key]);
 
   useEffect(() => {
     if (!desktop) return;
@@ -105,6 +111,7 @@ function TaskViews({ mode }: { mode: Mode }) {
       ([page, withoutDate]) => {
         if (!current) return;
         nextOffset.current = page.issues.length;
+        restartPagination.current = false;
         setResults({ key, issues: page.issues, total: page.total });
         setUndated(withoutDate.total);
       },
@@ -141,7 +148,7 @@ function TaskViews({ mode }: { mode: Mode }) {
   // Completed issues stay in place, marked done, until the view next loads,
   // so the list does not shift under the pointer or lose focus.
   async function toggle(issue: IssueSummary) {
-    if (busy.has(issue.id)) return;
+    if (busy.size || loadingMore || results?.key !== key) return;
     setBusy((ids) => new Set(ids).add(issue.id));
     setError("");
     setMessage("");
@@ -150,6 +157,14 @@ function TaskViews({ mode }: { mode: Mode }) {
         ? await reopenIssue(issue.id)
         : await completeIssue(issue.id);
       replace(updated);
+      if (latestKey.current === key) {
+        restartPagination.current = true;
+        setResults((current) =>
+          current?.key === key
+            ? { ...current, total: current.total + (updated.closed ? -1 : 1) }
+            : current,
+        );
+      }
       setMessage(
         `${issueKey(updated)} ${updated.closed ? "completed" : "reopened"}.`,
       );
@@ -165,7 +180,14 @@ function TaskViews({ mode }: { mode: Mode }) {
   }
 
   async function reschedule(issue: IssueSummary, dueDate: string | null) {
-    if (dueDate === issue.dueDate) return;
+    if (
+      dueDate === issue.dueDate ||
+      loadingMore ||
+      busy.size ||
+      results?.key !== key
+    )
+      return;
+    setBusy((ids) => new Set(ids).add(issue.id));
     setError("");
     setMessage("");
     const index = results?.issues.findIndex(({ id }) => id === issue.id) ?? 0;
@@ -191,11 +213,11 @@ function TaskViews({ mode }: { mode: Mode }) {
     );
     if (leaves) {
       pendingFocus.current = index;
-      nextOffset.current -= 1;
     }
     try {
       const updated = await setIssueDueDate(issue.id, dueDate);
       if (!leaves) replace(updated);
+      if (latestKey.current === key) restartPagination.current = true;
       const moved = leaves
         ? mode === "today"
           ? " and moved to Upcoming"
@@ -208,7 +230,7 @@ function TaskViews({ mode }: { mode: Mode }) {
       );
       if (!dueDate) setUndated((count) => (count ?? 0) + 1);
     } catch (cause) {
-      if (leaves) nextOffset.current += 1;
+      if (latestKey.current !== key) return;
       setResults(
         (current) =>
           current && {
@@ -225,32 +247,50 @@ function TaskViews({ mode }: { mode: Mode }) {
           },
       );
       setError(`Could not reschedule ${issueKey(issue)}. ${issueError(cause)}`);
+    } finally {
+      setBusy((ids) => {
+        const next = new Set(ids);
+        next.delete(issue.id);
+        return next;
+      });
     }
   }
 
   async function loadMore() {
-    if (!results || loadingMore) return;
+    if (!results || results.key !== key || loadingMore || busy.size) return;
     setLoadingMore(true);
     const loadingKey = results.key;
+    let offset = restartPagination.current ? 0 : nextOffset.current;
+    const known = new Set(results.issues.map(({ id }) => id));
     try {
-      const page = await queryIssues({
-        ...viewQuery(mode, today),
-        limit: PAGE_SIZE,
-        offset: nextOffset.current,
-      });
-      nextOffset.current += page.issues.length;
-      setResults((current) => {
-        if (!current || current.key !== loadingKey) return current;
-        const known = new Set(current.issues.map(({ id }) => id));
-        return {
-          ...current,
-          total: page.total,
-          issues: [
-            ...current.issues,
-            ...page.issues.filter(({ id }) => !known.has(id)),
-          ],
-        };
-      });
+      while (true) {
+        const page = await queryIssues({
+          ...viewQuery(mode, today),
+          limit: PAGE_SIZE,
+          offset,
+        });
+        if (latestKey.current !== loadingKey) return;
+        offset += page.issues.length;
+        const additions = page.issues.filter(({ id }) => !known.has(id));
+        if (
+          additions.length === 0 &&
+          page.issues.length > 0 &&
+          offset < page.total
+        )
+          continue;
+        nextOffset.current = offset;
+        restartPagination.current = false;
+        setResults((current) =>
+          current?.key === loadingKey
+            ? {
+                ...current,
+                total: page.total,
+                issues: [...current.issues, ...additions],
+              }
+            : current,
+        );
+        break;
+      }
     } catch (cause) {
       setError(issueError(cause));
     } finally {
@@ -374,7 +414,7 @@ function TaskViews({ mode }: { mode: Mode }) {
                           null
                     }
                     from={from}
-                    busy={busy.has(issue.id)}
+                    busy={busy.size > 0 || loadingMore || loading}
                     toggleRef={(element) => {
                       if (element) toggles.current.set(issue.id, element);
                       else toggles.current.delete(issue.id);
@@ -388,21 +428,23 @@ function TaskViews({ mode }: { mode: Mode }) {
           );
         })}
       </div>
-      {results && issues.length < results.total && (
-        <div className="issue-more">
-          <p>
-            Showing {issues.length} of {results.total}
-          </p>
-          <button
-            type="button"
-            className="action"
-            aria-disabled={loadingMore}
-            onClick={() => void loadMore()}
-          >
-            {loadingMore ? "Loading…" : "Load more"}
-          </button>
-        </div>
-      )}
+      {results &&
+        issues.filter((issue) => !issue.closed).length < results.total && (
+          <div className="issue-more">
+            <p>
+              Showing {issues.filter((issue) => !issue.closed).length} of{" "}
+              {results.total}
+            </p>
+            <button
+              type="button"
+              className="action"
+              aria-disabled={loadingMore || loading || busy.size > 0}
+              onClick={() => void loadMore()}
+            >
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        )}
       {undated !== null && undated > 0 && (
         <p className="task-undated">
           {undated === 1
@@ -489,6 +531,7 @@ function TaskRow({
           {due <= today && (
             <button
               type="button"
+              disabled={busy}
               aria-label={`Move ${issueKey(issue)} to tomorrow`}
               onClick={() => onReschedule(addDays(today, 1))}
             >
@@ -501,6 +544,7 @@ function TaskRow({
             </span>
             <input
               type="date"
+              readOnly={busy}
               value={draft ?? due}
               onChange={(event) => setDraft(event.target.value)}
               onBlur={() => commit()}
