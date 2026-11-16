@@ -5,18 +5,38 @@ import {
   getDocumentUsage,
   type DocumentUsage,
 } from "../../database/documentLinks";
+import type { DocumentSummary } from "../../database/documents";
 import {
-  createDocument,
-  listDocuments,
-  type DocumentSummary,
-} from "../../database/documents";
+  addLibraryDocument,
+  createFolder,
+  duplicateDocument,
+  loadLibrary,
+  updateLibraryDocument,
+  type Folder,
+  type LibraryDocument,
+} from "../../database/documentLibrary";
+import {
+  LibraryControls,
+  folderPath,
+  templateBody,
+  templates,
+} from "./LibraryControls";
+import { readDraft, waitForDocumentWrites } from "./editor/drafts";
 import { isTauri } from "../../database/status";
 import { DocumentEditor } from "./DocumentEditor";
 import "./documentLinks.css";
 
 export function Documents() {
   const desktop = isTauri();
-  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [documents, setDocuments] = useState<LibraryDocument[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [search, setSearch] = useState("");
+  const [folder, setFolder] = useState("all");
+  const [view, setView] = useState("active");
+  const [sort, setSort] = useState("updated");
+  const [template, setTemplate] =
+    useState<keyof typeof templates>("Blank document");
+  const [busy, setBusy] = useState(false);
   // The open document lives in the URL, so issues and projects can link to
   // it and the browser history returns to them.
   const [params, setParams] = useSearchParams();
@@ -34,8 +54,12 @@ export function Documents() {
   useEffect(() => {
     if (!desktop) return;
     let current = true;
-    listDocuments()
-      .then((loaded) => current && setDocuments(loaded))
+    loadLibrary()
+      .then((loaded) => {
+        if (!current) return;
+        setDocuments(loaded.documents);
+        setFolders(loaded.folders);
+      })
       .catch(
         () => current && setError("Could not read documents from storage."),
       );
@@ -45,22 +69,73 @@ export function Documents() {
   }, [desktop]);
 
   const handleSaved = useCallback((saved: DocumentSummary) => {
+    setDocuments((existing) =>
+      existing.map((entry) =>
+        entry.id === saved.id
+          ? { ...entry, title: saved.title, updatedAt: saved.updatedAt }
+          : entry,
+      ),
+    );
+  }, []);
+
+  function upsert(saved: LibraryDocument) {
     setDocuments((existing) => [
       saved,
       ...existing.filter(({ id }) => id !== saved.id),
     ]);
-  }, []);
+  }
 
-  async function create() {
+  function select(id: string) {
+    setActiveId(id);
+    void updateLibraryDocument(id, { kind: "open" }).then(
+      (item) => {
+        setDocuments((entries) =>
+          entries.map((entry) =>
+            entry.id === item.id
+              ? { ...entry, openedAt: item.openedAt }
+              : entry,
+          ),
+        );
+      },
+      () => undefined,
+    );
+  }
+
+  async function run(operation: () => Promise<void>) {
+    if (busy) return false;
+    setBusy(true);
     setError("");
     try {
-      const created = await createDocument();
-      handleSaved(created);
-      setActiveId(created.id);
+      await operation();
+      return true;
     } catch {
-      setError("Could not create a document.");
+      setError("Could not update the document library. Try again.");
+      return false;
+    } finally {
+      setBusy(false);
     }
   }
+
+  const selected = documents.find(({ id }) => id === activeId);
+  const query = search.trim().toLocaleLowerCase();
+  const visible = documents
+    .filter(
+      (item) =>
+        Boolean(item.archivedAt) === (view === "archived") &&
+        (view !== "favorites" || item.favorite) &&
+        (view !== "recent" || item.openedAt) &&
+        (folder === "all" || item.folderId === (folder || null)) &&
+        item.title.toLocaleLowerCase().includes(query),
+    )
+    .sort((a, b) =>
+      sort === "title"
+        ? a.title.localeCompare(b.title)
+        : sort === "created"
+          ? b.createdAt.localeCompare(a.createdAt)
+          : view === "recent"
+            ? (b.openedAt ?? "").localeCompare(a.openedAt ?? "")
+            : b.updatedAt.localeCompare(a.updatedAt),
+    );
 
   return (
     <>
@@ -79,19 +154,137 @@ export function Documents() {
         <div className="documents">
           <section aria-labelledby="document-list-heading">
             <h2 id="document-list-heading">Your documents</h2>
-            <button type="button" className="action" onClick={create}>
+            <div className="word-controls">
+              <label>
+                Template
+                <select
+                  value={template}
+                  onChange={(event) =>
+                    setTemplate(event.target.value as keyof typeof templates)
+                  }
+                >
+                  {Object.keys(templates).map((name) => (
+                    <option key={name}>{name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Search documents
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </label>
+              <label>
+                Show documents
+                <select
+                  value={view}
+                  onChange={(event) => setView(event.target.value)}
+                >
+                  <option value="active">Active</option>
+                  <option value="favorites">Favorites</option>
+                  <option value="recent">Recent</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+              <label>
+                Folder filter
+                <select
+                  value={folder}
+                  onChange={(event) => setFolder(event.target.value)}
+                >
+                  <option value="all">All folders</option>
+                  <option value="">Top level</option>
+                  {folders.map(({ id }) => (
+                    <option key={id} value={id}>
+                      {folderPath(id, folders)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Sort documents
+                <select
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value)}
+                >
+                  <option value="updated">
+                    {view === "recent" ? "Last opened" : "Last updated"}
+                  </option>
+                  <option value="created">Recently created</option>
+                  <option value="title">Title</option>
+                </select>
+              </label>
+            </div>
+            <button
+              type="button"
+              className="action"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const created = await addLibraryDocument(
+                    template === "Blank document" ? "Untitled" : template,
+                    templateBody(template),
+                    folder === "all" ? null : folder || null,
+                  );
+                  upsert(created);
+                  setView("active");
+                  setSearch("");
+                  setActiveId(created.id);
+                })
+              }
+            >
               <FilePlus size={15} aria-hidden="true" /> New document
             </button>
-            {documents.length === 0 ? (
-              <p>No documents yet.</p>
+            <LibraryControls
+              folders={folders}
+              selected={selected}
+              busy={busy}
+              addFolder={(name, parent) =>
+                run(async () => {
+                  const created = await createFolder(name, parent);
+                  setFolders((items) => [...items, created]);
+                })
+              }
+              update={(input) => {
+                if (selected)
+                  void run(async () =>
+                    upsert(await updateLibraryDocument(selected.id, input)),
+                  );
+              }}
+              duplicate={() => {
+                if (selected)
+                  void run(async () => {
+                    await waitForDocumentWrites(selected.id);
+                    if (readDraft(selected.id)) {
+                      setError(
+                        "Wait for the document to save or resolve its recovered draft before duplicating.",
+                      );
+                      return;
+                    }
+                    const created = await duplicateDocument(selected.id);
+                    upsert(created);
+                    setView("active");
+                    setSearch("");
+                    setActiveId(created.id);
+                  });
+              }}
+            />
+            {visible.length === 0 ? (
+              <p>
+                {documents.length
+                  ? "No documents match this view."
+                  : "No documents yet."}
+              </p>
             ) : (
               <ul className="document-list">
-                {documents.map(({ id, title }) => (
+                {visible.map(({ id, title }) => (
                   <li key={id}>
                     <button
                       type="button"
                       aria-current={id === activeId ? "true" : undefined}
-                      onClick={() => setActiveId(id)}
+                      onClick={() => select(id)}
                     >
                       {title}
                     </button>

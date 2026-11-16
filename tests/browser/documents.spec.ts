@@ -12,7 +12,14 @@ async function setup(page: Page, version?: number) {
         },
       ],
     });
+    const meta = {
+      folderId: null as string | null,
+      favorite: false,
+      archivedAt: null as string | null,
+      openedAt: null as string | null,
+    };
     const first = {
+      ...meta,
       id: "one",
       title: "First draft",
       content,
@@ -20,6 +27,7 @@ async function setup(page: Page, version?: number) {
       createdAt: "",
     };
     const second = {
+      ...meta,
       id: "two",
       title: "Second draft",
       content,
@@ -27,6 +35,7 @@ async function setup(page: Page, version?: number) {
       createdAt: "",
     };
     const documents = [first, second];
+    const folders: { id: string; parentId: string | null; name: string }[] = [];
     let image = "";
     Object.assign(window, {
       isTauri: true,
@@ -38,15 +47,55 @@ async function setup(page: Page, version?: number) {
             title,
             content,
             data,
+            input,
+            name,
+            parentId,
+            folder,
           }: {
             id?: string;
             title?: string;
             content?: string;
             data?: string;
+            input?: { kind: string; folder?: string; value?: boolean };
+            name?: string;
+            parentId?: string | null;
+            folder?: string | null;
           } = {},
         ) {
           const document = documents.find((item) => item.id === id);
           switch (command) {
+            case "list_document_library":
+              return structuredClone({ documents, folders });
+            case "change_document_library":
+              if (!document) throw new Error("Missing document");
+              if (input?.kind === "move")
+                document.folderId = input.folder ?? null;
+              if (input?.kind === "favorite")
+                document.favorite = Boolean(input.value);
+              if (input?.kind === "archive") document.archivedAt = "2026-11-17";
+              if (input?.kind === "restore") document.archivedAt = null;
+              return structuredClone(document);
+            case "create_document_folder": {
+              const item = {
+                id: `folder-${folders.length + 1}`,
+                parentId: parentId ?? null,
+                name: name!,
+              };
+              folders.push(item);
+              return structuredClone(item);
+            }
+            case "create_library_document": {
+              const item = {
+                ...first,
+                ...meta,
+                id: `doc-${documents.length + 1}`,
+                title: title!,
+                content: content!,
+                folderId: folder ?? null,
+              };
+              documents.push(item);
+              return structuredClone(item);
+            }
             case "list_documents":
               return structuredClone(documents);
             case "get_document":
@@ -227,4 +276,58 @@ test("prints the selected paper geometry and an explicit page break", async ({
   await expect(page.getByLabel("Page header", { exact: true })).toHaveValue(
     "Research brief",
   );
+});
+
+test("organizes documents in nested folders, filters favorites, and creates a template", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByText("Organize documents", { exact: true }).click();
+  const name = page.getByLabel("New folder name");
+  await name.fill("Research");
+  await page
+    .getByRole("button", { name: "Create folder", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Parent folder", exact: true })
+    .selectOption({ label: "Research" });
+  await name.fill("Notes");
+  await page
+    .getByRole("button", { name: "Create folder", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Move document", exact: true })
+    .selectOption({ label: "Research / Notes" });
+  await page.getByRole("button", { name: "Add favorite", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Show documents", exact: true })
+    .selectOption("favorites");
+  await expect(
+    page.getByRole("button", { name: "First draft", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Second draft", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Archive document", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "First draft", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("combobox", { name: "Show documents", exact: true })
+    .selectOption("archived");
+  await expect(
+    page.getByRole("button", { name: "First draft", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Restore document", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Template", exact: true })
+    .selectOption("Meeting notes");
+  await page.getByRole("button", { name: "New document", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Agenda", exact: true }),
+  ).toBeVisible();
 });

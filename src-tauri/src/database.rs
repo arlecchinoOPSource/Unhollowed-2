@@ -105,6 +105,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0016_document_assets.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 17,
+            description: "Organize documents with folders and library metadata",
+            sql: include_str!("../migrations/0017_document_library.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -437,6 +437,12 @@ export async function installIpcMock(page: Page) {
               await delayedList;
               return snapshot;
             }
+            case "list_document_library":
+              return { documents: structuredClone(documents), folders: [] };
+            case "change_document_library":
+              return structuredClone(
+                documents.find((item) => item.id === args.id),
+              );
             case "list_documents":
               return documents.map(({ id, title }) => ({
                 id,
