@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import type {
   Issue,
   IssueFields,
+  IssueQuery,
   IssueStatus,
 } from "../../src/database/issues";
 import type { Project } from "../../src/database/projects";
@@ -27,7 +28,31 @@ test.beforeEach(async ({ page }) => {
         updatedAt: "2026-11-14T00:00:00Z",
       },
     ];
+    // Tests can preload issues by defining window.__seedIssues in their own
+    // init script. That script runs after this one, so seeds load on the
+    // first IPC call.
     const issues: Issue[] = [];
+    let seeded = false;
+    const seed = () =>
+      (
+        (window as unknown as { __seedIssues?: Partial<Issue>[] })
+          .__seedIssues ?? []
+      ).map((seed, index): Issue => ({
+        id: `seed-${index + 1}`,
+        number: index + 1,
+        projectId: null,
+        title: `Seed ${index + 1}`,
+        description: empty,
+        status: "todo",
+        priority: "none",
+        startDate: null,
+        dueDate: null,
+        completedAt: null,
+        closed: seed.status === "done" || seed.status === "canceled",
+        createdAt: `2026-11-01T00:00:${String(index % 60).padStart(2, "0")}Z`,
+        updatedAt: `2026-11-01T00:${String(index % 60).padStart(2, "0")}:00Z`,
+        ...seed,
+      }));
     let clock = 0;
     let delayedList: Promise<void> | undefined;
     if (location.search.includes("delay-list")) {
@@ -71,8 +96,13 @@ test.beforeEach(async ({ page }) => {
             input?: IssueFields;
             projectId?: string | null;
             status?: IssueStatus;
+            query?: IssueQuery;
           } = {},
         ) => {
+          if (!seeded) {
+            seeded = true;
+            issues.push(...seed());
+          }
           if (failing.has(command)) throw { code: "storage_failed" };
           switch (command) {
             case "list_projects":
@@ -82,15 +112,63 @@ test.beforeEach(async ({ page }) => {
               if (!project) throw { code: "not_found" };
               return project;
             }
-            case "list_issues": {
-              const snapshot = structuredClone(
-                issues
-                  .filter(
-                    (issue) =>
-                      !args.projectId || issue.projectId === args.projectId,
-                  )
-                  .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+            case "query_issues": {
+              // Mirrors the backend's filter, sort, and paging rules.
+              const q = args.query!;
+              const text = q.text?.trim().toLowerCase();
+              const matches = issues.filter(
+                (issue) =>
+                  (!text ||
+                    `${issue.title}\n${issue.description}`
+                      .toLowerCase()
+                      .includes(text)) &&
+                  (!q.statuses?.length || q.statuses.includes(issue.status)) &&
+                  (!q.priorities?.length ||
+                    q.priorities.includes(issue.priority)) &&
+                  (!(q.projectIds?.length || q.inbox) ||
+                    (issue.projectId
+                      ? (q.projectIds ?? []).includes(issue.projectId)
+                      : Boolean(q.inbox))) &&
+                  (q.undated === "only"
+                    ? !issue.dueDate
+                    : issue.dueDate
+                      ? (!q.dueAfter || issue.dueDate >= q.dueAfter) &&
+                        (!q.dueBefore || issue.dueDate <= q.dueBefore)
+                      : q.undated !== "exclude"),
               );
+              const open = matches.filter((issue) => !issue.closed).length;
+              const inState = matches.filter(
+                (issue) =>
+                  !q.state ||
+                  q.state === "all" ||
+                  (q.state === "closed") === issue.closed,
+              );
+              const rank = ["none", "low", "medium", "high", "urgent"];
+              const key = (issue: Issue): string | number =>
+                ({
+                  updated: issue.updatedAt,
+                  created: issue.createdAt,
+                  priority: rank.indexOf(issue.priority),
+                  title: issue.title.toLowerCase(),
+                  due: issue.dueDate ?? "",
+                })[q.sort ?? "updated"];
+              const sign = q.direction === "asc" ? 1 : -1;
+              inState.sort((a, b) => {
+                if (q.sort === "due" && !a.dueDate !== !b.dueDate)
+                  return a.dueDate ? -1 : 1;
+                const [x, y] = [key(a), key(b)];
+                return (
+                  (x < y ? -sign : x > y ? sign : 0) ||
+                  sign * (a.number - b.number)
+                );
+              });
+              const offset = q.offset ?? 0;
+              const snapshot = structuredClone({
+                issues: inState.slice(offset, offset + (q.limit ?? 100)),
+                total: inState.length,
+                open,
+                closed: matches.length - open,
+              });
               await delayedList;
               return snapshot;
             }
@@ -214,7 +292,7 @@ test("lists, completes, and reopens issues with open and closed filters", async 
     .getByRole("button", { name: "Reopen ISS-2: Book venue" })
     .click();
   await expect(page.getByText("ISS-2 reopened.")).toBeVisible();
-  await expect(page.getByText("No closed issues.")).toBeVisible();
+  await expect(page.getByText("No closed issues match.")).toBeVisible();
   await expect(page.getByLabel("New issue")).toBeFocused();
 
   await page.getByRole("button", { name: /^All/ }).click();
@@ -342,7 +420,7 @@ test("handles missing issues and storage failures", async ({ page }) => {
 
   await page.evaluate(() =>
     window.dispatchEvent(
-      new CustomEvent("fail-command", { detail: "list_issues" }),
+      new CustomEvent("fail-command", { detail: "query_issues" }),
     ),
   );
   await page.getByRole("link", { name: "All issues" }).click();
@@ -351,7 +429,7 @@ test("handles missing issues and storage failures", async ({ page }) => {
   );
   await page.evaluate(() =>
     window.dispatchEvent(
-      new CustomEvent("restore-command", { detail: "list_issues" }),
+      new CustomEvent("restore-command", { detail: "query_issues" }),
     ),
   );
   await page.getByRole("button", { name: "Retry" }).click();
@@ -420,4 +498,137 @@ test("keeps a typed title while waiting for the initial list before creating", a
     page.getByRole("link", { name: "Created after loading" }),
   ).toBeVisible();
   await expect(page.getByText("Created ISS-1.")).toBeVisible();
+});
+
+function seedIssues(page: Page, seeds: Partial<Issue>[]) {
+  return page.addInitScript((data) => {
+    Object.assign(window, { __seedIssues: data });
+  }, seeds);
+}
+
+test("searches, combines filters, resets them, and sorts undated issues last", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-16T10:00:00"));
+  const rich = JSON.stringify({
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: "Meet at the Café" }],
+      },
+    ],
+  });
+  await seedIssues(page, [
+    {
+      title: "Alpha",
+      priority: "high",
+      dueDate: "2026-11-10",
+      projectId: "project-1",
+    },
+    { title: "Bravo", priority: "low" },
+    {
+      title: "Charlie",
+      priority: "urgent",
+      dueDate: "2099-01-01",
+      status: "done",
+    },
+    {
+      title: "Delta",
+      priority: "high",
+      projectId: "project-1",
+      description: rich,
+    },
+    { title: "Echo", dueDate: "2026-11-20" },
+  ]);
+  await page.goto("/issues");
+  const list = page.getByRole("list", { name: "Open issues" });
+  const rows = list.getByRole("link", {
+    name: /^(Alpha|Bravo|Delta|Echo|Charlie)$/,
+  });
+  await expect(rows).toHaveCount(4);
+  await expect(page.getByRole("button", { name: /^Closed/ })).toContainText(
+    "1",
+  );
+
+  // Search reads rich description text.
+  await page.getByLabel("Search issues").fill("café");
+  await expect(rows).toHaveText(["Delta"]);
+  await expect(page).toHaveURL(/q=caf%C3%A9/);
+  await page
+    .getByRole("button", { name: "Remove filter Search: “café”" })
+    .click();
+  await expect(page.getByLabel("Search issues")).toHaveValue("");
+  await expect(rows).toHaveCount(4);
+
+  // Filters combine.
+  await page.getByRole("combobox", { name: /^Priority/ }).selectOption("high");
+  await page
+    .getByRole("combobox", { name: /^Project/ })
+    .selectOption("project-1");
+  await page.getByRole("combobox", { name: /^Sort by/ }).selectOption("title");
+  await expect(rows).toHaveText(["Alpha", "Delta"]);
+  await page.getByRole("combobox", { name: /^Due date/ }).selectOption("none");
+  await expect(rows).toHaveText(["Delta"]);
+  await page
+    .getByRole("combobox", { name: /^Due date/ })
+    .selectOption("overdue");
+  await expect(rows).toHaveText(["Alpha"]);
+  const chips = page.getByRole("list", { name: "Active filters" });
+  await expect(chips.getByRole("button")).toHaveText([
+    "Priority: High",
+    "Project: Studio launch",
+    "Due: Overdue",
+  ]);
+
+  // Filters survive opening an issue and coming back.
+  await page.getByRole("link", { name: "Alpha" }).click();
+  await page.getByRole("link", { name: "All issues" }).click();
+  await expect(page.getByRole("combobox", { name: /^Priority/ })).toHaveValue(
+    "high",
+  );
+  await expect(rows).toHaveText(["Alpha"]);
+
+  await page.getByLabel("Search issues").fill("nothing like this");
+  await expect(page.getByText("No issues match these filters.")).toBeVisible();
+  await page.getByRole("button", { name: "Reset filters" }).click();
+  await expect(chips).toBeHidden();
+  await expect(page.getByLabel("Search issues")).toHaveValue("");
+  await expect(page.getByRole("combobox", { name: /^Sort by/ })).toHaveValue(
+    "title",
+  );
+  await expect(rows).toHaveText(["Alpha", "Bravo", "Delta", "Echo"]);
+
+  // Undated issues stay last in both directions, ordered by number.
+  await page.getByRole("combobox", { name: /^Sort by/ }).selectOption("due");
+  await expect(rows).toHaveText(["Alpha", "Echo", "Bravo", "Delta"]);
+  await page
+    .getByRole("button", { name: "Sorted ascending. Switch to descending" })
+    .click();
+  await expect(rows).toHaveText(["Echo", "Alpha", "Delta", "Bravo"]);
+  await expect(page).toHaveURL(/sort=due&dir=desc/);
+});
+
+test("loads long lists in pages without repeating issues", async ({ page }) => {
+  await seedIssues(
+    page,
+    Array.from({ length: 120 }, (_, index) => ({
+      title: `Bulk ${index + 1}`,
+    })),
+  );
+  await page.goto("/issues?sort=title");
+  const items = page
+    .getByRole("list", { name: "Open issues" })
+    .getByRole("listitem");
+  await expect(items).toHaveCount(50);
+  await expect(page.getByText("Showing 50 of 120")).toBeVisible();
+  await page.getByRole("button", { name: "Load more issues" }).click();
+  await expect(items).toHaveCount(100);
+  await page.getByRole("button", { name: "Load more issues" }).click();
+  await expect(page.getByText("Showing 120 of 120")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Load more issues" }),
+  ).toBeHidden();
+  const keys = await items.locator(".issue-key").allTextContents();
+  expect(new Set(keys).size).toBe(120);
 });

@@ -74,6 +74,49 @@ function read<T>(run: () => Promise<T>): Promise<T> {
   return writes.then(run);
 }
 
+/**
+ * Combinable filters shared by issue lists. Board and saved views can store
+ * and reuse this shape. Empty lists and missing values mean no restriction.
+ */
+export interface IssueFilter {
+  /** Literal text to find in the title or description. */
+  text?: string;
+  state?: "open" | "closed" | "all";
+  statuses?: IssueStatus[];
+  priorities?: IssuePriority[];
+  projectIds?: string[];
+  /** Also match issues without a project. */
+  inbox?: boolean;
+  /** Inclusive local dates. A range matches dated issues unless `undated` is include. */
+  dueAfter?: string;
+  dueBefore?: string;
+  undated?: "include" | "exclude" | "only";
+}
+
+export type IssueSortField =
+  "updated" | "created" | "priority" | "title" | "due";
+
+export interface IssueQuery extends IssueFilter {
+  sort?: IssueSortField;
+  direction?: "asc" | "desc";
+  /** 1 to 200, default 100. */
+  limit?: number;
+  offset?: number;
+}
+
+export interface IssuePage {
+  issues: IssueSummary[];
+  /** Matches for the whole query, across pages. */
+  total: number;
+  /** Matches for the query without its state. */
+  open: number;
+  closed: number;
+}
+
+export function queryIssues(query: IssueQuery): Promise<IssuePage> {
+  return read(() => invoke("query_issues", { query }));
+}
+
 export function listIssues(projectId?: string): Promise<IssueSummary[]> {
   return read(() => invoke("list_issues", { projectId: projectId ?? null }));
 }
@@ -144,6 +187,8 @@ export function issueError(error: unknown): string {
       return "The due date must be on or after the start date.";
     case "invalid_project":
       return "That project is unavailable in the current workspace.";
+    case "invalid_filter":
+      return "These filters are not supported. Reset them and try again.";
     default:
       return "Could not access local issue storage. Try again.";
   }

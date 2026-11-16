@@ -23,6 +23,7 @@ fn main() {
             projects::change_project_status,
             projects::archive_project,
             issues::list_issues,
+            issues::query_issues,
             issues::get_issue,
             issues::create_issue,
             issues::update_issue,
