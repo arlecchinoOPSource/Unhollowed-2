@@ -1,0 +1,120 @@
+.issue-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(230px, 1fr);
+  gap: 12px;
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.issue-board[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+.board-column {
+  display: grid;
+  gap: 8px;
+  min-height: 160px;
+  padding: 12px;
+  background: var(--sidebar);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.board-drop {
+  border-color: var(--accent);
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+}
+
+.board-column-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+
+.board-column ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: grab;
+  overflow-wrap: anywhere;
+}
+
+.board-card:hover {
+  border-color: var(--accent);
+}
+
+.board-dragging {
+  opacity: 0.5;
+}
+
+.board-card .issue-title {
+  flex: none;
+}
+
+.board-empty {
+  margin: 0;
+  font-size: 13px;
+}
+
+.board-move {
+  position: relative;
+  justify-self: start;
+}
+
+.board-move > button,
+.board-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.board-move [role="menu"] {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  min-width: 150px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+}
+
+.board-move [role="menuitem"] {
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+}
+
+.board-move [role="menuitem"]:is(:hover, :focus) {
+  background: var(--selection);
+  color: var(--accent);
+}

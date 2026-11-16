@@ -4,7 +4,12 @@ import { Workspace } from "../components/layout/Workspace";
 import { Documents } from "../features/documents/Documents";
 import { Home } from "../features/home/Home";
 import { IssueDetail } from "../features/issues/IssueDetail";
-import { Issues, ProjectIssues } from "../features/issues/Issues";
+import {
+  IssueBoardPage,
+  Issues,
+  ProjectBoard,
+  ProjectIssues,
+} from "../features/issues/Issues";
 import { Labels } from "../features/labels/Labels";
 import { Milestones } from "../features/milestones/Milestones";
 import { Projects } from "../features/projects/Projects";
@@ -22,7 +27,9 @@ export function App() {
         <Route path="/projects/:id" element={<ProjectDetail />} />
         <Route path="/projects/:id/goals" element={<ProjectGoalsPage />} />
         <Route path="/projects/:id/issues" element={<ProjectIssues />} />
+        <Route path="/projects/:id/board" element={<ProjectBoard />} />
         <Route path="/issues" element={<Issues />} />
+        <Route path="/issues/board" element={<IssueBoardPage />} />
         <Route path="/issues/labels" element={<Labels />} />
         <Route path="/issues/milestones" element={<Milestones />} />
         <Route path="/issues/:id" element={<IssueDetail />} />

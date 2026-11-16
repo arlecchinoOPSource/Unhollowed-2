@@ -105,6 +105,14 @@ Missions are broad project goals. Objectives describe measurable outcomes and ma
 
 Parent links run from child to parent, with at most one parent per issue. Blocking links run from blocker to blocked issue. Related links are symmetric and stored once in stable UUID order. SQLite foreign keys enforce workspace membership. Writes validate cycles within each directed graph while holding SQLite's writer lock. Closing an issue preserves its links and status remains visible on linked records. Only Done children count as complete. Closing a parent has no effect on its children.
 
+## Issue board
+
+The board (`/issues/board` and `/projects/:id/board`) has no records of its own. It shows the same issues as the list, with one column per status, and reads the same URL filters through `IssueFilterBar` and `toQuery`. Columns are statuses, so it ignores the Status filter and the open/closed state.
+
+- Each column is a separate `query_issues` request with `statuses: [column]` and the list's sort, loading 50 cards at a time with a total and **Show more**. Large boards render at most 50 cards per column until more are requested.
+- Cards move by drag and drop or with each card's **Move** menu. Both call `change_issue_status`, so lifecycle rules such as `completed_at` are unchanged. There is no manual ordering. A moved card goes to the top of its new column until the next load.
+- Moves are optimistic. The board records the newest move for each issue, and only that move's reply may change the card. A failed newest move returns the card to its last saved status, with an explanation, and a late reply to an older move cannot undo a newer one.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.

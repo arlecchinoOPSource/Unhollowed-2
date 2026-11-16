@@ -1,13 +1,4 @@
-import {
-  ArrowDownWideNarrow,
-  ArrowUpNarrowWide,
-  Circle,
-  CircleCheck,
-  Flag,
-  ListTodo,
-  Plus,
-  X,
-} from "lucide-react";
+import { Circle, CircleCheck, Flag, ListTodo, Plus } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -21,41 +12,29 @@ import {
   createIssue,
   issueError,
   issueKey,
-  issuePriorities,
-  issueStatuses,
   queryIssues,
   reopenIssue,
-  type IssueSortField,
   type IssueSummary,
 } from "../../database/issues";
-import { listLabels, type Label } from "../../database/labels";
-import {
-  fitsIssue,
-  listMilestones,
-  type Milestone,
-} from "../../database/milestones";
-import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
 import {
-  defaultDirection,
-  duePresets,
   hasFilters,
   readFilters,
   resetFilters,
-  sortFields,
   states,
   toQuery,
   writeFilters,
   type ListFilters,
   type State,
 } from "./filters";
-import { LabelBadges, LabelPicker } from "../labels/LabelParts";
+import { LabelBadges } from "../labels/LabelParts";
 import { PriorityBadge, StatusBadge } from "./IssueBadges";
+import { IssueFilterBar } from "./IssueFilterBar";
+import { useIssueReferences } from "./useIssueReferences";
 import { isIssueShortcut } from "./issueKeyboard";
 import "./issues.css";
 
 const PAGE_SIZE = 50;
-const SEARCH_DELAY_MS = 250;
 
 interface Results {
   /** The query and request these results answer. */
@@ -82,9 +61,7 @@ export function IssueList({ projectId }: { projectId?: string }) {
   const queryKey = JSON.stringify(query);
   const [results, setResults] = useState<Results | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [labels, setLabels] = useState<Label[]>([]);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const { projects, labels, milestones } = useIssueReferences(desktop);
   const [loadError, setLoadError] = useState("");
   const [request, setRequest] = useState(0);
   const [title, setTitle] = useState("");
@@ -92,9 +69,6 @@ export function IssueList({ projectId }: { projectId?: string }) {
   const [actionError, setActionError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
-  // Typed search text waits briefly before it updates the URL and reloads.
-  const [typedSearch, setTypedSearch] = useState<string | null>(null);
-  const searchTimer = useRef<number>(undefined);
   const titleInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const filterGroup = useRef<HTMLDivElement>(null);
@@ -156,35 +130,6 @@ export function IssueList({ projectId }: { projectId?: string }) {
     latestKey.current = queryKey;
   });
 
-  useEffect(() => () => window.clearTimeout(searchTimer.current), []);
-
-  useEffect(() => {
-    if (!desktop) return;
-    let current = true;
-    // Names for links, badges, and chips. The list still works without them.
-    listProjects().then(
-      (loaded) => {
-        if (current) setProjects(loaded);
-      },
-      () => undefined,
-    );
-    listLabels().then(
-      (loaded) => {
-        if (current) setLabels(loaded);
-      },
-      () => undefined,
-    );
-    listMilestones().then(
-      (loaded) => {
-        if (current) setMilestones(loaded);
-      },
-      () => undefined,
-    );
-    return () => {
-      current = false;
-    };
-  }, [desktop]);
-
   useEffect(() => {
     if (!desktop) return;
     let current = true;
@@ -206,21 +151,6 @@ export function IssueList({ projectId }: { projectId?: string }) {
 
   function update(changes: Partial<ListFilters>) {
     setParams(writeFilters({ ...filters, ...changes }), { replace: true });
-  }
-
-  function search(value: string) {
-    setTypedSearch(value);
-    window.clearTimeout(searchTimer.current);
-    searchTimer.current = window.setTimeout(() => {
-      setTypedSearch(null);
-      update({ text: value });
-    }, SEARCH_DELAY_MS);
-  }
-
-  function reset() {
-    window.clearTimeout(searchTimer.current);
-    setTypedSearch(null);
-    setParams(writeFilters(resetFilters(filters)), { replace: true });
   }
 
   async function loadMore() {
@@ -364,58 +294,8 @@ export function IssueList({ projectId }: { projectId?: string }) {
   const milestoneTitles = new Map(
     milestones.map(({ id, title }) => [id, title]),
   );
-  // In a project's list, offer only milestones its issues can use.
-  const milestoneOptions = projectId
-    ? milestones.filter((milestone) => fitsIssue(milestone, projectId))
-    : milestones;
   const from = `${location.pathname}${location.search}`;
   const filtered = hasFilters(filters);
-  const active: { label: string; clear: Partial<ListFilters> }[] = [];
-  if (filters.text.trim())
-    active.push({
-      label: `Search: “${filters.text.trim()}”`,
-      clear: { text: "" },
-    });
-  if (filters.status)
-    active.push({
-      label: `Status: ${issueStatuses[filters.status]}`,
-      clear: { status: "" },
-    });
-  if (filters.priority)
-    active.push({
-      label: `Priority: ${issuePriorities[filters.priority]}`,
-      clear: { priority: "" },
-    });
-  if (filters.project && !projectId)
-    active.push({
-      label: `Project: ${
-        filters.project === "inbox"
-          ? "Inbox"
-          : (projectNames.get(filters.project) ?? "Unavailable project")
-      }`,
-      clear: { project: "" },
-    });
-  for (const id of filters.labels)
-    active.push({
-      label: `Label: ${labelsById.get(id)?.name ?? "Unavailable label"}`,
-      clear: { labels: filters.labels.filter((other) => other !== id) },
-    });
-  if (filters.labels.length > 1 && filters.labelMatch === "all")
-    active.push({ label: "Match all labels", clear: { labelMatch: "any" } });
-  if (filters.milestone)
-    active.push({
-      label: `Milestone: ${
-        filters.milestone === "none"
-          ? "None"
-          : (milestoneTitles.get(filters.milestone) ?? "Unavailable milestone")
-      }`,
-      clear: { milestone: "" },
-    });
-  if (filters.due)
-    active.push({
-      label: `Due: ${duePresets[filters.due]}`,
-      clear: { due: "" },
-    });
   const empty = counts !== null && counts.all === 0;
   const loading = results !== null && results.key !== `${queryKey}#${request}`;
 
@@ -472,204 +352,19 @@ export function IssueList({ projectId }: { projectId?: string }) {
         {message}
       </p>
 
-      <div className="issue-toolbar" role="search" aria-label="Find issues">
-        <label className="issue-search">
-          Search issues
-          <input
-            type="search"
-            ref={searchInput}
-            onKeyDown={leaveField}
-            placeholder="Search titles and descriptions"
-            maxLength={200}
-            value={typedSearch ?? filters.text}
-            onChange={(event) => search(event.target.value)}
-          />
-        </label>
-        <label>
-          Status
-          <select
-            value={filters.status}
-            onChange={(event) =>
-              update({ status: event.target.value as ListFilters["status"] })
-            }
-          >
-            <option value="">Any status</option>
-            {Object.entries(issueStatuses).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Priority
-          <select
-            value={filters.priority}
-            onChange={(event) =>
-              update({
-                priority: event.target.value as ListFilters["priority"],
-              })
-            }
-          >
-            <option value="">Any priority</option>
-            {Object.entries(issuePriorities).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {!projectId && (
-          <label>
-            Project
-            <select
-              value={filters.project}
-              onChange={(event) => update({ project: event.target.value })}
-            >
-              <option value="">Any project</option>
-              <option value="inbox">Inbox (no project)</option>
-              {projects
-                .filter(
-                  (project) =>
-                    project.status !== "archived" ||
-                    project.id === filters.project,
-                )
-                .map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-        )}
-        <label>
-          Due date
-          <select
-            value={filters.due}
-            onChange={(event) =>
-              update({ due: event.target.value as ListFilters["due"] })
-            }
-          >
-            <option value="">Any due date</option>
-            {Object.entries(duePresets).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Milestone
-          <select
-            value={filters.milestone}
-            onChange={(event) => update({ milestone: event.target.value })}
-          >
-            <option value="">Any milestone</option>
-            <option value="none">No milestone</option>
-            {milestoneOptions.map((milestone) => (
-              <option key={milestone.id} value={milestone.id}>
-                {milestone.closed
-                  ? `${milestone.title} (closed)`
-                  : milestone.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <details className="issue-label-filter">
-          <summary>
-            Labels
-            {filters.labels.length > 0 && ` (${filters.labels.length})`}
-          </summary>
-          <div>
-            <LabelPicker
-              legend="Show issues with these labels"
-              labels={labels}
-              selected={filters.labels}
-              allowArchived
-              onChange={(ids) => update({ labels: ids })}
-            />
-            <label className="issue-label-match">
-              <input
-                type="checkbox"
-                checked={filters.labelMatch === "all"}
-                onChange={(event) =>
-                  update({ labelMatch: event.target.checked ? "all" : "any" })
-                }
-              />
-              Match all selected labels
-            </label>
-            <Link to="/issues/labels">Manage labels</Link>
-          </div>
-        </details>
-        <div className="issue-sort">
-          <label>
-            Sort by
-            <select
-              value={filters.sort}
-              onChange={(event) => {
-                const sort = event.target.value as IssueSortField;
-                update({ sort, direction: defaultDirection(sort) });
-              }}
-            >
-              {Object.entries(sortFields).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="issue-direction"
-            aria-label={
-              filters.direction === "asc"
-                ? "Sorted ascending. Switch to descending"
-                : "Sorted descending. Switch to ascending"
-            }
-            title={filters.direction === "asc" ? "Ascending" : "Descending"}
-            onClick={() =>
-              update({
-                direction: filters.direction === "asc" ? "desc" : "asc",
-              })
-            }
-          >
-            {filters.direction === "asc" ? (
-              <ArrowUpNarrowWide size={16} aria-hidden="true" />
-            ) : (
-              <ArrowDownWideNarrow size={16} aria-hidden="true" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {active.length > 0 && (
-        <div className="issue-active-filters">
-          <span id="active-filters-label">Active filters</span>
-          <ul aria-labelledby="active-filters-label">
-            {active.map(({ label, clear }) => (
-              <li key={label}>
-                <button
-                  type="button"
-                  aria-label={`Remove filter ${label}`}
-                  onClick={() => {
-                    if ("text" in clear) {
-                      window.clearTimeout(searchTimer.current);
-                      setTypedSearch(null);
-                    }
-                    update(clear);
-                  }}
-                >
-                  {label}
-                  <X size={14} aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button type="button" className="issue-reset" onClick={reset}>
-            Reset filters
-          </button>
-        </div>
-      )}
+      <IssueFilterBar
+        filters={filters}
+        onChange={update}
+        onReset={() =>
+          setParams(writeFilters(resetFilters(filters)), { replace: true })
+        }
+        projectId={projectId}
+        projects={projects}
+        labels={labels}
+        milestones={milestones}
+        searchRef={searchInput}
+        onSearchKeyDown={leaveField}
+      />
 
       <div
         ref={filterGroup}

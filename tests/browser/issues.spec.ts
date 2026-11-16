@@ -88,6 +88,23 @@ test.beforeEach(async ({ page }) => {
     window.addEventListener("fail-command", (event) => {
       failing.add((event as CustomEvent<string>).detail);
     });
+    // One-shot failures and held commands, for testing overlapping writes.
+    const failOnce = new Set<string>();
+    window.addEventListener("fail-once", (event) => {
+      failOnce.add((event as CustomEvent<string>).detail);
+    });
+    const held = new Map<string, Promise<void>>();
+    window.addEventListener("hold-command", (event) => {
+      const command = (event as CustomEvent<string>).detail;
+      held.set(
+        command,
+        new Promise((resolve) =>
+          window.addEventListener(`release-${command}`, () => resolve(), {
+            once: true,
+          }),
+        ),
+      );
+    });
     window.addEventListener("restore-command", (event) => {
       failing.delete((event as CustomEvent<string>).detail);
     });
@@ -127,7 +144,13 @@ test.beforeEach(async ({ page }) => {
             seeded = true;
             issues.push(...seed());
           }
+          const hold = held.get(command);
+          if (hold) {
+            held.delete(command);
+            await hold;
+          }
           if (failing.has(command)) throw { code: "storage_failed" };
+          if (failOnce.delete(command)) throw { code: "storage_failed" };
           switch (command) {
             case "list_projects":
               return projects;
@@ -1235,4 +1258,143 @@ test("leaves modal keyboard handling and focus restoration to the dialog", async
   await name.press("Escape");
   await expect(modal).toBeHidden();
   await expect(create).toBeFocused();
+});
+
+function dispatch(page: Page, type: string, detail?: string) {
+  return page.evaluate(
+    ([name, value]) =>
+      window.dispatchEvent(
+        value === undefined
+          ? new Event(name)
+          : new CustomEvent(name, { detail: value }),
+      ),
+    [type, detail] as const,
+  );
+}
+
+test("moves issues on the board by keyboard and by dragging", async ({
+  page,
+}) => {
+  await seedIssues(page, [
+    { title: "Sketch layout", priority: "high", projectId: "project-1" },
+    { title: "Order paint", status: "in_progress" },
+    { title: "Hang lights" },
+  ]);
+  await page.goto("/issues?priority=high");
+  await page.getByRole("link", { name: "Board view" }).click();
+  // The board keeps the list's filters.
+  await expect(page).toHaveURL(/\/issues\/board\?priority=high$/);
+  const column = (name: string) =>
+    page.getByRole("region", { name: new RegExp(`^${name}`) });
+  await expect(column("To Do").getByRole("listitem")).toHaveCount(1);
+  await expect(column("To Do")).toContainText("High");
+  await page.getByRole("button", { name: "Reset filters" }).click();
+  await expect(column("To Do").getByRole("listitem")).toHaveCount(2);
+  await expect(column("In Progress").getByRole("listitem")).toHaveCount(1);
+  await expect(column("To Do").getByRole("heading")).toContainText("2");
+
+  // Keyboard: the Move menu.
+  const move = page.getByRole("button", { name: "Move ISS-1: Sketch layout" });
+  await move.focus();
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("menu", { name: "Move ISS-1 to" });
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(move).toBeFocused();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("menuitem", { name: "Blocked" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Moved ISS-1 to Blocked.")).toBeVisible();
+  await expect(
+    column("Blocked").getByRole("link", { name: "Sketch layout" }),
+  ).toBeVisible();
+  // Focus follows the card into its new column.
+  await expect(move).toBeFocused();
+
+  // Mouse: drag and drop.
+  await column("To Do")
+    .getByRole("listitem")
+    .filter({ hasText: "Hang lights" })
+    .dragTo(column("Done"));
+  await expect(page.getByText("Moved ISS-3 to Done.")).toBeVisible();
+  await expect(
+    column("Done").getByRole("link", { name: "Hang lights" }),
+  ).toBeVisible();
+  await expect(column("To Do").getByText("No issues")).toBeVisible();
+
+  // The list shows the same state.
+  await page.getByRole("link", { name: "List view" }).click();
+  await page.getByRole("button", { name: /^All/ }).click();
+  const row = (title: string) =>
+    page.getByRole("listitem").filter({ hasText: title });
+  await expect(row("Sketch layout").getByText("Blocked")).toBeVisible();
+  await expect(row("Hang lights").getByText("Done")).toBeVisible();
+});
+
+test("restores a card when a move fails and ignores late replies to older moves", async ({
+  page,
+}) => {
+  await seedIssues(page, [{ title: "Water plants" }]);
+  await page.goto("/issues/board");
+  const column = (name: string) =>
+    page.getByRole("region", { name: new RegExp(`^${name}`) });
+  const card = (name: string) =>
+    column(name).getByRole("link", { name: "Water plants" });
+  const move = page.getByRole("button", { name: "Move ISS-1: Water plants" });
+  const moveTo = async (status: string) => {
+    await move.click();
+    await page
+      .getByRole("menu", { name: "Move ISS-1 to" })
+      .getByRole("menuitem", { name: status })
+      .click();
+  };
+
+  // A rejected move puts the card back with an explanation.
+  await dispatch(page, "fail-once", "change_issue_status");
+  await moveTo("Done");
+  await expect(page.getByRole("alert")).toContainText(
+    "Could not move ISS-1 to Done. It is back in To Do.",
+  );
+  await expect(card("To Do")).toBeVisible();
+  await expect(move).toBeFocused();
+
+  // Two quick moves: the first is held and then fails, the second succeeds.
+  // The first reply arrives late and must not undo the newer move.
+  await dispatch(page, "hold-command", "change_issue_status");
+  await dispatch(page, "fail-once", "change_issue_status");
+  await moveTo("In Progress");
+  await expect(card("In Progress")).toBeVisible();
+  await moveTo("Blocked");
+  await expect(card("Blocked")).toBeVisible();
+  await dispatch(page, "release-change_issue_status");
+  await expect(page.getByText("Moved ISS-1 to Blocked.")).toBeVisible();
+  await expect(card("Blocked")).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("bounds a large board and loads more cards per column", async ({
+  page,
+}) => {
+  await seedIssues(
+    page,
+    Array.from({ length: 300 }, (_, index) => ({
+      title: `Card ${index + 1}`,
+      status: index % 3 === 0 ? ("done" as const) : ("todo" as const),
+      labelIds: [],
+    })),
+  );
+  await page.goto("/issues/board");
+  const todo = page.getByRole("region", { name: /^To Do/ });
+  await expect(todo.getByRole("heading")).toContainText("200");
+  await expect(todo.getByRole("listitem")).toHaveCount(50);
+  await expect(
+    page.getByRole("region", { name: /^Done/ }).getByRole("listitem"),
+  ).toHaveCount(50);
+  await expect(page.locator(".board-card")).toHaveCount(100);
+  await todo.getByRole("button", { name: "Show more in To Do (150)" }).click();
+  await expect(todo.getByRole("listitem")).toHaveCount(100);
+  const keys = await todo.locator(".issue-key").allTextContents();
+  expect(new Set(keys).size).toBe(100);
 });
