@@ -1,3 +1,4 @@
+import { DocumentReference } from "./DocumentReferences";
 import { DocumentPageLayout, PageBreak } from "./pageLayout";
 import { TableKit } from "@tiptap/extension-table";
 import { DocumentImage } from "./DocumentImage";
@@ -200,6 +201,7 @@ export const documentExtensions = [
   TableKit.configure({ table: { resizable: true } }),
   CellStyles,
   DocumentImage,
+  DocumentReference,
   DocumentPageLayout,
   PageBreak,
 ];

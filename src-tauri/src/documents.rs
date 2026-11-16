@@ -1,5 +1,6 @@
 pub(crate) mod assets;
 pub(crate) mod library;
+pub(crate) mod references;
 pub(crate) mod revisions;
 
 use crate::database::{active_workspace, pool, DatabaseError};

@@ -1,3 +1,9 @@
+import { useNavigate } from "react-router";
+import {
+  DocumentReferences,
+  ReferencePicker,
+  documentHref,
+} from "./editor/DocumentReferences";
 import {
   DocumentLayout,
   DocumentPageMode,
@@ -103,6 +109,8 @@ function EditorBody({
   onRestored: (document: WorkspaceDocument) => void;
 }) {
   const id = document.id;
+  const navigate = useNavigate();
+  const [updatedAt, setUpdatedAt] = useState(document.updatedAt);
   const [recovered, setRecovered] = useState(() => {
     const draft = readDraft(id);
     if (
@@ -177,6 +185,7 @@ function EditorBody({
     setSaveState("saving");
     void saveDocumentDraft(id, snapshot).then(
       (saved) => {
+        setUpdatedAt(saved.updatedAt);
         notify.current(saved);
         if (latest.current === snapshot) {
           dirty.current = false;
@@ -304,9 +313,26 @@ function EditorBody({
         {assetError && <p role="alert">{assetError}</p>}
         {editor && (
           <PageSurface editor={editor}>
-            <EditorContent editor={editor} className="editor" />
+            <EditorContent
+              editor={editor}
+              className="editor"
+              onClick={(event) => {
+                const anchor =
+                  event.target instanceof Element &&
+                  event.target.closest<HTMLAnchorElement>(
+                    "a[data-document-target]",
+                  );
+                if (!anchor || !anchor.dataset.documentTarget) return;
+                event.preventDefault();
+                navigate(documentHref(anchor.dataset.documentTarget));
+              }}
+            />
+            {!recovered && !restoring && (
+              <ReferencePicker editor={editor} id={id} />
+            )}
           </PageSurface>
         )}
+        {!focusMode && <DocumentReferences id={id} updatedAt={updatedAt} />}
         <p role="status" className="save-status">
           {restoring
             ? "Restoring version…"

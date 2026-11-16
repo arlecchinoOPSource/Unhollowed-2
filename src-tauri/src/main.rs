@@ -34,6 +34,7 @@ fn main() {
             goals::save_project_objective,
             documents::list_documents,
             documents::library::list_document_library,
+            documents::references::list_document_references,
             documents::library::create_document_folder,
             documents::library::change_document_library,
             documents::library::create_library_document,

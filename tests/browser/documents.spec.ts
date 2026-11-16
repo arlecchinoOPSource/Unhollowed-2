@@ -96,6 +96,8 @@ async function setup(page: Page, version?: number) {
               documents.push(item);
               return structuredClone(item);
             }
+            case "list_document_references":
+              return [];
             case "list_documents":
               return structuredClone(documents);
             case "get_document":
@@ -330,4 +332,22 @@ test("organizes documents in nested folders, filters favorites, and creates a te
   await expect(
     page.getByRole("heading", { name: "Agenda", exact: true }),
   ).toBeVisible();
+});
+
+test("inserts a document reference and follows it in the editor", async ({
+  page,
+}) => {
+  await setup(page);
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await editor.press("End");
+  await editor.press("Enter");
+  await page.keyboard.insertText("[[Second");
+  await page
+    .getByRole("group", { name: "Insert document link" })
+    .getByRole("button", { name: "Second draft" })
+    .click();
+  const link = editor.getByRole("link", { name: "Second draft" });
+  await expect(link).toHaveAttribute("href", "/documents?doc=two");
+  await link.click();
+  await expect(page).toHaveURL(/doc=two$/);
 });
