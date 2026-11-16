@@ -74,6 +74,17 @@ Issues are read and changed only through the commands in `src-tauri/src/issues.r
 
 Invalid values return `invalid_filter`. Every query is scoped to the active workspace and binds all values as parameters.
 
+## Labels
+
+`labels` stores workspace-owned labels: a 1 to 50 character name, an optional description of up to 500 characters, a color from a fixed palette (`gray`, `red`, `orange`, `yellow`, `green`, `teal`, `blue`, `purple`, `pink`), `archived_at`, and timestamps. `name_key` is the name lowercased by Rust with full Unicode rules, and `UNIQUE (workspace_id, name_key)` makes names differing only in case duplicates. Archived labels keep their names reserved.
+
+`issue_labels` links issues and labels, with its own `workspace_id` and a primary key of `(issue_id, label_id)`, so each link is unique. A link cannot exist without both its issue and its label, so it uses `ON DELETE CASCADE` on both. Triggers require both ends to belong to the link's workspace, reject new links to archived labels, and forbid editing links in place.
+
+- `set_issue_labels` replaces an issue's labels in one transaction. Archived labels the issue already has can stay or be removed but cannot be added. A failed request changes nothing, and repeating the same set keeps `updated_at`.
+- Every issue read returns `labelIds`, including archived labels, so historical assignments stay visible. `list_labels` returns active labels first, then archived, each by name, with an `issueCount`.
+- `IssueFilter.labelIds` matches issues with `any` (the default) or `all` of the labels in `labelMatch`. Archived labels still match.
+- Badges always show the label name, and archived labels say so in text. Each palette color has light and dark theme values with at least 3:1 contrast on that theme's surfaces, which `tests/unit/labels.test.tsx` checks against the theme tokens.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -91,3 +102,4 @@ Invalid values return `invalid_filter`. Every query is scoped to the active work
 | 0004      | `projects`, owned by a workspace, with status and optional dates               |
 | 0005      | `issues` and `issue_counters`, with per-workspace numbers and optional project |
 | 0006      | `issues.search_text` for literal, case-insensitive issue search                |
+| 0007      | `labels` and `issue_labels`, with unique links and archived-label rules        |

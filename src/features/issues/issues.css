@@ -349,3 +349,24 @@
 .issue-more .action {
   margin: 0;
 }
+
+.issue-page-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.issue-manage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.issue-label-match {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400 !important;
+}

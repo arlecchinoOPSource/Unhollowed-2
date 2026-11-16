@@ -21,6 +21,7 @@ import {
   type IssueSortField,
   type IssueSummary,
 } from "../../database/issues";
+import { listLabels, type Label } from "../../database/labels";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
 import {
@@ -36,6 +37,7 @@ import {
   type ListFilters,
   type State,
 } from "./filters";
+import { LabelBadges, LabelPicker } from "../labels/LabelParts";
 import { PriorityBadge, StatusBadge } from "./IssueBadges";
 import "./issues.css";
 
@@ -68,6 +70,7 @@ export function IssueList({ projectId }: { projectId?: string }) {
   const [results, setResults] = useState<Results | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [loadError, setLoadError] = useState("");
   const [request, setRequest] = useState(0);
   const [title, setTitle] = useState("");
@@ -94,9 +97,16 @@ export function IssueList({ projectId }: { projectId?: string }) {
   useEffect(() => {
     if (!desktop) return;
     let current = true;
+    // Names for links, badges, and chips. The list still works without them.
     listProjects().then(
       (loaded) => {
         if (current) setProjects(loaded);
+      },
+      () => undefined,
+    );
+    listLabels().then(
+      (loaded) => {
+        if (current) setLabels(loaded);
       },
       () => undefined,
     );
@@ -280,6 +290,7 @@ export function IssueList({ projectId }: { projectId?: string }) {
   }
 
   const projectNames = new Map(projects.map(({ id, name }) => [id, name]));
+  const labelsById = new Map(labels.map((label) => [label.id, label]));
   const from = `${location.pathname}${location.search}`;
   const filtered = hasFilters(filters);
   const active: { label: string; clear: Partial<ListFilters> }[] = [];
@@ -307,6 +318,13 @@ export function IssueList({ projectId }: { projectId?: string }) {
       }`,
       clear: { project: "" },
     });
+  for (const id of filters.labels)
+    active.push({
+      label: `Label: ${labelsById.get(id)?.name ?? "Unavailable label"}`,
+      clear: { labels: filters.labels.filter((other) => other !== id) },
+    });
+  if (filters.labels.length > 1 && filters.labelMatch === "all")
+    active.push({ label: "Match all labels", clear: { labelMatch: "any" } });
   if (filters.due)
     active.push({
       label: `Due: ${duePresets[filters.due]}`,
@@ -427,6 +445,32 @@ export function IssueList({ projectId }: { projectId?: string }) {
             ))}
           </select>
         </label>
+        <details className="issue-label-filter">
+          <summary>
+            Labels
+            {filters.labels.length > 0 && ` (${filters.labels.length})`}
+          </summary>
+          <div>
+            <LabelPicker
+              legend="Show issues with these labels"
+              labels={labels}
+              selected={filters.labels}
+              allowArchived
+              onChange={(ids) => update({ labels: ids })}
+            />
+            <label className="issue-label-match">
+              <input
+                type="checkbox"
+                checked={filters.labelMatch === "all"}
+                onChange={(event) =>
+                  update({ labelMatch: event.target.checked ? "all" : "any" })
+                }
+              />
+              Match all selected labels
+            </label>
+            <Link to="/issues/labels">Manage labels</Link>
+          </div>
+        </details>
         <div className="issue-sort">
           <label>
             Sort by
@@ -597,6 +641,7 @@ export function IssueList({ projectId }: { projectId?: string }) {
                       Due <time dateTime={issue.dueDate}>{issue.dueDate}</time>
                     </span>
                   )}
+                  <LabelBadges ids={issue.labelIds} labels={labelsById} />
                 </span>
               </li>
             );

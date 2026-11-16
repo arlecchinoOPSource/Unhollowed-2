@@ -17,14 +17,17 @@ import {
   issuePriorities,
   issueStatuses,
   reopenIssue,
+  setIssueLabels,
   setIssueProject,
   updateIssue,
   type Issue,
   type IssuePriority,
   type IssueStatus,
 } from "../../database/issues";
+import { listLabels, type Label } from "../../database/labels";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
+import { LabelPicker } from "../labels/LabelParts";
 import { StatusBadge } from "./IssueBadges";
 import "./issues.css";
 
@@ -56,16 +59,20 @@ function IssueLoader({ id }: { id: string }) {
   const location = useLocation();
   const from = (location.state as { from?: unknown } | null)?.from;
   const back = typeof from === "string" ? from : "/issues";
-  const [loaded, setLoaded] = useState<{ issue: Issue; projects: Project[] }>();
+  const [loaded, setLoaded] = useState<{
+    issue: Issue;
+    projects: Project[];
+    labels: Label[];
+  }>();
   const [error, setError] = useState<{ message: string; missing: boolean }>();
   const [request, setRequest] = useState(0);
 
   useEffect(() => {
     if (!desktop) return;
     let current = true;
-    Promise.all([getIssue(id), listProjects()]).then(
-      ([issue, projects]) => {
-        if (current) setLoaded({ issue, projects });
+    Promise.all([getIssue(id), listProjects(), listLabels()]).then(
+      ([issue, projects, labels]) => {
+        if (current) setLoaded({ issue, projects, labels });
       },
       (cause) => {
         if (current)
@@ -108,7 +115,11 @@ function IssueLoader({ id }: { id: string }) {
       )}
       {desktop && !error && !loaded && <p>Loading issue…</p>}
       {loaded && (
-        <IssueEditor initial={loaded.issue} projects={loaded.projects} />
+        <IssueEditor
+          initial={loaded.issue}
+          projects={loaded.projects}
+          labels={loaded.labels}
+        />
       )}
     </section>
   );
@@ -117,9 +128,11 @@ function IssueLoader({ id }: { id: string }) {
 function IssueEditor({
   initial,
   projects,
+  labels,
 }: {
   initial: Issue;
   projects: Project[];
+  labels: Label[];
 }) {
   const id = initial.id;
   const [recovered] = useState(() => unsavedDrafts.get(id));
@@ -280,6 +293,11 @@ function IssueEditor({
     );
   }
 
+  function changeLabels(labelIds: string[]) {
+    setIssue((current) => ({ ...current, labelIds }));
+    run(setIssueLabels(id, labelIds), () => undefined, "Labels updated.");
+  }
+
   const status =
     pending > 0 || unsaved
       ? "Saving…"
@@ -397,6 +415,16 @@ function IssueEditor({
             Open project {projectName}
           </Link>
         )}
+        <LabelPicker
+          legend="Labels"
+          labels={labels}
+          selected={issue.labelIds}
+          retained={initial.labelIds}
+          onChange={changeLabels}
+        />
+        <Link className="issue-manage" to="/issues/labels">
+          Manage labels
+        </Link>
         <label>
           Start date
           <input

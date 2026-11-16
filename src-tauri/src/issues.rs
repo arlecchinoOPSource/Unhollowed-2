@@ -9,6 +9,8 @@ use uuid::Uuid;
 
 mod query;
 pub(crate) use query::search_text;
+#[cfg(test)]
+pub use query::IssueFilter;
 pub use query::{query, IssuePage, IssueQuery};
 
 const MAX_TITLE_CHARS: usize = 200;
@@ -36,6 +38,22 @@ pub struct IssueSummary {
     pub closed: bool,
     pub created_at: String,
     pub updated_at: String,
+    /// IDs of the issue's labels, including archived ones.
+    #[sqlx(try_from = "String")]
+    pub label_ids: LabelIds,
+}
+
+/// Label IDs read from a JSON array produced by SQLite.
+#[derive(Debug, Default, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct LabelIds(pub Vec<String>);
+
+impl TryFrom<String> for LabelIds {
+    type Error = serde_json::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        serde_json::from_str(&value).map(Self)
+    }
 }
 
 #[derive(Debug, FromRow, PartialEq, Serialize)]
@@ -76,6 +94,10 @@ pub enum IssueError {
     InvalidProject,
     /// A search, filter, sort, or page value is not supported.
     InvalidFilter,
+    /// A label does not exist in the active workspace.
+    InvalidLabel,
+    /// An archived label cannot be newly assigned. Existing links remain.
+    LabelArchived,
     StorageFailed,
 }
 
@@ -142,10 +164,18 @@ impl IssueFields {
     }
 }
 
-pub(crate) const SUMMARY_FIELDS: &str = "id, number, project_id, title, status, priority, \
-     start_date, due_date, completed_at, closed, created_at, updated_at";
-pub(crate) const FIELDS: &str = "id, number, project_id, title, status, priority, \
-     start_date, due_date, completed_at, closed, created_at, updated_at, description";
+/// The label IDs are read with each row, including in RETURNING clauses, so
+/// every command returns an issue's current labels.
+macro_rules! summary_fields {
+    () => {
+        "id, number, project_id, title, status, priority, start_date, due_date, \
+         completed_at, closed, created_at, updated_at, \
+         (SELECT json_group_array(label_id) FROM (SELECT label_id FROM issue_labels \
+          WHERE issue_id = issues.id ORDER BY label_id)) AS label_ids"
+    };
+}
+pub(crate) const SUMMARY_FIELDS: &str = summary_fields!();
+pub(crate) const FIELDS: &str = concat!(summary_fields!(), ", description");
 
 /// Fails with `InvalidProject` unless the project belongs to the workspace.
 pub(crate) async fn ensure_project<'e>(
@@ -344,6 +374,98 @@ pub async fn set_project(
     .ok_or(IssueError::NotFound)
 }
 
+const MAX_LABELS_PER_ISSUE: usize = 50;
+
+/// Replaces an issue's labels with `label_ids`.
+///
+/// Every label must belong to the workspace. An archived label can stay on an
+/// issue that already has it, and can be removed, but cannot be newly added.
+/// The issue's `updated_at` changes only when its labels change.
+pub async fn set_labels(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+    label_ids: Vec<String>,
+) -> Result<Issue, IssueError> {
+    let mut wanted = label_ids;
+    wanted.sort();
+    wanted.dedup();
+    if wanted.len() > MAX_LABELS_PER_ISSUE {
+        return Err(IssueError::InvalidLabel);
+    }
+    let mut transaction = pool.begin().await.map_err(storage_failed)?;
+    // Removing first takes SQLite's write lock before any read.
+    let mut remove = sqlx::QueryBuilder::new("DELETE FROM issue_labels WHERE issue_id = ");
+    remove
+        .push_bind(id)
+        .push(" AND workspace_id = ")
+        .push_bind(workspace);
+    if !wanted.is_empty() {
+        remove.push(" AND label_id NOT IN (");
+        let mut list = remove.separated(", ");
+        for label in &wanted {
+            list.push_bind(label);
+        }
+        list.push_unseparated(")");
+    }
+    let mut changed = remove
+        .build()
+        .execute(&mut *transaction)
+        .await
+        .map_err(storage_failed)?
+        .rows_affected()
+        > 0;
+    sqlx::query("SELECT 1 FROM issues WHERE id = ? AND workspace_id = ?")
+        .bind(id)
+        .bind(workspace)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(storage_failed)?
+        .ok_or(IssueError::NotFound)?;
+    for label in &wanted {
+        let found: Option<(bool, bool)> = sqlx::query_as(
+            "SELECT archived_at IS NOT NULL,
+                    EXISTS (SELECT 1 FROM issue_labels WHERE issue_id = ? AND label_id = labels.id)
+             FROM labels WHERE id = ? AND workspace_id = ?",
+        )
+        .bind(id)
+        .bind(label)
+        .bind(workspace)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(storage_failed)?;
+        match found {
+            None => return Err(IssueError::InvalidLabel),
+            Some((_, true)) => {}
+            Some((true, false)) => return Err(IssueError::LabelArchived),
+            Some((false, false)) => {
+                sqlx::query(
+                    "INSERT INTO issue_labels (issue_id, label_id, workspace_id) VALUES (?, ?, ?)",
+                )
+                .bind(id)
+                .bind(label)
+                .bind(workspace)
+                .execute(&mut *transaction)
+                .await
+                .map_err(storage_failed)?;
+                changed = true;
+            }
+        }
+    }
+    if changed {
+        sqlx::query(&format!(
+            "UPDATE issues SET updated_at = {NOW} WHERE id = ? AND workspace_id = ?"
+        ))
+        .bind(id)
+        .bind(workspace)
+        .execute(&mut *transaction)
+        .await
+        .map_err(storage_failed)?;
+    }
+    transaction.commit().await.map_err(storage_failed)?;
+    get(pool, workspace, id).await
+}
+
 /// The open database and the active workspace that every command is scoped to.
 /// The webview never supplies a workspace ID.
 async fn scope(instances: &DbInstances) -> Result<(SqlitePool, String), IssueError> {
@@ -369,6 +491,16 @@ pub async fn query_issues(
 ) -> Result<IssuePage, IssueError> {
     let (pool, workspace) = scope(&instances).await?;
     self::query(&pool, &workspace, query).await
+}
+
+#[tauri::command]
+pub async fn set_issue_labels(
+    instances: State<'_, DbInstances>,
+    id: String,
+    label_ids: Vec<String>,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_labels(&pool, &workspace, &id, label_ids).await
 }
 
 #[tauri::command]

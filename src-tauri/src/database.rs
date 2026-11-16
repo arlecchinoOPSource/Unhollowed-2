@@ -45,6 +45,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0006_issue_search.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "Create workspace labels",
+            sql: include_str!("../migrations/0007_labels.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
