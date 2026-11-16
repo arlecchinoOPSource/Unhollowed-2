@@ -1592,3 +1592,143 @@ test.describe("Today and Upcoming", () => {
     ).toBeVisible();
   });
 });
+
+test.describe("Calendar", () => {
+  // A six-week grid needs a tall window: native drag and drop in tests
+  // fails for targets at the edge of the viewport.
+  test.use({
+    timezoneId: "America/New_York",
+    viewport: { width: 1280, height: 1100 },
+  });
+
+  test("shows dated issues, moves by keyboard, reschedules, creates, and filters", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
+    await seedIssues(page, [
+      { title: "Hang posters", dueDate: "2026-11-16", projectId: "project-1" },
+      { title: "Buy frames", dueDate: "2026-11-20" },
+      { title: "Old errand", dueDate: "2026-11-02", status: "done" },
+      { title: "Winter prep", dueDate: "2026-12-03" },
+      { title: "No date yet" },
+    ]);
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Workspace" })
+      .getByRole("link", { name: "Calendar" })
+      .click();
+    const grid = page.getByRole("table", { name: "November 2026" });
+    await expect(grid).toBeVisible();
+    const today = grid.getByRole("button", {
+      name: /^Monday, November 16, 2026/,
+    });
+    await expect(today).toHaveAttribute("aria-current", "date");
+    await expect(today).toHaveAttribute("aria-pressed", "true");
+    const panel = page.getByRole("region", {
+      name: "Monday, November 16, 2026",
+    });
+    await expect(
+      panel.getByRole("link", { name: "Hang posters" }),
+    ).toBeVisible();
+    await expect(grid.getByText("Buy frames")).toBeVisible();
+    // Closed and undated issues are hidden unless asked for.
+    await expect(grid.getByText("Old errand")).toHaveCount(0);
+    await expect(page.getByText("No date yet")).toHaveCount(0);
+    await page.getByLabel("Show closed issues").click();
+    await expect(grid.getByText("Old errand")).toBeVisible();
+
+    // Arrow keys move between days, Page Down to the next month.
+    await today.focus();
+    for (let step = 0; step < 4; step++)
+      await page.keyboard.press("ArrowRight");
+    const friday = grid.getByRole("button", {
+      name: /^Friday, November 20, 2026, 1 issue/,
+    });
+    await expect(friday).toBeFocused();
+    await expect(
+      page.getByRole("region", { name: "Friday, November 20, 2026" }),
+    ).toContainText("Buy frames");
+    await page.keyboard.press("PageDown");
+    const december = page.getByRole("table", { name: "December 2026" });
+    await expect(
+      december.getByRole("button", { name: /^Sunday, December 20, 2026/ }),
+    ).toBeFocused();
+    await expect(december.getByText("Winter prep")).toBeVisible();
+    await page.keyboard.press("PageUp");
+    await expect(friday).toBeFocused();
+
+    // Reschedule by typing a date.
+    const date = page.getByLabel("Due date for ISS-2");
+    await date.fill("2026-11-18");
+    await date.press("Enter");
+    await expect(
+      page.getByText("ISS-2 is now due Wednesday, November 18, 2026."),
+    ).toBeVisible();
+    await expect(
+      grid.getByRole("button", {
+        name: /^Wednesday, November 18, 2026, 1 issue/,
+      }),
+    ).toBeVisible();
+
+    // Reschedule by dragging, keeping the same issue.
+    await grid
+      .locator(".calendar-chip")
+      .filter({ hasText: "Hang posters" })
+      .dragTo(
+        grid.getByRole("cell").filter({
+          has: page.getByRole("button", { name: /^Tuesday, November 17/ }),
+        }),
+      );
+    await expect(
+      page.getByText("ISS-1 is now due Tuesday, November 17, 2026."),
+    ).toBeVisible();
+
+    // A rejected reschedule leaves the issue where it was.
+    await dispatch(page, "fail-once", "set_issue_due_date");
+    await grid
+      .locator(".calendar-chip")
+      .filter({ hasText: "Hang posters" })
+      .dragTo(
+        grid.getByRole("cell").filter({
+          has: page.getByRole("button", { name: /^Thursday, November 19/ }),
+        }),
+      );
+    await expect(page.getByRole("alert")).toContainText(
+      "Could not reschedule ISS-1. It is still due Tuesday, November 17, 2026.",
+    );
+    await expect(
+      grid.getByRole("button", {
+        name: /^Tuesday, November 17, 2026, 1 issue/,
+      }),
+    ).toBeVisible();
+
+    // Create on a chosen day.
+    await grid
+      .getByRole("button", { name: /^Wednesday, November 25, 2026/ })
+      .click();
+    await page.getByLabel("New issue on this day").fill("Bake pies");
+    await page.getByRole("button", { name: "Add issue" }).click();
+    await expect(
+      page.getByText("Created ISS-6, due Wednesday, November 25, 2026."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Wednesday, November 25, 2026" }),
+    ).toContainText("Bake pies");
+
+    // Project filter.
+    await page.getByLabel("Project").selectOption("project-1");
+    await expect(grid.getByText("Hang posters")).toBeVisible();
+    await expect(grid.getByText("Buy frames")).toHaveCount(0);
+
+    // Open an issue from the calendar.
+    await grid.getByRole("button", { name: /^Tuesday, November 17/ }).click();
+    await page
+      .getByRole("region", { name: "Tuesday, November 17, 2026" })
+      .getByRole("link", { name: "Hang posters" })
+      .click();
+    await expect(page.getByLabel("Issue title")).toHaveValue("Hang posters");
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue(
+      "2026-11-17",
+    );
+  });
+});

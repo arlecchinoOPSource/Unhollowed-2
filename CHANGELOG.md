@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Replaced the Calendar placeholder with an issue calendar: a keyboard-navigable month grid of issues by due date, a project filter, drag or typed rescheduling, and creating an issue on a chosen day.
 - Added Today and Upcoming views of open issues by local due date, with overdue issues in Today, date or project grouping, quick completion, rescheduling through `set_issue_due_date`, and refresh at local midnight or when the app resumes.
 - Added a kanban board for All Issues and each project, with one column per status, the shared issue filters, drag-and-drop and keyboard Move menus, optimistic moves that roll back on failure, and paged columns for large boards.
 - Added optional project missions and objectives, issue links, and individual objective progress.

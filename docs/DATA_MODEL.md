@@ -124,6 +124,16 @@ The board (`/issues/board` and `/projects/:id/board`) has no records of its own.
 - **Day changes.** A timer fires at the next local midnight, built from local date fields so 23- and 25-hour daylight-saving days work. The date is also checked when the window regains focus or becomes visible, which covers sleep, missed timers, and time zone changes.
 - **Rescheduling** uses `set_issue_due_date`, which changes only `due_date`, so the issue keeps its ID, number, description, status, and links. The new date must be on or after any start date. The view updates immediately, moves the issue between Today and Upcoming when its date crosses today, and restores it if the change is rejected. Typed dates commit on Enter or when leaving the field, never while typing.
 
+## Issue calendar
+
+`/calendar` shows issues on their due dates, read straight from issues through `query_issues`, with no calendar records. Due dates are local calendar dates, so an issue appears on the same day in any time zone and across daylight saving.
+
+- The month grid shows six weeks starting on the Monday on or before the 1st (`src/features/calendar/monthGrid.ts`). Undated issues are not shown. Closed issues are hidden unless **Show closed issues** is on, and the **Project** filter narrows to one project or the Inbox. `month`, `project`, and `closed` live in the URL.
+- One grid loads at most 1,000 issues in pages of 200, with a note when more exist.
+- Day buttons use a roving tab stop: arrow keys move by day and week, Home and End to the week's ends, and Page Up and Page Down by month (keeping the day of the month and clamping to shorter months). The chosen day lists every issue due then, with links to their pages, a due date field that commits on Enter or blur, and a form that creates an issue due that day (in the filtered project, if one is selected).
+- Dragging an issue chip to another day, or editing its date, reschedules through `set_issue_due_date`, so the issue keeps its identity. Changes show immediately. Only the newest change to an issue applies its reply, and a rejected change returns the issue to its previous day with an explanation.
+- The calendar does not use the bundled FullCalendar packages. FullCalendar injects its styles at run time, which the production CSP (`style-src 'self'`) blocks, although the development CSP allows it.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
