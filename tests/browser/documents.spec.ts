@@ -196,3 +196,35 @@ test("persists a table and local image reference across document switches", asyn
   await expect(editor.locator("tr")).toHaveCount(4);
   await expect(image).toBeVisible();
 });
+
+test("prints the selected paper geometry and an explicit page break", async ({
+  page,
+}) => {
+  await setup(page);
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await page.getByText("Page setup and print", { exact: true }).click();
+  await page.getByRole("combobox", { name: "Paper" }).selectOption("letter");
+  await page
+    .getByRole("combobox", { name: "Orientation" })
+    .selectOption("landscape");
+  await page.getByLabel("Page header", { exact: true }).fill("Research brief");
+  await page.getByLabel("Page numbers").check();
+  await editor.press("End");
+  await page.getByRole("button", { name: "Insert page break" }).click();
+  await editor.press("ControlOrMeta+End");
+  await page.keyboard.type("On the following page.");
+  const pdf = await page.pdf({ preferCSSPageSize: true });
+  const structure = pdf.toString("latin1");
+  expect(structure).toMatch(/\/MediaBox\s*\[0 0 792 612\]/);
+  expect(structure).toMatch(/\/Count 2\b/);
+  await expect(page.getByText("All changes saved")).toBeVisible();
+  await page.getByRole("button", { name: "Second draft" }).click();
+  await page.getByRole("button", { name: "First draft" }).click();
+  await page.getByText("Page setup and print", { exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Orientation" })).toHaveValue(
+    "landscape",
+  );
+  await expect(page.getByLabel("Page header", { exact: true })).toHaveValue(
+    "Research brief",
+  );
+});

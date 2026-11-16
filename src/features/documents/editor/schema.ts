@@ -1,3 +1,4 @@
+import { DocumentPageLayout, PageBreak } from "./pageLayout";
 import { TableKit } from "@tiptap/extension-table";
 import { DocumentImage } from "./DocumentImage";
 import { Extension, Mark, getSchema, type JSONContent } from "@tiptap/react";
@@ -199,6 +200,8 @@ export const documentExtensions = [
   TableKit.configure({ table: { resizable: true } }),
   CellStyles,
   DocumentImage,
+  DocumentPageLayout,
+  PageBreak,
 ];
 
 const schema = getSchema(documentExtensions);

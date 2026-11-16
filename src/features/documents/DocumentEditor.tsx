@@ -1,3 +1,8 @@
+import {
+  DocumentLayout,
+  DocumentPageMode,
+  PageSurface,
+} from "./editor/DocumentLayout";
 import { DocumentImage } from "./editor/DocumentImage";
 import { DocumentInsert } from "./editor/DocumentInsert";
 import { EditorContent } from "@tiptap/react";
@@ -111,6 +116,7 @@ function EditorBody({
   const [title, setTitle] = useState(document.title);
   const [restoring, setRestoring] = useState(false);
   const [assetError, setAssetError] = useState("");
+  const [pageMode, setPageMode] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const focusControl = useRef<HTMLButtonElement>(null);
 
@@ -238,85 +244,93 @@ function EditorBody({
   }
 
   return (
-    <div className="document-editor" data-writing-focus={focusMode}>
-      <div className="word-controls">
-        <button
-          type="button"
-          ref={focusControl}
-          aria-pressed={focusMode}
-          onClick={() => setFocusMode(!focusMode)}
-        >
-          {focusMode ? "Exit focus mode" : "Focus mode"}
-        </button>
-      </div>
-      <label className="visually-hidden" htmlFor="document-title">
-        Document title
-      </label>
-      <input
-        id="document-title"
-        className="document-title"
-        value={title}
-        maxLength={200}
-        disabled={Boolean(recovered) || restoring}
-        onChange={(event) => {
-          setTitle(event.target.value);
-          latest.current = { ...latest.current, title: event.target.value };
-          schedule();
-        }}
-      />
-      {recovered && (
+    <DocumentPageMode value={pageMode}>
+      <div className="document-editor" data-writing-focus={focusMode}>
+        <h1 className="document-print-title">{title || "Untitled"}</h1>
         <div className="word-controls">
-          <p>
-            Unsaved edits are available from an earlier session. Resume them or
-            keep the saved version.
-          </p>
-          <button type="button" onClick={resume}>
-            Resume unsaved edits
-          </button>
           <button
             type="button"
-            onClick={() => {
-              discardDraft(id, recovered);
-              setRecovered(undefined);
-              setSaveState("saved");
-            }}
+            ref={focusControl}
+            aria-pressed={focusMode}
+            onClick={() => setFocusMode(!focusMode)}
           >
-            Keep saved version
+            {focusMode ? "Exit focus mode" : "Focus mode"}
           </button>
         </div>
-      )}
-      {editor && !recovered && !restoring && (
-        <>
-          <DocumentToolbar editor={editor} />
-          <DocumentInsert editor={editor} documentId={id} />
-          <DocumentNavigation editor={editor} />
-        </>
-      )}
-      {assetError && <p role="alert">{assetError}</p>}
-      <EditorContent editor={editor} className="editor" />
-      <p role="status" className="save-status">
-        {restoring
-          ? "Restoring version…"
-          : recovered
-            ? "Unsaved edit recovery available."
-            : saveMessages[saveState]}
-      </p>
-      {journalFailed && (
-        <p role="alert">
-          Recovery storage is unavailable. Leave the editor open until the save
-          finishes.
+        <label className="visually-hidden" htmlFor="document-title">
+          Document title
+        </label>
+        <input
+          id="document-title"
+          className="document-title"
+          value={title}
+          maxLength={200}
+          disabled={Boolean(recovered) || restoring}
+          onChange={(event) => {
+            setTitle(event.target.value);
+            latest.current = { ...latest.current, title: event.target.value };
+            schedule();
+          }}
+        />
+        {recovered && (
+          <div className="word-controls">
+            <p>
+              Unsaved edits are available from an earlier session. Resume them
+              or keep the saved version.
+            </p>
+            <button type="button" onClick={resume}>
+              Resume unsaved edits
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                discardDraft(id, recovered);
+                setRecovered(undefined);
+                setSaveState("saved");
+              }}
+            >
+              Keep saved version
+            </button>
+          </div>
+        )}
+        {editor && !recovered && !restoring && (
+          <>
+            <DocumentToolbar editor={editor} />
+            <DocumentInsert editor={editor} documentId={id} />
+            <DocumentLayout editor={editor} setPageMode={setPageMode} />
+            <DocumentNavigation editor={editor} />
+          </>
+        )}
+        {assetError && <p role="alert">{assetError}</p>}
+        {editor && (
+          <PageSurface editor={editor}>
+            <EditorContent editor={editor} className="editor" />
+          </PageSurface>
+        )}
+        <p role="status" className="save-status">
+          {restoring
+            ? "Restoring version…"
+            : recovered
+              ? "Unsaved edit recovery available."
+              : saveMessages[saveState]}
         </p>
-      )}
-      {saveState === "error" && !recovered && (
-        <button className="action" type="button" onClick={save}>
-          Retry save
-        </button>
-      )}
-      <RevisionHistory
-        id={id}
-        disabled={saveState !== "saved" || Boolean(recovered) || restoring}
-        restore={restore}
-      />
-    </div>
+        {journalFailed && (
+          <p role="alert">
+            Recovery storage is unavailable. Leave the editor open until the
+            save finishes.
+          </p>
+        )}
+        {saveState === "error" && !recovered && (
+          <button className="action" type="button" onClick={save}>
+            Retry save
+          </button>
+        )}
+        <RevisionHistory
+          id={id}
+          disabled={saveState !== "saved" || Boolean(recovered) || restoring}
+          restore={restore}
+        />
+      </div>
+    </DocumentPageMode>
   );
 }
