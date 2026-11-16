@@ -99,7 +99,7 @@ Invalid values return `invalid_filter`. Every query is scoped to the active work
 
 ## Missions and objectives
 
-Missions are broad project goals. Objectives describe measurable outcomes and may reference one mission in the same project. Milestones remain independent checkpoints. Objectives may link to multiple issues in their project, and issues may contribute to multiple objectives. Moving an issue to another project or to the Inbox clears its objective links. Progress counts Done issues against all linked issues except Canceled. Blocked issues count toward the total and empty objectives display no progress bar.
+Missions are broad project goals. Objectives describe measurable outcomes and may reference one mission in the same project. Milestones remain independent checkpoints. Objectives may link to multiple issues in their project, and issues may contribute to multiple objectives. Moving an issue to another project or to the Inbox clears its objective links. Progress follows the rollup rules in **Progress rollups** below.
 
 ## Issue relationships
 
@@ -180,6 +180,17 @@ The project page opens with an overview computed by `get_project_overview` (`src
 - **Recent activity** lists the ten newest observable events, each labeled by the timestamp it comes from: **Created** (`created_at`), **Completed** (`completed_at`), and **Last updated** (`updated_at`, when later than creation and not the completion itself). There is no change log, so "Last updated" means the issue's latest change of any kind.
 - **Links.** Each number opens the matching project issue list (open, closed, overdue, due this week, each status, and undated), and milestones open their issue list.
 - An empty project shows zero counts, **No issues yet**, and empty-state text for each section.
+
+## Progress rollups
+
+Objectives, missions, and milestones summarize progress with the same rule as the project overview, computed from live issues each time they are read, with no stored totals:
+
+- **Denominator.** Progress is done ÷ (issues in the group − canceled). Canceled issues are neither done nor outstanding and are reported separately. **Blocked** issues are open: they count in the total, not as done, and are reported separately. A group whose total is 0 shows "No issues count toward progress yet" and no bar, never 0% or 100%.
+- **Objective issues.** An objective's issues are its directly linked issues **plus their sub-issues at any depth** (through `parent` relationships) that are in the same project. The parent counts as an issue in its own right, alongside its children.
+- **Mission issues.** A mission rolls up every issue of every objective that references it.
+- **Deduplication.** Group membership is collected as distinct (group, issue) pairs (SQL `UNION`), then counted. An issue linked to several objectives of one mission, or linked directly and also reached as a sub-issue, counts once per group. `UNION` also ends the recursion.
+- **What updates a rollup.** Completing, reopening, canceling, or blocking an issue. Linking or unlinking it. Adding or removing a parent relationship. Moving an issue to another project, which clears its objective links and stops it counting as a sub-issue.
+- **Milestones** keep their rules (completed ÷ open + completed) and now also report `blockedCount`, a subset of their open issues.
 
 ## Migrations
 

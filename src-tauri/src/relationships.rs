@@ -87,7 +87,7 @@ async fn list(
     .await?)
 }
 
-async fn add(
+pub(crate) async fn add(
     db: &SqlitePool,
     workspace: &str,
     issue: &str,
@@ -148,7 +148,7 @@ async fn add(
     Ok(())
 }
 
-async fn remove(
+pub(crate) async fn remove(
     db: &SqlitePool,
     workspace: &str,
     issue: &str,
