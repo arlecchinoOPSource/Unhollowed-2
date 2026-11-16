@@ -29,6 +29,14 @@ test.beforeEach(async ({ page }) => {
     ];
     const issues: Issue[] = [];
     let clock = 0;
+    let delayedList: Promise<void> | undefined;
+    if (location.search.includes("delay-list")) {
+      delayedList = new Promise((resolve) => {
+        window.addEventListener("release-list", () => resolve(), {
+          once: true,
+        });
+      });
+    }
     const failing = new Set<string>();
     // Failures last until cleared, because React's development StrictMode
     // runs each load effect twice.
@@ -74,8 +82,8 @@ test.beforeEach(async ({ page }) => {
               if (!project) throw { code: "not_found" };
               return project;
             }
-            case "list_issues":
-              return structuredClone(
+            case "list_issues": {
+              const snapshot = structuredClone(
                 issues
                   .filter(
                     (issue) =>
@@ -83,6 +91,9 @@ test.beforeEach(async ({ page }) => {
                   )
                   .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
               );
+              await delayedList;
+              return snapshot;
+            }
             case "get_issue":
               return structuredClone(find(args.id));
             case "create_issue": {
@@ -361,4 +372,52 @@ test("handles missing issues and storage failures", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Complete ISS-1: Fragile" }),
   ).toBeVisible();
+});
+
+test("recovers a failed draft after leaving and saves it on retry", async ({
+  page,
+}) => {
+  await page.goto("/issues");
+  await createIssue(page, "Original issue");
+  await page.getByRole("link", { name: "Original issue" }).click();
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent("fail-command", { detail: "update_issue" }),
+    ),
+  );
+  await page.getByLabel("Issue title").fill("Recover this edit");
+  await expect(page.getByRole("button", { name: "Retry save" })).toBeVisible();
+  await page.getByRole("link", { name: "All issues" }).click();
+  await page.getByRole("link", { name: "Original issue" }).click();
+  await expect(page.getByLabel("Issue title")).toHaveValue("Recover this edit");
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent("restore-command", { detail: "update_issue" }),
+    ),
+  );
+  await page.getByRole("button", { name: "Retry save" }).click();
+  await expect(page.getByText("All changes saved")).toBeVisible();
+  await page.getByRole("link", { name: "All issues" }).click();
+  await expect(
+    page.getByRole("link", { name: "Recover this edit" }),
+  ).toBeVisible();
+});
+
+test("keeps a typed title while waiting for the initial list before creating", async ({
+  page,
+}) => {
+  await page.goto("/issues?delay-list");
+  const title = page.getByLabel("New issue");
+  await title.fill("Created after loading");
+  const create = page.getByRole("button", { name: "Create issue" });
+  await expect(create).toBeDisabled();
+  await title.press("Enter");
+  await expect(title).toHaveValue("Created after loading");
+  await page.evaluate(() => window.dispatchEvent(new Event("release-list")));
+  await expect(create).toBeEnabled();
+  await title.press("Enter");
+  await expect(
+    page.getByRole("link", { name: "Created after loading" }),
+  ).toBeVisible();
+  await expect(page.getByText("Created ISS-1.")).toBeVisible();
 });

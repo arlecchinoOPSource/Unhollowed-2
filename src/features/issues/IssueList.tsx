@@ -84,7 +84,7 @@ export function IssueList({ projectId }: { projectId?: string }) {
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (creating) return;
+    if (creating || issues === null) return;
     setActionError("");
     setMessage("");
     const trimmed = title.trim();
@@ -164,7 +164,11 @@ export function IssueList({ projectId }: { projectId?: string }) {
             value={title}
             onChange={(event) => setTitle(event.target.value)}
           />
-          <button className="action" type="submit" aria-disabled={creating}>
+          <button
+            className="action"
+            type="submit"
+            aria-disabled={creating || issues === null}
+          >
             <Plus size={16} aria-hidden="true" />
             {creating ? "Creating…" : "Create issue"}
           </button>

@@ -38,6 +38,9 @@ interface Draft {
   dueDate: string | null;
 }
 
+// Keep unsaved drafts available when the editor unmounts during a write.
+const unsavedDrafts = new Map<string, Draft>();
+
 function draftOf(issue: Issue): Draft {
   const { title, description, priority, startDate, dueDate } = issue;
   return { title, description, priority, startDate, dueDate };
@@ -119,19 +122,20 @@ function IssueEditor({
   projects: Project[];
 }) {
   const id = initial.id;
+  const [recovered] = useState(() => unsavedDrafts.get(id));
   // `issue` is the latest server state with optimistic status and project
   // changes applied. `fields` holds the editable values, which can be ahead
   // of the server while typing.
   const [issue, setIssue] = useState(initial);
-  const [fields, setFields] = useState(() => draftOf(initial));
+  const [fields, setFields] = useState(() => recovered ?? draftOf(initial));
   const [pending, setPending] = useState(0);
   const [unsaved, setUnsaved] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(Boolean(recovered));
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const draft = useRef(draftOf(initial));
+  const draft = useRef(recovered ?? draftOf(initial));
   const saved = useRef(initial);
-  const dirty = useRef(false);
+  const dirty = useRef(Boolean(recovered));
   const timer = useRef<number>(undefined);
   const inFlight = useRef(0);
 
@@ -169,26 +173,25 @@ function IssueEditor({
     setUnsaved(false);
     if (!dirty.current) return;
     dirty.current = false;
+    const snapshot = draft.current;
     const input = {
-      ...draft.current,
+      ...snapshot,
       title: draft.current.title.trim() || saved.current.title,
     };
     const saving = updateIssue(id, input).then((result) => {
+      if (unsavedDrafts.get(id) === snapshot) unsavedDrafts.delete(id);
       setFailed(false);
       return result;
     });
     run(saving, () => {
       setFailed(true);
-      // Restore properties the backend refused. Unsaved text stays in the
-      // draft and is retried on the next edit or when leaving the page.
-      const { priority, startDate, dueDate } = saved.current;
-      draft.current = { ...draft.current, priority, startDate, dueDate };
-      setFields((current) => ({ ...current, priority, startDate, dueDate }));
+      // Keep the rejected values available for correction or explicit retry.
       dirty.current = true;
     });
   }
 
   function schedule() {
+    unsavedDrafts.set(id, draft.current);
     dirty.current = true;
     setUnsaved(true);
     window.clearTimeout(timer.current);
@@ -200,7 +203,7 @@ function IssueEditor({
   useEffect(
     () => () => {
       window.clearTimeout(timer.current);
-      if (dirty.current) saveFields();
+      if (timer.current !== undefined && dirty.current) saveFields();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -208,9 +211,9 @@ function IssueEditor({
 
   const editor = useRichTextEditor(
     "Issue description",
-    initial.description,
+    recovered?.description ?? initial.description,
     (description) => {
-      draft.current.description = description;
+      draft.current = { ...draft.current, description };
       schedule();
     },
   );
@@ -228,6 +231,7 @@ function IssueEditor({
       return;
     }
     draft.current = next;
+    unsavedDrafts.set(id, next);
     setFields((current) => ({ ...current, [key]: value }));
     dirty.current = true;
     saveFields();
@@ -280,7 +284,7 @@ function IssueEditor({
     pending > 0 || unsaved
       ? "Saving…"
       : failed
-        ? "Changes not saved yet. They will be retried."
+        ? "Changes not saved. Retry or keep editing."
         : message || "All changes saved";
 
   return (
@@ -303,7 +307,7 @@ function IssueEditor({
           maxLength={200}
           onChange={(event) => {
             const title = event.target.value;
-            draft.current.title = title;
+            draft.current = { ...draft.current, title };
             setFields((current) => ({ ...current, title }));
             schedule();
           }}
@@ -321,6 +325,11 @@ function IssueEditor({
         <p role="status" className="save-status">
           {status}
         </p>
+        {failed && pending === 0 && (
+          <button type="button" className="action" onClick={saveFields}>
+            Retry save
+          </button>
+        )}
         {error && <p role="alert">{error}</p>}
       </div>
       <section
