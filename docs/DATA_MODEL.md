@@ -169,6 +169,18 @@ A recurring issue is a series of ordinary issues, one per occurrence. Only one o
 - **Direct and inherited.** A project page lists documents linked to the project, and separately **From this project's issues**: documents linked to its issues but not to the project, each with the issues that link it. Inherited entries follow the issue, so moving an issue out of the project removes them.
 - **Navigation.** The Documents page opens the document named by `?doc=<id>`. Links from issues and projects include a **Back to** link for their origin, and each document lists the issues and projects that link to it under **Linked from**.
 
+## Project overview
+
+The project page opens with an overview computed by `get_project_overview` (`src-tauri/src/overview.rs`) from the project's existing issues and milestones each time it loads. Nothing is stored. Every query is scoped to the active workspace and the project.
+
+- **Totals.** Open is To Do + In Progress + Blocked, and closed is Done + Canceled, following the generated `closed` column. Status counts cover all five statuses.
+- **Completion** is done ÷ (all issues − canceled). Canceled work is neither done nor outstanding. When no non-canceled issues exist the overview shows **No issues yet**, never 0% or 100%.
+- **Overdue and upcoming** use the Today and Upcoming rules with the user's local date: open issues only, overdue when due before today, upcoming from today through the next 6 days, which matches the list's **Due in the next 7 days** filter. Each list shows five issues with a total and **View all** link. Undated open issues are counted and linked separately.
+- **Milestones** are the project's own milestones with the milestone progress rules (completed ÷ open + completed, canceled not counted, "No issues yet" when empty).
+- **Recent activity** lists the ten newest observable events, each labeled by the timestamp it comes from: **Created** (`created_at`), **Completed** (`completed_at`), and **Last updated** (`updated_at`, when later than creation and not the completion itself). There is no change log, so "Last updated" means the issue's latest change of any kind.
+- **Links.** Each number opens the matching project issue list (open, closed, overdue, due this week, each status, and undated), and milestones open their issue list.
+- An empty project shows zero counts, **No issues yet**, and empty-state text for each section.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.

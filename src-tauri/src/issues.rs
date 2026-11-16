@@ -13,7 +13,7 @@ pub(crate) use query::search_text;
 #[cfg(test)]
 pub use query::IssueFilter;
 pub use query::{query, IssuePage, IssueQuery};
-pub use recurrence::{recurrence_for, set_rule, Recurrence, RecurrenceInput};
+pub use recurrence::{add_days, recurrence_for, set_rule, Recurrence, RecurrenceInput};
 
 const MAX_TITLE_CHARS: usize = 200;
 pub(crate) const PRIORITIES: [&str; 5] = ["none", "low", "medium", "high", "urgent"];

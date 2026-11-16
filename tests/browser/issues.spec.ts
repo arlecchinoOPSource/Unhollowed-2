@@ -478,6 +478,75 @@ test.beforeEach(async ({ page }) => {
                   .map(({ id, name }) => ({ id, name })),
               };
             }
+            case "get_project_overview": {
+              // Mirrors the backend aggregates and their denominators.
+              const { today } = args as { today: string };
+              const project = projects.find(
+                (item) => item.id === args.projectId,
+              );
+              if (!project) throw { code: "not_found" };
+              const own = issues.filter(
+                (issue) => issue.projectId === project.id,
+              );
+              const count = (status: IssueStatus) =>
+                own.filter((issue) => issue.status === status).length;
+              const statuses = {
+                todo: count("todo"),
+                inProgress: count("in_progress"),
+                blocked: count("blocked"),
+                done: count("done"),
+                canceled: count("canceled"),
+              };
+              const counted = own.length - statuses.canceled;
+              const open = own.filter((issue) => !issue.closed);
+              const horizon = new Date(`${today}T00:00:00Z`);
+              horizon.setUTCDate(horizon.getUTCDate() + 6);
+              const end = horizon.toISOString().slice(0, 10);
+              const byDue = (a: Issue, b: Issue) =>
+                a.dueDate!.localeCompare(b.dueDate!) || a.number - b.number;
+              const overdue = open
+                .filter((issue) => issue.dueDate && issue.dueDate < today)
+                .sort(byDue);
+              const upcoming = open
+                .filter(
+                  (issue) =>
+                    issue.dueDate &&
+                    issue.dueDate >= today &&
+                    issue.dueDate <= end,
+                )
+                .sort(byDue);
+              const activity = own
+                .flatMap((issue) => [
+                  { kind: "created", at: issue.createdAt, issue },
+                  ...(issue.completedAt
+                    ? [{ kind: "completed", at: issue.completedAt, issue }]
+                    : []),
+                ])
+                .sort((a, b) => b.at.localeCompare(a.at))
+                .slice(0, 10)
+                .map(({ kind, at, issue }) => ({
+                  kind,
+                  at,
+                  issueId: issue.id,
+                  number: issue.number,
+                  title: issue.title,
+                }));
+              return structuredClone({
+                project,
+                total: own.length,
+                open: open.length,
+                closed: own.length - open.length,
+                statuses,
+                completion: counted > 0 ? statuses.done / counted : null,
+                overdueCount: overdue.length,
+                overdue: overdue.slice(0, 5),
+                upcomingCount: upcoming.length,
+                upcoming: upcoming.slice(0, 5),
+                undatedOpen: open.filter((issue) => !issue.dueDate).length,
+                milestones: [],
+                activity,
+              });
+            }
             case "list_saved_views":
               return structuredClone(
                 [...views].sort((a, b) => a.name.localeCompare(b.name)),
@@ -2285,4 +2354,101 @@ test("links documents to issues and projects and navigates both ways", async ({
   await expect(page.getByRole("alert")).toHaveText(
     "Could not open this document.",
   );
+});
+
+test.describe("Project overview", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("answers what is underway, late, and next, with links to the lists", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
+    await page.addInitScript(() => {
+      Object.assign(window, { __seedDocuments: [] });
+    });
+    await seedIssues(page, [
+      { title: "Print posters", projectId: "project-1", dueDate: "2026-11-10" },
+      {
+        title: "Book venue",
+        projectId: "project-1",
+        dueDate: "2026-11-18",
+        status: "in_progress",
+      },
+      {
+        title: "Order chairs",
+        projectId: "project-1",
+        status: "done",
+        completedAt: "2026-11-15T12:00:00.000Z",
+      },
+      { title: "Cancelled idea", projectId: "project-1", status: "canceled" },
+      { title: "Write invite", projectId: "project-1" },
+      { title: "Other project", projectId: "project-2", status: "done" },
+    ]);
+    await page.goto("/projects/project-1");
+    const overview = page.getByRole("region", { name: "Overview" });
+    // 1 done of 4 non-canceled issues.
+    await expect(overview.getByText("25%")).toBeVisible();
+    await expect(
+      overview.getByText("1 of 4 done, canceled issues not counted"),
+    ).toBeVisible();
+    await expect(overview.getByRole("link", { name: /^Open 3/ })).toBeVisible();
+    const bars = overview.getByRole("region", { name: "Issues by status" });
+    await expect(
+      bars.getByRole("link", { name: "Done: 1 issue" }),
+    ).toBeVisible();
+    await expect(
+      bars.getByRole("link", { name: "In Progress: 1 issue" }),
+    ).toBeVisible();
+    await expect(
+      overview
+        .getByRole("region", { name: "Overdue" })
+        .getByRole("link", { name: "ISS-1: Print posters" }),
+    ).toBeVisible();
+    await expect(
+      overview
+        .getByRole("region", { name: "Coming up" })
+        .getByRole("link", { name: "ISS-2: Book venue" }),
+    ).toBeVisible();
+    await expect(
+      overview.getByRole("link", { name: "1 open issue has no due date" }),
+    ).toBeVisible();
+    const activity = overview.getByRole("region", { name: "Recent activity" });
+    await expect(
+      activity.getByText("Completed", { exact: true }),
+    ).toBeVisible();
+
+    // Metrics open the matching list.
+    await overview.getByRole("link", { name: /^Overdue 1/ }).click();
+    await expect(page).toHaveURL(/\/projects\/project-1\/issues\?due=overdue$/);
+    await expect(
+      page.getByRole("list", { name: "Open issues" }).getByRole("listitem"),
+    ).toHaveCount(1);
+    await page.goBack();
+    await page
+      .getByRole("region", { name: "Issues by status" })
+      .getByRole("link", { name: "Done: 1 issue" })
+      .click();
+    await expect(page).toHaveURL(/state=all&status=done/);
+    const list = page.getByRole("list", { name: "All issues" });
+    await expect(
+      list.getByRole("link", { name: "Order chairs" }),
+    ).toBeVisible();
+    await expect(list.getByRole("link", { name: "Other project" })).toHaveCount(
+      0,
+    );
+  });
+
+  test("shows a calm empty state for a project with no issues", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      Object.assign(window, { __seedDocuments: [] });
+    });
+    await seedIssues(page, []);
+    await page.goto("/projects/project-2");
+    const overview = page.getByRole("region", { name: "Overview" });
+    await expect(overview.getByText("No issues yet").first()).toBeVisible();
+    await expect(overview.getByText("Nothing overdue.")).toBeVisible();
+    await expect(overview.getByText("No activity yet.")).toBeVisible();
+  });
 });
