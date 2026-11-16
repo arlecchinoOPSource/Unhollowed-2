@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod database;
+mod document_links;
 mod documents;
 mod goals;
 mod issues;
@@ -53,6 +54,13 @@ fn main() {
             saved_views::create_saved_view,
             saved_views::update_saved_view,
             saved_views::delete_saved_view,
+            document_links::list_issue_documents,
+            document_links::link_issue_document,
+            document_links::unlink_issue_document,
+            document_links::list_project_documents,
+            document_links::link_project_document,
+            document_links::unlink_project_document,
+            document_links::get_document_usage,
             labels::list_labels,
             labels::create_label,
             labels::update_label,

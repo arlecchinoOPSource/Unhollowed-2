@@ -468,3 +468,7 @@
   justify-self: start;
   margin: 0;
 }
+
+.issue-main .linked-documents {
+  margin-top: 22px;
+}

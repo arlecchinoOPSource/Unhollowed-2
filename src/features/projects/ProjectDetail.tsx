@@ -1,10 +1,4 @@
-import {
-  ArrowLeft,
-  Flag,
-  LayoutDashboard,
-  ListTodo,
-  Notebook,
-} from "lucide-react";
+import { ArrowLeft, Flag, LayoutDashboard, ListTodo } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -16,12 +10,10 @@ import {
   type Project,
   type ProjectStatus,
 } from "../../database/projects";
+import { ProjectDocuments } from "../documents/LinkedDocuments";
 import { ProjectDialog } from "./ProjectDialog";
 
-const sections = [
-  { title: "Documents", icon: Notebook },
-  { title: "Dashboard", icon: LayoutDashboard },
-];
+const sections = [{ title: "Dashboard", icon: LayoutDashboard }];
 
 export function ProjectDetail() {
   const { id } = useParams();
@@ -174,6 +166,12 @@ function ProjectDetails({ id }: { id: string }) {
                 <p>Planned for a future release.</p>
               </section>
             ))}
+          </div>
+          <div className="project-documents">
+            <ProjectDocuments
+              projectId={id}
+              origin={{ from: `/projects/${id}`, fromLabel: project.name }}
+            />
           </div>
           {editing && (
             <ProjectDialog
