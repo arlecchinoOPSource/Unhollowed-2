@@ -386,6 +386,50 @@ pub async fn set_project(
     .ok_or(IssueError::NotFound)
 }
 
+/// Reschedules an issue by setting or clearing only its due date.
+///
+/// Everything else, including the ID, number, description, status, and links,
+/// is unchanged. The new date must be on or after any start date. Repeating
+/// the current date changes nothing.
+pub async fn set_due_date(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+    due_date: Option<&str>,
+) -> Result<Issue, IssueError> {
+    if due_date.is_some_and(|date| !valid_date(date)) {
+        return Err(IssueError::InvalidDate);
+    }
+    let start: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT start_date FROM issues WHERE id = ? AND workspace_id = ?")
+            .bind(id)
+            .bind(workspace)
+            .fetch_optional(pool)
+            .await
+            .map_err(storage_failed)?;
+    let Some((start,)) = start else {
+        return Err(IssueError::NotFound);
+    };
+    if let (Some(start), Some(due)) = (start.as_deref(), due_date) {
+        if start > due {
+            return Err(IssueError::InvalidDateRange);
+        }
+    }
+    sqlx::query_as(&format!(
+        "UPDATE issues SET
+             due_date = ?1,
+             updated_at = CASE WHEN due_date IS ?1 THEN updated_at ELSE {NOW} END
+         WHERE id = ?2 AND workspace_id = ?3 RETURNING {FIELDS}"
+    ))
+    .bind(due_date)
+    .bind(id)
+    .bind(workspace)
+    .fetch_optional(pool)
+    .await
+    .map_err(storage_failed)?
+    .ok_or(IssueError::NotFound)
+}
+
 /// Sets or clears the issue's milestone.
 ///
 /// The milestone must be in the workspace and be a workspace milestone or one
@@ -552,6 +596,16 @@ pub async fn query_issues(
 ) -> Result<IssuePage, IssueError> {
     let (pool, workspace) = scope(&instances).await?;
     self::query(&pool, &workspace, query).await
+}
+
+#[tauri::command]
+pub async fn set_issue_due_date(
+    instances: State<'_, DbInstances>,
+    id: String,
+    due_date: Option<String>,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_due_date(&pool, &workspace, &id, due_date.as_deref()).await
 }
 
 #[tauri::command]

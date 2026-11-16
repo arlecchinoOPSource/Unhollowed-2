@@ -493,6 +493,17 @@ test.beforeEach(async ({ page }) => {
               milestone.closedAt = milestone.closed ? now() : null;
               return structuredClone(milestone);
             }
+            case "set_issue_due_date": {
+              const issue = find(args.id);
+              const due = (args as { dueDate?: string | null }).dueDate ?? null;
+              if (due && issue.startDate && issue.startDate > due)
+                throw { code: "invalid_date_range" };
+              if (issue.dueDate !== due) {
+                issue.dueDate = due;
+                issue.updatedAt = now();
+              }
+              return structuredClone(issue);
+            }
             case "set_issue_milestone": {
               const issue = find(args.id);
               const id = args.milestoneId ?? null;
@@ -790,7 +801,7 @@ function seedIssues(page: Page, seeds: Partial<Issue>[]) {
 test("searches, combines filters, resets them, and sorts undated issues last", async ({
   page,
 }) => {
-  await page.clock.setFixedTime(new Date("2026-11-16T10:00:00"));
+  await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
   const rich = JSON.stringify({
     type: "doc",
     content: [
@@ -1211,6 +1222,10 @@ test("supports keyboard capture, search, issue navigation and completion", async
   page,
 }) => {
   await page.goto("/");
+  // Wait for the app to render so its shortcut listener is attached.
+  await expect(
+    page.getByRole("heading", { name: "Welcome to Unhollowed." }),
+  ).toBeVisible();
   await page.keyboard.press("Alt+Shift+KeyN");
   const capture = page.getByLabel("New issue");
   await expect(capture).toBeFocused();
@@ -1397,4 +1412,183 @@ test("bounds a large board and loads more cards per column", async ({
   await expect(todo.getByRole("listitem")).toHaveCount(100);
   const keys = await todo.locator(".issue-key").allTextContents();
   expect(new Set(keys).size).toBe(100);
+});
+
+test.describe("Today and Upcoming", () => {
+  // A fixed zone with a daylight-saving change on 2026-11-01.
+  // Clock times below carry explicit offsets, because the test process may
+  // run in a different zone from the page.
+  test.use({ timezoneId: "America/New_York" });
+
+  const seeds = [
+    { title: "Renew passport", dueDate: "2026-11-10", projectId: "project-1" },
+    { title: "Pay rent", dueDate: "2026-11-16", priority: "high" as const },
+    { title: "Send invites", dueDate: "2026-11-17", projectId: "project-1" },
+    { title: "Pick up frame", dueDate: "2026-11-20" },
+    { title: "Book flights", dueDate: "2026-12-25" },
+    { title: "Someday idea" },
+    { title: "Already filed", dueDate: "2026-11-15", status: "done" as const },
+  ];
+
+  test("shows overdue and today, groups upcoming by date, and explains undated issues", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
+    await seedIssues(page, seeds);
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Workspace" })
+      .getByRole("link", { name: "Today" })
+      .click();
+    const group = (name: string) =>
+      page.getByRole("region", { name: new RegExp(`^${name}`) });
+    await expect(group("Overdue").getByRole("link")).toHaveText([
+      "Renew passport",
+    ]);
+    await expect(group("Overdue")).toContainText("Overdue, due");
+    await expect(group("Today").getByRole("link")).toHaveText(["Pay rent"]);
+    // Closed and undated issues are not listed.
+    await expect(page.getByText("Already filed")).toHaveCount(0);
+    await expect(page.getByText("Someday idea")).toHaveCount(0);
+    await expect(
+      page.getByText("1 open issue has no due date and is not shown here."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Review issues without a due date" }),
+    ).toHaveAttribute("href", "/issues?due=none");
+
+    await page.getByRole("link", { name: "Upcoming" }).click();
+    await expect(page).toHaveURL(/\/today\/upcoming$/);
+    const headings = page.locator(".task-group h2");
+    await expect(headings).toHaveCount(3);
+    await expect(headings.nth(0)).toContainText("Tomorrow");
+    await expect(headings.nth(1)).toContainText("Friday");
+    await expect(headings.nth(2)).toContainText("Dec");
+    await expect(group("Tomorrow").getByRole("link")).toHaveText([
+      "Send invites",
+    ]);
+
+    // Optional project grouping, with the Inbox last.
+    // The checkbox follows the URL, which updates just after the click.
+    await page.getByLabel("Group by project").click();
+    await expect(page.getByLabel("Group by project")).toBeChecked();
+    await expect(page).toHaveURL(/group=project/);
+    await expect(headings).toHaveCount(2);
+    await expect(headings.nth(0)).toContainText("Studio launch");
+    await expect(headings.nth(1)).toContainText("Inbox");
+    await page.getByRole("link", { name: "Today", exact: true }).last().click();
+    await expect(page).toHaveURL(/\/today\?group=project$/);
+  });
+
+  test("loads the last open issue after completing a row on the first page", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
+    await seedIssues(
+      page,
+      Array.from({ length: 101 }, (_, index) => ({
+        title: `Paged task ${index + 1}`,
+        dueDate: "2026-11-16",
+      })),
+    );
+    await page.goto("/today");
+    await expect(page.getByText("Showing 100 of 101")).toBeVisible();
+    await page.getByRole("button", { name: /^Complete ISS-1:/ }).click();
+    await expect(page.getByText("Showing 99 of 100")).toBeVisible();
+    await page.getByRole("button", { name: "Load more" }).click();
+    await expect(
+      page.getByRole("link", { name: "Paged task 101" }),
+    ).toBeVisible();
+  });
+
+  test("completes in place and reschedules with immediate updates", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00-05:00"));
+    await seedIssues(page, seeds);
+    await page.goto("/today");
+
+    // Completion keeps the row in place until the view reloads.
+    await page
+      .getByRole("button", { name: "Complete ISS-2: Pay rent" })
+      .click();
+    await expect(page.getByText("ISS-2 completed.")).toBeVisible();
+    const rent = page.getByRole("listitem").filter({ hasText: "Pay rent" });
+    await expect(rent.getByText("Completed")).toBeVisible();
+    await rent.getByRole("button", { name: "Reopen ISS-2: Pay rent" }).click();
+    await expect(page.getByText("ISS-2 reopened.")).toBeVisible();
+
+    // Rescheduling an overdue issue to tomorrow moves it to Upcoming.
+    await page.getByRole("button", { name: "Move ISS-1 to tomorrow" }).click();
+    await expect(
+      page.getByText("ISS-1 is now due tomorrow and moved to Upcoming."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Renew passport" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Complete ISS-2: Pay rent" }),
+    ).toBeFocused();
+
+    // A rejected reschedule puts the issue back.
+    await dispatch(page, "fail-once", "set_issue_due_date");
+    await page.getByRole("button", { name: "Move ISS-2 to tomorrow" }).click();
+    await expect(page.getByRole("alert")).toContainText(
+      "Could not reschedule ISS-2.",
+    );
+    await expect(page.getByRole("link", { name: "Pay rent" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Upcoming" }).click();
+    const tomorrow = page.getByRole("region", { name: /^Tomorrow/ });
+    await expect(tomorrow.getByRole("link")).toHaveText([
+      "Renew passport",
+      "Send invites",
+    ]);
+    // Typing a date commits on Enter, keeping the same issue.
+    const date = page.getByLabel("Due date for ISS-3");
+    await date.fill("2026-11-16");
+    await date.press("Enter");
+    await expect(
+      page.getByText("ISS-3 is now due today and moved to Today."),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Today", exact: true }).last().click();
+    await expect(
+      page.getByRole("region", { name: /^Today/ }).getByRole("link"),
+    ).toHaveText(["Pay rent", "Send invites"]);
+    await page.getByRole("link", { name: "Send invites" }).click();
+    await expect(page.getByText("ISS-3", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Due date", { exact: true })).toHaveValue(
+      "2026-11-16",
+    );
+  });
+
+  test("refreshes at local midnight, across daylight saving, and on resume", async ({
+    page,
+  }) => {
+    // 2026-11-01 is 25 hours long in New York.
+    await page.clock.install({ time: new Date("2026-11-01T23:59:00-05:00") });
+    await seedIssues(page, [
+      { title: "Return library books", dueDate: "2026-11-02" },
+    ]);
+    await page.goto("/today");
+    await expect(
+      page.getByRole("heading", { name: "Nothing due today" }),
+    ).toBeVisible();
+
+    await page.clock.runFor(2 * 60 * 1000);
+    await expect(
+      page
+        .getByRole("region", { name: /^Today/ })
+        .getByRole("link", { name: "Return library books" }),
+    ).toBeVisible();
+
+    // After sleeping past several midnights, focus brings the view up to date.
+    await page.clock.setSystemTime(new Date("2026-11-04T09:00:00-05:00"));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(
+      page
+        .getByRole("region", { name: /^Overdue/ })
+        .getByRole("link", { name: "Return library books" }),
+    ).toBeVisible();
+  });
 });

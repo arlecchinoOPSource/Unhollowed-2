@@ -113,6 +113,17 @@ The board (`/issues/board` and `/projects/:id/board`) has no records of its own.
 - Cards move by drag and drop or with each card's **Move** menu. Both call `change_issue_status`, so lifecycle rules such as `completed_at` are unchanged. There is no manual ordering. A moved card goes to the top of its new column until the next load.
 - Moves are optimistic. The board records the newest move for each issue, and only that move's reply may change the card. A failed newest move returns the card to its last saved status, with an explanation, and a late reply to an older move cannot undo a newer one.
 
+## Today and Upcoming
+
+`/today` and `/today/upcoming` are views over `query_issues`, with no records of their own. Both use local calendar dates (`YYYY-MM-DD` in the device's current time zone) and compare date strings, never UTC instants.
+
+- **Today** lists open issues with a due date on or before today: **Overdue** (before today) and **Today**.
+- **Upcoming** lists open issues due tomorrow or later, earliest first, grouped by date (Tomorrow, weekday names for the coming week, then dates). Both views can group by project instead, with the Inbox last.
+- **Closed issues** are not listed. An issue completed in a view stays in place, marked completed and reopenable, until the view reloads.
+- **Undated issues** are not listed. Both views show how many open issues have no due date and link to the list filtered to them. Start dates do not affect either view.
+- **Day changes.** A timer fires at the next local midnight, built from local date fields so 23- and 25-hour daylight-saving days work. The date is also checked when the window regains focus or becomes visible, which covers sleep, missed timers, and time zone changes.
+- **Rescheduling** uses `set_issue_due_date`, which changes only `due_date`, so the issue keeps its ID, number, description, status, and links. The new date must be on or after any start date. The view updates immediately, moves the issue between Today and Upcoming when its date crosses today, and restores it if the change is rejected. Typed dates commit on Enter or when leaving the field, never while typing.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.

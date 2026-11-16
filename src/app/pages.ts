@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CalendarCheck,
   CalendarDays,
   ChartNoAxesCombined,
   CircleCheck,
@@ -19,6 +20,12 @@ export const settings = {
 };
 
 export const features = [
+  {
+    path: "/today",
+    title: "Today",
+    icon: CalendarCheck,
+    description: "Choose what to do now and see what is coming.",
+  },
   {
     path: "/documents",
     title: "Documents",

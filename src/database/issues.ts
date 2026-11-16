@@ -171,6 +171,17 @@ export function setIssueProject(
   return write(() => invoke("set_issue_project", { id, projectId }));
 }
 
+/**
+ * Reschedules an issue: sets or clears only its due date (a local
+ * YYYY-MM-DD date). The issue keeps its ID, number, and every other field.
+ */
+export function setIssueDueDate(
+  id: string,
+  dueDate: string | null,
+): Promise<Issue> {
+  return write(() => invoke("set_issue_due_date", { id, dueDate }));
+}
+
 /** Sets or clears the issue's milestone. */
 export function setIssueMilestone(
   id: string,
