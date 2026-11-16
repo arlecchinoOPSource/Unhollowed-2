@@ -249,3 +249,42 @@ fn milestones_report_blocked_alongside_their_counts() {
         );
     });
 }
+
+#[test]
+fn a_sub_issue_path_cannot_leave_and_reenter_the_project() {
+    tauri::async_runtime::block_on(async {
+        let db = migrated_pool().await;
+        let project = add_project(&db, DEFAULT_WORKSPACE, "Local").await;
+        let outside = add_project(&db, DEFAULT_WORKSPACE, "Outside").await;
+        let root = add_issue(&db, DEFAULT_WORKSPACE, Some(&project)).await;
+        let child = add_issue(&db, DEFAULT_WORKSPACE, Some(&outside)).await;
+        let grandchild = add_issue(&db, DEFAULT_WORKSPACE, Some(&project)).await;
+        for (from, to) in [(&child, &root), (&grandchild, &child)] {
+            add(&db, DEFAULT_WORKSPACE, from, to, RelationKind::Parent)
+                .await
+                .unwrap();
+        }
+        save_mission(&db, DEFAULT_WORKSPACE, &project, None, goal("Ship"))
+            .await
+            .unwrap();
+        let mission = load(&db, DEFAULT_WORKSPACE, &project)
+            .await
+            .unwrap()
+            .missions
+            .remove(0);
+        objective(
+            &db,
+            &project,
+            "Local objective",
+            Some(&mission.id),
+            &[&root],
+        )
+        .await;
+        set_status(&db, DEFAULT_WORKSPACE, &grandchild, "done")
+            .await
+            .unwrap();
+        let (objectives, missions) = rollups(&db, &project).await;
+        assert_eq!(objectives[0].1, (1, 0, 0, 0));
+        assert_eq!(missions[0].1, (1, 0, 0, 0));
+    });
+}

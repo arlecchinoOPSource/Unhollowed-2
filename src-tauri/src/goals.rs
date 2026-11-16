@@ -97,13 +97,14 @@ impl GoalText {
 
 /// Each objective's issues: its linked issues and their sub-issues at any
 /// depth, as distinct pairs. `UNION` removes repeats, which also ends the
-/// recursion. Rollups then keep only issues in the project (?1).
+/// recursion. Each hop must stay inside project (?1) and workspace (?2).
 const MEMBERS: &str = "WITH RECURSIVE members (objective_id, issue_id) AS (
          SELECT l.objective_id, l.issue_id FROM objective_issues AS l
          JOIN objectives AS o ON o.id = l.objective_id WHERE o.project_id = ?1
          UNION
          SELECT m.objective_id, r.source_id FROM members AS m
-         JOIN issue_relationships AS r ON r.kind = 'parent' AND r.target_id = m.issue_id)";
+         JOIN issue_relationships AS r ON r.workspace_id = ?2 AND r.kind = 'parent' AND r.target_id = m.issue_id
+         JOIN issues AS child ON child.id = r.source_id AND child.project_id = ?1)";
 
 /// Rollup counts over the joined issues `i`.
 const ROLLUP: &str = "COUNT(CASE WHEN i.status <> 'canceled' THEN 1 END) AS total,
@@ -136,6 +137,7 @@ async fn load(db: &SqlitePool, workspace: &str, project: &str) -> Result<Project
          WHERE ms.project_id = ?1 GROUP BY ms.id ORDER BY ms.title COLLATE NOCASE, ms.id"
     ))
     .bind(project)
+    .bind(workspace)
     .fetch_all(&mut *tx)
     .await?;
     let objectives = sqlx::query_as(&format!(
@@ -147,6 +149,7 @@ async fn load(db: &SqlitePool, workspace: &str, project: &str) -> Result<Project
          WHERE o.project_id = ?1 GROUP BY o.id ORDER BY o.title COLLATE NOCASE, o.id"
     ))
     .bind(project)
+    .bind(workspace)
     .fetch_all(&mut *tx)
     .await?;
     let links = sqlx::query_as("SELECT l.objective_id, l.issue_id FROM objective_issues l JOIN objectives o ON o.id = l.objective_id WHERE o.project_id = ?")
