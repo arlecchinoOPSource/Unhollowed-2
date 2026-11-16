@@ -153,6 +153,7 @@ export function DocumentReferences({
   return (
     <details>
       <summary>Document links</summary>
+      <Link to={`/graph?doc=${encodeURIComponent(id)}`}>Open local graph</Link>
       {failed ? (
         <p role="alert">Could not load document links.</p>
       ) : (

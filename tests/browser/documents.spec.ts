@@ -96,6 +96,8 @@ async function setup(page: Page, version?: number) {
               documents.push(item);
               return structuredClone(item);
             }
+            case "get_document_graph":
+              return { documents, links: [{ source: "one", target: "two" }] };
             case "list_document_references":
               return [];
             case "list_documents":
@@ -349,5 +351,20 @@ test("inserts a document reference and follows it in the editor", async ({
   const link = editor.getByRole("link", { name: "Second draft" });
   await expect(link).toHaveAttribute("href", "/documents?doc=two");
   await link.click();
+  await expect(page).toHaveURL(/doc=two$/);
+});
+
+test("opens a local graph and finds a neighboring document", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByText("Document links", { exact: true }).click();
+  await page.getByRole("link", { name: "Open local graph" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Graph · First draft" }),
+  ).toBeVisible();
+  await expect(page.locator(".graph-canvas canvas").first()).toBeVisible();
+  await page.getByRole("searchbox", { name: "Find a document" }).fill("second");
+  await page.getByRole("link", { name: "Second draft" }).click();
   await expect(page).toHaveURL(/doc=two$/);
 });

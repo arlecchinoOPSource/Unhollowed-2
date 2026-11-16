@@ -102,3 +102,63 @@ mod tests {
         });
     }
 }
+
+#[derive(FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GraphDocument {
+    id: String,
+    title: String,
+    folder_id: Option<String>,
+}
+
+#[derive(FromRow, Serialize)]
+struct GraphLink {
+    source: String,
+    target: String,
+}
+
+#[derive(Serialize)]
+pub struct DocumentGraph {
+    documents: Vec<GraphDocument>,
+    links: Vec<GraphLink>,
+    memberships: Vec<(String, String)>,
+}
+
+#[tauri::command]
+pub async fn get_document_graph(
+    instances: State<'_, DbInstances>,
+) -> Result<DocumentGraph, DocumentError> {
+    let (pool, workspace) = scope(&instances).await?;
+    let mut tx = pool.begin().await.map_err(storage_failed)?;
+    let documents = sqlx::query_as(
+        "SELECT id, title, folder_id FROM documents
+         WHERE workspace_id = ? AND archived_at IS NULL ORDER BY title, id",
+    )
+    .bind(&workspace)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(storage_failed)?;
+    let links = sqlx::query_as(
+        "SELECT r.source_id AS source, r.target_id AS target FROM document_references r
+         JOIN documents s ON s.workspace_id = r.workspace_id AND s.id = r.source_id
+         JOIN documents t ON t.workspace_id = r.workspace_id AND t.id = r.target_id
+         WHERE r.workspace_id = ? AND s.archived_at IS NULL AND t.archived_at IS NULL",
+    )
+    .bind(&workspace)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(storage_failed)?;
+    let memberships = sqlx::query_as(
+        "SELECT document_id, project_id FROM project_documents WHERE workspace_id = ?",
+    )
+    .bind(&workspace)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(storage_failed)?;
+    tx.commit().await.map_err(storage_failed)?;
+    Ok(DocumentGraph {
+        documents,
+        links,
+        memberships,
+    })
+}

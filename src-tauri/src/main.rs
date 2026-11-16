@@ -35,6 +35,7 @@ fn main() {
             documents::list_documents,
             documents::library::list_document_library,
             documents::references::list_document_references,
+            documents::references::get_document_graph,
             documents::library::create_document_folder,
             documents::library::change_document_library,
             documents::library::create_library_document,

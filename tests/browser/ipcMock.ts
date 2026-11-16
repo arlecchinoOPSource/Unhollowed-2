@@ -56,6 +56,18 @@ export async function installIpcMock(page: Page) {
     const views: SavedView[] = [];
     // Documents seeded through window.__seedDocuments, and their links.
     const documents: { id: string; title: string; content: string }[] = [];
+    function libraryDocument(document: (typeof documents)[number]) {
+      return {
+        ...document,
+        folderId: null,
+        favorite: false,
+        archivedAt: null,
+        openedAt: null,
+        createdAt: "2026-11-01T00:00:00Z",
+        updatedAt: "2026-11-01T00:00:00Z",
+      };
+    }
+
     const issueDocuments: [string, string][] = [];
     const projectDocuments: [string, string][] = [];
     const milestones: Milestone[] = [];
@@ -438,11 +450,20 @@ export async function installIpcMock(page: Page) {
               return snapshot;
             }
             case "list_document_library":
-              return { documents: structuredClone(documents), folders: [] };
-            case "change_document_library":
-              return structuredClone(
-                documents.find((item) => item.id === args.id),
-              );
+              return { documents: documents.map(libraryDocument), folders: [] };
+            case "change_document_library": {
+              const document = documents.find((item) => item.id === args.id);
+              if (!document) throw { code: "not_found" };
+              return libraryDocument(document);
+            }
+            case "list_document_references":
+              return [];
+            case "get_document_graph":
+              return {
+                documents: documents.map(libraryDocument),
+                links: [],
+                memberships: [],
+              };
             case "list_documents":
               return documents.map(({ id, title }) => ({
                 id,
