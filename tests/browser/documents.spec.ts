@@ -106,3 +106,47 @@ test("preserves unsupported documents without opening an editable surface", asyn
     page.getByRole("textbox", { name: "Document content" }),
   ).toHaveCount(0);
 });
+
+test("replaces literal text, undoes it, and exits focus mode with Escape", async ({
+  page,
+}) => {
+  await setup(page);
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await page.getByRole("button", { name: "Find & replace" }).click();
+  await page.getByRole("searchbox", { name: "Find" }).fill("saved document");
+  await page
+    .getByRole("textbox", { name: "Replace with" })
+    .fill("revised note");
+  await page.getByRole("button", { name: "Replace all" }).click();
+  await expect(editor).toHaveText("A revised note");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(editor).toHaveText("A saved document");
+  await page.getByRole("button", { name: "Focus mode", exact: true }).click();
+  await expect(
+    page.getByRole("navigation", { name: "Workspace" }),
+  ).toBeHidden();
+  await editor.press("Escape");
+  await expect(
+    page.getByRole("navigation", { name: "Workspace" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Focus mode", exact: true }),
+  ).toBeFocused();
+});
+
+test("recovers a draft after reloading before the debounce expires", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await setup(page);
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await editor.fill("Recover these edits");
+  await page.reload();
+  await expect(
+    page.getByText("Unsaved edit recovery available."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Resume unsaved edits" }).click();
+  await expect(editor).toHaveText("Recover these edits");
+  await page.clock.fastForward(800);
+  await expect(page.getByText("All changes saved")).toBeVisible();
+});

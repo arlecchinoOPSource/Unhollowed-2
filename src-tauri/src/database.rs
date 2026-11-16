@@ -93,6 +93,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0014_issue_archive.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 15,
+            description: "Add local document revision checkpoints",
+            sql: include_str!("../migrations/0015_document_revisions.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

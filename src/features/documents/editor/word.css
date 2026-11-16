@@ -221,3 +221,40 @@
 .document-editor .ProseMirror .u2-size-72 {
   font-size: 72pt;
 }
+
+.document-navigation {
+  margin-bottom: 10px;
+}
+
+.document-revisions,
+.document-outline {
+  display: grid;
+  gap: 6px;
+  padding-inline-start: 16px;
+  overflow-wrap: anywhere;
+}
+
+.document-outline button {
+  text-align: start;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  padding: 4px;
+}
+
+.workspace:has([data-writing-focus="true"]) #sidebar,
+.workspace:has([data-writing-focus="true"]) .workspace-body > header,
+.workspace:has([data-writing-focus="true"]) .documents > :first-child,
+.documents:has([data-writing-focus="true"]) .document-usage,
+[data-writing-focus="true"] :is(.word-tools, .document-navigation, .word-more) {
+  display: none;
+}
+
+.documents:has([data-writing-focus="true"]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-writing-focus="true"] {
+  max-width: 72ch;
+  margin-inline: auto;
+}

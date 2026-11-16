@@ -36,6 +36,8 @@ fn main() {
             documents::get_document,
             documents::create_document,
             documents::update_document,
+            documents::revisions::list_document_revisions,
+            documents::revisions::restore_document_revision,
             projects::list_projects,
             projects::get_project,
             projects::create_project,

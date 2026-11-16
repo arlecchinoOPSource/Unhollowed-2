@@ -1,3 +1,5 @@
+pub(crate) mod revisions;
+
 use crate::database::{active_workspace, pool, DatabaseError};
 use serde::Serialize;
 use sqlx::SqlitePool;
