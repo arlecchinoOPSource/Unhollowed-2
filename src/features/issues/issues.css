@@ -559,3 +559,41 @@
   gap: 6px;
   margin: 0;
 }
+
+.issue-list-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+}
+
+.issue-export {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.issue-export button {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.issue-export button[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.issue-export p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.issue-export-message:empty {
+  display: none;
+}

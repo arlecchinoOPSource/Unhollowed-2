@@ -39,6 +39,7 @@ Dependency installation needs internet access. The built app serves its UI and f
 - `src/stores/theme.ts` persists the theme in the webview's local storage. The system preference sets the initial theme.
 - `src/database/status.ts` calls the typed desktop command. In Rust, Tauri's SQL plugin preloads `workspace.sqlite3` under the application-specific config directory and applies migrations. On macOS this is `~/Library/Application Support/dev.arlecchino.unhollowed2/`.
 - **Settings → Check local storage** queries the seeded Personal workspace through Tauri IPC. The main window has no plugin permissions. Rust owns the connection and query.
+- **Settings → Data** exports projects and issues to JSON and imports an export as copies after a preview. **Export CSV** on an issue list saves the issues the current filters match. Rust shows the Save dialog and writes the file.
 
 The workspace uses a stable UUID stored as text, and `app_state` records which workspace is active. As features are implemented, give their rows independent UUIDs and a required `workspace_id` foreign key. Add new migration files and preserve migrations already applied to existing databases. The [data model](docs/DATA_MODEL.md) documents the conventions.
 

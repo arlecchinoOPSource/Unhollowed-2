@@ -669,6 +669,76 @@ test.beforeEach(async ({ page }) => {
                 milestoneTotal: hits.length,
               });
             }
+            case "export_project_data":
+            case "export_issues_csv": {
+              // The native save dialog is not available here, so the mock
+              // records the request and reports a fixed path.
+              Object.assign(window, { __lastExport: { command, args } });
+              if ((window as { __cancelSave?: boolean }).__cancelSave)
+                return null;
+              return command === "export_project_data"
+                ? { path: "/Exports/projects.json", records: issues.length }
+                : { path: "/Exports/issues.csv", records: 2 };
+            }
+            case "preview_import":
+            case "import_project_data": {
+              // A small stand-in for the backend: the format check, and a
+              // copy of each issue with the next number.
+              let data: { format?: string; issues?: { title: string }[] };
+              try {
+                data = JSON.parse((args as { content: string }).content);
+              } catch {
+                throw { code: "unreadable_file", detail: "Not JSON." };
+              }
+              if (data.format !== "unhollowed-2/projects")
+                throw {
+                  code: "invalid_file",
+                  problems: ["This is not an Unhollowed 2 project export."],
+                  total: 1,
+                };
+              const incoming = data.issues ?? [];
+              const renumbered = incoming.map((_, index): [string, string] => [
+                `ISS-${index + 1}`,
+                `ISS-${issues.length + index + 1}`,
+              ]);
+              if (command === "import_project_data")
+                for (const { title } of incoming) {
+                  const time = now();
+                  issues.push({
+                    id: `issue-${issues.length + 1}`,
+                    number: issues.length + 1,
+                    projectId: null,
+                    title,
+                    description: empty,
+                    status: "todo",
+                    priority: "none",
+                    startDate: null,
+                    dueDate: null,
+                    completedAt: null,
+                    closed: false,
+                    createdAt: time,
+                    updatedAt: time,
+                    labelIds: [],
+                    milestoneId: null,
+                    recurrenceId: null,
+                    recurring: false,
+                    archivedAt: null,
+                  });
+                }
+              return {
+                projects: 0,
+                labelsCreated: 0,
+                labelsReused: ["Bug"],
+                milestones: 0,
+                missions: 0,
+                objectives: 0,
+                issues: incoming.length,
+                relationships: 0,
+                renumbered,
+                skippedLabelLinks: 0,
+                completionRepaired: 1,
+              };
+            }
             case "list_saved_views":
               return structuredClone(
                 [...views].sort((a, b) => a.name.localeCompare(b.name)),
@@ -2758,4 +2828,99 @@ test("archives, restores, and permanently deletes an issue with confirmation", a
   await leaf.getByRole("button", { name: "Delete ISS-3" }).click();
   await expect(page).toHaveURL(/\/issues\?archived=only$/);
   await expect(page.getByRole("link", { name: "Keep me" })).toHaveCount(0);
+});
+
+test("exports filtered issues as CSV and imports a project file after a preview", async ({
+  page,
+}) => {
+  await seedIssues(page, [
+    { title: "Existing one" },
+    { title: "Existing two", priority: "high" },
+  ]);
+  await page.goto("/issues?priority=high&q=two");
+  await expect(page.getByRole("link", { name: "Existing two" })).toBeVisible();
+
+  // CSV export sends the list's own query, so it follows the filters.
+  await page.getByRole("button", { name: "Export CSV" }).click();
+  await expect(
+    page.getByText("Exported 2 issues to /Exports/issues.csv."),
+  ).toBeVisible();
+  const sent = await page.evaluate(
+    () =>
+      (
+        window as {
+          __lastExport?: { args: { query: Record<string, unknown> } };
+        }
+      ).__lastExport?.args.query,
+  );
+  expect(sent).toMatchObject({ text: "two", priorities: ["high"] });
+  await page.evaluate(() => Object.assign(window, { __cancelSave: true }));
+  await page.getByRole("button", { name: "Export CSV" }).click();
+  await expect(page.getByText("Export canceled.")).toBeVisible();
+  await page.evaluate(() => Object.assign(window, { __cancelSave: false }));
+
+  // JSON export from Settings. The mock lives in the page, so the rest of
+  // the test navigates inside the app instead of reloading.
+  const nav = page.getByRole("navigation", { name: "Workspace" });
+  await nav.getByRole("link", { name: "Settings" }).click();
+  const data = page.getByRole("region", { name: "Data" });
+  await data.getByRole("button", { name: "Export projects" }).click();
+  await expect(
+    data.getByText("Exported 2 projects and issues to /Exports/projects.json."),
+  ).toBeVisible();
+
+  // A file in another format is rejected with the reason, before any write.
+  const file = data.getByLabel("Choose an export file");
+  await file.setInputFiles({
+    name: "notes.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ format: "other" })),
+  });
+  await expect(data.getByRole("alert")).toContainText(
+    "This is not an Unhollowed 2 project export.",
+  );
+  await expect(data.getByRole("button", { name: "Import" })).toHaveCount(0);
+
+  // A valid file shows a preview, and nothing is added until confirmed.
+  const content = JSON.stringify({
+    format: "unhollowed-2/projects",
+    issues: [{ title: "Copied one" }, { title: "Copied two" }],
+  });
+  await file.setInputFiles({
+    name: "backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(content),
+  });
+  const preview = data.getByRole("group", {
+    name: "Importing backup.json will add",
+  });
+  await expect(preview.getByText("2 issues")).toBeVisible();
+  await expect(preview.getByText("Uses existing labels: Bug")).toBeVisible();
+  await expect(
+    preview.getByText("Sets a completion time on 1 done issue that had none"),
+  ).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Import" })).toBeFocused();
+  await preview.getByText("New issue keys").click();
+  await expect(preview.getByText("ISS-1 → ISS-3")).toBeVisible();
+
+  // Cancel leaves the workspace unchanged.
+  await preview.getByRole("button", { name: "Cancel" }).click();
+  await expect(data.getByText("Import canceled.")).toBeVisible();
+  await nav.getByRole("link", { name: "Issues" }).click();
+  await expect(page.getByRole("link", { name: "Existing one" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Copied one" })).toHaveCount(0);
+
+  await nav.getByRole("link", { name: "Settings" }).click();
+  await file.setInputFiles({
+    name: "backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(content),
+  });
+  await preview.getByRole("button", { name: "Import" }).click();
+  await expect(
+    data.getByText("Imported 0 projects and 2 issues from backup.json."),
+  ).toBeVisible();
+  await nav.getByRole("link", { name: "Issues" }).click();
+  await expect(page.getByRole("link", { name: "Copied one" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Copied two" })).toBeVisible();
 });

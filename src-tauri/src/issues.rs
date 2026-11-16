@@ -13,7 +13,7 @@ mod recurrence;
 pub use archive::{delete, deletion_impact, set_archived, DeletionImpact};
 #[cfg(test)]
 pub use query::IssueFilter;
-pub(crate) use query::{index_missing, search_text};
+pub(crate) use query::{index_missing, search_text, MAX_LIMIT as MAX_QUERY_LIMIT};
 pub use query::{query, IssuePage, IssueQuery};
 pub use recurrence::{add_days, recurrence_for, set_rule, Recurrence, RecurrenceInput};
 

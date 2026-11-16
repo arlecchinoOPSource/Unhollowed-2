@@ -223,6 +223,26 @@ Archiving is the recoverable way to remove clutter. Permanent deletion is a sepa
 - The user must type the issue's key (for example `ISS-12`), and `delete_issue` requires that key, so a stray call cannot delete the wrong issue. Deletion runs in one transaction that re-checks the policy.
 - The issue's number is never reused, because `issue_counters` only increases.
 
+## Data portability
+
+**JSON export (backup).** `export_project_data` writes one versioned JSON file, `{ "format": "unhollowed-2/projects", "version": 1, "exportedAt": … }`, to a location the user picks in the native Save dialog. Rust opens the dialog and writes the file, so the webview keeps no plugin permissions. The file holds the active workspace's:
+
+- projects, labels (including archived), milestones, missions, and objectives
+- issues, including archived ones, with title, Tiptap description, status, priority, dates, project, milestone, and readable number
+- issue–label links, objective–issue links, and issue relationships (parent, blocks, related)
+
+Not included in version 1: documents and document links, saved views, repeat series, and workspace settings. Records keep their UUIDs, and every reference in the file points to a record in the same file.
+
+**Import.** The user chooses a JSON file, and the app shows a preview report before anything is written.
+
+- **Validation before commit.** Rust rejects a file with the wrong `format`, an unsupported `version`, unknown fields, or invalid values (the same title, date, status, priority, color, and Tiptap rules as editing). It also rejects duplicate IDs in the file and **any reference that does not resolve inside the file**: an issue's project or milestone, a milestone's or objective's project, an objective's mission, a link or relationship endpoint, a milestone or objective issue from another project, more than one parent per issue, and parent or blocking cycles. Rejections list up to 20 problems, and nothing is written.
+- **Collisions.** Import always **copies**. Every record gets a new UUID, and references are rewritten to match, so an import never overwrites or merges with existing records, even when it is the same file imported twice.
+- **Display IDs.** Imported issues get the next numbers of the active workspace, in the order of their original numbers. The report maps original keys to new ones.
+- **Repairs.** Labels are matched to existing labels by name, ignoring case, and the report lists those reused names, because label names are unique in a workspace. A Done issue without `completedAt` gets the import time. A non-Done issue's `completedAt` is dropped, because only Done issues have one.
+- **Transaction.** The import runs in one transaction. The preview runs the same steps and rolls back, so its report matches what the import does.
+
+**CSV export.** `export_issues_csv` writes the list's current filters and sort (with every page) as CSV to a user-chosen location. Columns: Key, Title, Status, Priority, Project, Milestone, Labels, Start date, Due date, Completed at, Created at, Updated at, Archived. Fields are quoted per RFC 4180 (commas, quotes, and line breaks). Fields that a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, a tab, or a carriage return) are prefixed with `'`.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
