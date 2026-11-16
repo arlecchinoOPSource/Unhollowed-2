@@ -62,6 +62,18 @@ Issues are read and changed only through the commands in `src-tauri/src/issues.r
 - Repeating a status, reopen, or project change is a no-op that keeps `updated_at` and `completed_at`, so retries are safe.
 - `update_issue` changes title, description, priority, and dates without affecting status or project. Archiving and deletion are not implemented yet.
 
+### Issue search, filtering, and sorting
+
+`query_issues` takes one `IssueQuery`: an `IssueFilter` plus sort and paging. `IssueFilter` (`src-tauri/src/issues/query.rs`, mirrored in `src/database/issues.ts`) is the shared filter definition for lists, board, and saved views. Empty lists and missing values mean no restriction. Filters combine with AND, and values within one list combine with OR.
+
+- **Search.** `search_text` holds the title and the text nodes of the Tiptap description, with a line break after each block, lowercased with Rust's full Unicode rules. Rust writes it on every create and update. Queries are trimmed and lowercased the same way and matched as literal substrings with `instr`, so `%`, `_`, and other characters have no special meaning. Rows saved before migration 6 have a NULL `search_text`. The first query in a workspace fills them in without changing `updated_at`. A scan of one workspace's rows is fast at the expected hundreds of issues, so there is no full-text index. FTS5 would also match tokens, not literal substrings.
+- **State, status, priority, project.** `state` is `open`, `closed`, or `all` and follows the generated `closed` column. `projectIds` matches any listed project, and `inbox` adds issues with no project. Unknown project IDs match nothing.
+- **Due dates.** `dueAfter` and `dueBefore` are inclusive local dates. `undated` is `include` (the default), `exclude`, or `only`. With a range, `include` also returns undated issues. `only` cannot be combined with a range.
+- **Sorting.** `updated` (default, newest first), `created`, `priority` (urgent highest), `title` (case-insensitive), or `due`, each `asc` or `desc`. Every order ends with the issue number in the same direction, so ties are stable and pages never repeat or skip rows. Undated issues sort after dated ones in both directions.
+- **Paging and counts.** `limit` is 1 to 200 (default 100) with an `offset`. The response includes `total` for the whole query and `open` and `closed` counts for the query without its state.
+
+Invalid values return `invalid_filter`. Every query is scoped to the active workspace and binds all values as parameters.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -78,3 +90,4 @@ Issues are read and changed only through the commands in `src-tauri/src/issues.r
 | 0003      | `documents`, owned by a workspace, with Tiptap JSON content                    |
 | 0004      | `projects`, owned by a workspace, with status and optional dates               |
 | 0005      | `issues` and `issue_counters`, with per-workspace numbers and optional project |
+| 0006      | `issues.search_text` for literal, case-insensitive issue search                |

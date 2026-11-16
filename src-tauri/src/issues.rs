@@ -7,10 +7,14 @@ use tauri::State;
 use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
+mod query;
+pub(crate) use query::search_text;
+pub use query::{query, IssuePage, IssueQuery};
+
 const MAX_TITLE_CHARS: usize = 200;
-const PRIORITIES: [&str; 5] = ["none", "low", "medium", "high", "urgent"];
+pub(crate) const PRIORITIES: [&str; 5] = ["none", "low", "medium", "high", "urgent"];
 /// Done and canceled are closed. The others are open.
-const STATUSES: [&str; 5] = ["todo", "in_progress", "blocked", "done", "canceled"];
+pub(crate) const STATUSES: [&str; 5] = ["todo", "in_progress", "blocked", "done", "canceled"];
 const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
 /// The list form of an issue. It leaves out the description, which can be
@@ -70,6 +74,8 @@ pub enum IssueError {
     InvalidDateRange,
     /// The project does not exist in the active workspace.
     InvalidProject,
+    /// A search, filter, sort, or page value is not supported.
+    InvalidFilter,
     StorageFailed,
 }
 
@@ -94,6 +100,8 @@ pub(crate) struct ValidFields {
     pub priority: String,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
+    /// Kept in sync with title and description on every write.
+    pub search_text: String,
 }
 
 impl IssueFields {
@@ -124,6 +132,7 @@ impl IssueFields {
             }
         }
         Ok(ValidFields {
+            search_text: search_text(&title, &description),
             title,
             description,
             priority,
@@ -214,8 +223,9 @@ pub async fn create(
     }
     let issue = sqlx::query_as(&format!(
         "INSERT INTO issues
-            (id, workspace_id, number, project_id, title, description, priority, start_date, due_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING {FIELDS}"
+            (id, workspace_id, number, project_id, title, description, priority, start_date,
+             due_date, search_text)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING {FIELDS}"
     ))
     .bind(Uuid::new_v4().to_string())
     .bind(workspace)
@@ -226,6 +236,7 @@ pub async fn create(
     .bind(fields.priority)
     .bind(fields.start_date)
     .bind(fields.due_date)
+    .bind(fields.search_text)
     .fetch_one(&mut *transaction)
     .await
     .map_err(storage_failed)?;
@@ -243,7 +254,7 @@ pub async fn update(
     let fields = fields.validate()?;
     sqlx::query_as(&format!(
         "UPDATE issues SET title = ?, description = ?, priority = ?, start_date = ?, due_date = ?,
-             updated_at = {NOW}
+             search_text = ?, updated_at = {NOW}
          WHERE id = ? AND workspace_id = ? RETURNING {FIELDS}"
     ))
     .bind(fields.title)
@@ -251,6 +262,7 @@ pub async fn update(
     .bind(fields.priority)
     .bind(fields.start_date)
     .bind(fields.due_date)
+    .bind(fields.search_text)
     .bind(id)
     .bind(workspace)
     .fetch_optional(pool)
@@ -347,6 +359,16 @@ pub async fn list_issues(
 ) -> Result<Vec<IssueSummary>, IssueError> {
     let (pool, workspace) = scope(&instances).await?;
     list(&pool, &workspace, project_id.as_deref()).await
+}
+
+/// Searches, filters, sorts, and pages the active workspace's issues.
+#[tauri::command]
+pub async fn query_issues(
+    instances: State<'_, DbInstances>,
+    query: IssueQuery,
+) -> Result<IssuePage, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    self::query(&pool, &workspace, query).await
 }
 
 #[tauri::command]

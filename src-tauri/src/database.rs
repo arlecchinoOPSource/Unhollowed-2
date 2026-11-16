@@ -39,6 +39,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0005_issues.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "Add issue search text",
+            sql: include_str!("../migrations/0006_issue_search.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
