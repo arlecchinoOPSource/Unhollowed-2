@@ -49,6 +49,9 @@ pub struct IssueFilter {
     pub milestone_ids: Vec<String>,
     /// Also match issues without a milestone.
     pub no_milestone: bool,
+    /// `exclude` (the default) hides archived issues, `include` shows them
+    /// too, and `only` shows just archived issues.
+    pub archived: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -128,6 +131,7 @@ struct ValidQuery {
     match_all_labels: bool,
     milestone_ids: Vec<String>,
     no_milestone: bool,
+    archived: Option<bool>,
     order: String,
     limit: u32,
     offset: u32,
@@ -195,6 +199,13 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
         return Err(invalid());
     }
 
+    // Some(false) hides archived issues, Some(true) shows only them.
+    let archived = match filter.archived.as_deref() {
+        None | Some("exclude") => Some(false),
+        Some("include") => None,
+        Some("only") => Some(true),
+        Some(_) => return Err(invalid()),
+    };
     let match_all_labels = match filter.label_match.as_deref() {
         None | Some("any") => false,
         Some("all") => true,
@@ -250,6 +261,7 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
         match_all_labels,
         milestone_ids: filter.milestone_ids,
         no_milestone: filter.no_milestone,
+        archived,
         order,
         limit,
         offset,
@@ -275,6 +287,15 @@ fn push_filters(
     builder
         .push(" WHERE workspace_id = ")
         .push_bind(workspace.to_owned());
+    match query.archived {
+        Some(false) => {
+            builder.push(" AND archived_at IS NULL");
+        }
+        Some(true) => {
+            builder.push(" AND archived_at IS NOT NULL");
+        }
+        None => {}
+    }
     if let Some(text) = &query.text {
         builder
             .push(" AND instr(search_text, ")

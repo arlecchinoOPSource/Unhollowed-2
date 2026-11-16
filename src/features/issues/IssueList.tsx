@@ -493,6 +493,9 @@ export function IssueList({ projectId }: { projectId?: string }) {
                     </span>
                   )}
                   {issue.recurring && <RepeatMark />}
+                  {issue.archivedAt && (
+                    <span className="issue-archived">Archived</span>
+                  )}
                   {issue.milestoneId &&
                     milestoneTitles.has(issue.milestoneId) && (
                       <span className="issue-milestone">

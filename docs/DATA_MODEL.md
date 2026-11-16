@@ -202,6 +202,27 @@ Objectives, missions, and milestones summarize progress with the same rule as th
 - **Indexes, from measurement.** All three queries use workspace-leading indexes (`projects_by_workspace`, `issues_by_workspace_number`, `milestones_by_workspace`), as a planner test asserts. A release build searching 5,000 issues, 300 projects, and 300 milestones in each of two workspaces took about 2.3 to 3.9 ms per search (`cargo test --release search::tests::measure -- --ignored --nocapture`), so no new index was added.
 - **Stale results.** The dialog waits 150 ms after typing and numbers each request. Replies to anything but the latest request are ignored.
 
+## Archiving and deletion
+
+Archiving is the recoverable way to remove clutter. Permanent deletion is a separate, narrow step with its own policy.
+
+**Issue archive (recoverable).**
+
+- `issues.archived_at` (UTC ISO 8601) marks an archived issue. Archiving is separate from the lifecycle: an issue keeps its status, `completed_at`, and `closed` value, and can be archived while open or closed. Archiving and restoring are idempotent and change no other column or row.
+- Restoring clears `archived_at`. The issue keeps its ID, number, project, milestone, labels, relationships, objective and document links, and recurrence series, because archiving never touched them.
+- **Defaults.** Archived issues are hidden from lists, boards, Today and Upcoming, the calendar, workspace search, the project overview, milestone counts, and goal rollups. `IssueFilter.archived` is `exclude` (the default), `include`, or `only`, and lists offer **Hide archived**, **Include archived**, and **Only archived**. Opening an archived issue by link still works and shows that it is archived. Relationship and document links to it stay visible, marked archived. Version 1 saved views always hide archived issues.
+- Archiving a recurring occurrence does not stop its series.
+
+**Project archive.** Archiving a project (the existing `archived` status) does not archive, move, or unlink its issues. They keep `project_id`, stay in issue lists, and can still be filtered by that project. The project page says how many issues it still holds. Projects cannot be deleted permanently.
+
+**Permanent issue deletion (policy).**
+
+- Only **archived** issues can be deleted, so every deletion is preceded by a recoverable state.
+- Deletion is refused while the issue has **sub-issues**, which would leave its children without their parent, or while it is the **latest occurrence of an active repeat series**, because deleting it would silently end the series. The impact check names these blockers and how to resolve them.
+- Before deleting, `issue_deletion_impact` reports what will be removed with the issue: label, document, objective, and relationship links (all `ON DELETE CASCADE`, since links cannot exist without both ends). Documents, labels, projects, milestones, and other issues are never deleted.
+- The user must type the issue's key (for example `ISS-12`), and `delete_issue` requires that key, so a stray call cannot delete the wrong issue. Deletion runs in one transaction that re-checks the policy.
+- The issue's number is never reused, because `issue_counters` only increases.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -226,3 +247,4 @@ Objectives, missions, and milestones summarize progress with the same rule as th
 | 0011      | `issue_recurrences` and occurrence identity on issues                          |
 | 0012      | `saved_views` with versioned filter configuration                              |
 | 0013      | `issue_documents` and `project_documents` links                                |
+| 0014      | `issues.archived_at`, separate from the issue lifecycle                        |

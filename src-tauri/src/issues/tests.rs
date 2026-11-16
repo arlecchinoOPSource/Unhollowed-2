@@ -658,6 +658,7 @@ fn serializes_the_shape_the_webview_expects() {
         assert_eq!(
             keys,
             [
+                "archivedAt",
                 "closed",
                 "completedAt",
                 "createdAt",

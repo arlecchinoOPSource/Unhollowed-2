@@ -99,6 +99,9 @@ export function IssueRelationships({ id, back }: { id: string; back: string }) {
                 {issueKey(relation)} {relation.title}
               </Link>
               <StatusBadge status={relation.status} />
+              {relation.archived && (
+                <span className="issue-archived">Archived</span>
+              )}
               <button
                 className="project-secondary"
                 type="button"

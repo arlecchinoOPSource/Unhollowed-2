@@ -130,6 +130,12 @@ export function IssueFilterBar({
       }`,
       clear: { milestone: "" },
     });
+  if (filters.archived)
+    active.push({
+      label:
+        filters.archived === "only" ? "Only archived" : "Including archived",
+      clear: { archived: "" },
+    });
   if (filters.due)
     active.push({
       label: `Due: ${duePresets[filters.due]}`,
@@ -248,6 +254,21 @@ export function IssueFilterBar({
                   : milestone.title}
               </option>
             ))}
+          </select>
+        </label>
+        <label>
+          Archived
+          <select
+            value={filters.archived}
+            onChange={(event) =>
+              onChange({
+                archived: event.target.value as ListFilters["archived"],
+              })
+            }
+          >
+            <option value="">Hide archived</option>
+            <option value="include">Include archived</option>
+            <option value="only">Only archived</option>
           </select>
         </label>
         <details className="issue-label-filter">

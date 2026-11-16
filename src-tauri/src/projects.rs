@@ -193,7 +193,7 @@ async fn update(
     .ok_or(ProjectError::NotFound)
 }
 
-async fn set_status(
+pub(crate) async fn set_status(
     pool: &SqlitePool,
     workspace: &str,
     id: &str,

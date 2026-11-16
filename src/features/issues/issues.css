@@ -472,3 +472,90 @@
 .issue-main .linked-documents {
   margin-top: 22px;
 }
+
+.issue-archived {
+  padding: 1px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 20px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.issue-archive-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.issue-archive-banner p {
+  margin: 0;
+  color: var(--text);
+}
+
+.issue-delete {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.issue-delete h2,
+.issue-delete p,
+.issue-delete ul {
+  margin: 0;
+}
+
+.issue-delete form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.issue-delete label {
+  display: grid;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.issue-delete input {
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.issue-danger {
+  padding: 7px 12px;
+  border: 1px solid var(--text);
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--background);
+  font-weight: 600;
+}
+
+.issue-danger[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.issue-archive-button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}

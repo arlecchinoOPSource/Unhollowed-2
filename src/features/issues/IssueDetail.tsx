@@ -37,6 +37,7 @@ import { LabelPicker } from "../labels/LabelParts";
 import { useLocalToday } from "../today/useLocalToday";
 import { IssueDocuments } from "../documents/LinkedDocuments";
 import { StatusBadge } from "./IssueBadges";
+import { ArchiveButton, ArchivedBanner } from "./IssueArchive";
 import { IssueRepeat } from "./IssueRepeat";
 import { IssueRelationships } from "./IssueRelationships";
 import "./issues.css";
@@ -172,6 +173,19 @@ function IssueEditor({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const today = useLocalToday();
+
+  // Changes made outside the editable fields, such as repeat or archive.
+  function applySaved(result: Issue, text: string) {
+    saved.current = result;
+    setIssue(result);
+    setError("");
+    setMessage(text);
+  }
+
+  function showError(text: string) {
+    setMessage("");
+    setError(text);
+  }
   const draft = useRef(recovered ?? draftOf(initial));
   const saved = useRef(initial);
   const dirty = useRef(Boolean(recovered));
@@ -364,6 +378,13 @@ function IssueEditor({
         <h1 className="visually-hidden">
           {issueKey(issue)} {issue.title}
         </h1>
+        {issue.archivedAt && (
+          <ArchivedBanner
+            issue={issue}
+            onSaved={applySaved}
+            onError={showError}
+          />
+        )}
         <p className="issue-heading">
           <span className="issue-key">{issueKey(issue)}</span>
           <StatusBadge status={issue.status} />
@@ -523,17 +544,16 @@ function IssueEditor({
         <IssueRepeat
           issue={issue}
           today={today}
-          onSaved={(result, text) => {
-            saved.current = result;
-            setIssue(result);
-            setError("");
-            setMessage(text);
-          }}
-          onError={(text) => {
-            setMessage("");
-            setError(text);
-          }}
+          onSaved={applySaved}
+          onError={showError}
         />
+        {!issue.archivedAt && (
+          <ArchiveButton
+            issue={issue}
+            onSaved={applySaved}
+            onError={showError}
+          />
+        )}
         <dl>
           <div>
             <dt>Created</dt>

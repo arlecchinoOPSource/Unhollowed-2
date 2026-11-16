@@ -134,6 +134,7 @@ async fn load(db: &SqlitePool, workspace: &str, project: &str) -> Result<Project
          FROM missions AS ms
          LEFT JOIN mission_members AS mm ON mm.mission_id = ms.id
          LEFT JOIN issues AS i ON i.id = mm.issue_id AND i.project_id = ?1
+             AND i.archived_at IS NULL
          WHERE ms.project_id = ?1 GROUP BY ms.id ORDER BY ms.title COLLATE NOCASE, ms.id"
     ))
     .bind(project)
@@ -146,6 +147,7 @@ async fn load(db: &SqlitePool, workspace: &str, project: &str) -> Result<Project
          FROM objectives AS o
          LEFT JOIN members AS m ON m.objective_id = o.id
          LEFT JOIN issues AS i ON i.id = m.issue_id AND i.project_id = ?1
+             AND i.archived_at IS NULL
          WHERE o.project_id = ?1 GROUP BY o.id ORDER BY o.title COLLATE NOCASE, o.id"
     ))
     .bind(project)
