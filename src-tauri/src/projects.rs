@@ -55,7 +55,8 @@ fn storage_failed(error: sqlx::Error) -> ProjectError {
     ProjectError::StorageFailed
 }
 
-fn valid_date(value: &str) -> bool {
+/// Accepts a real local calendar date in `YYYY-MM-DD` form.
+pub(crate) fn valid_date(value: &str) -> bool {
     let parts: Vec<_> = value.split('-').collect();
     let [year, month, day] = parts.as_slice() else {
         return false;
@@ -132,7 +133,11 @@ async fn list(pool: &SqlitePool, workspace: &str) -> Result<Vec<Project>, Projec
     .map_err(storage_failed)
 }
 
-async fn get(pool: &SqlitePool, workspace: &str, id: &str) -> Result<Project, ProjectError> {
+pub(crate) async fn get(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+) -> Result<Project, ProjectError> {
     sqlx::query_as(&format!(
         "SELECT {FIELDS} FROM projects WHERE id = ? AND workspace_id = ?"
     ))

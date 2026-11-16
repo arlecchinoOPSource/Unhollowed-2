@@ -6,9 +6,9 @@ use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
 const DEFAULT_TITLE: &str = "Untitled";
-const EMPTY_CONTENT: &str = r#"{"type":"doc","content":[{"type":"paragraph"}]}"#;
+pub(crate) const EMPTY_CONTENT: &str = r#"{"type":"doc","content":[{"type":"paragraph"}]}"#;
 const MAX_TITLE_CHARS: usize = 200;
-const MAX_CONTENT_BYTES: usize = 5 * 1024 * 1024;
+pub(crate) const MAX_CONTENT_BYTES: usize = 5 * 1024 * 1024;
 const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -63,13 +63,19 @@ fn valid_title(title: &str) -> Result<&str, DocumentError> {
     Ok(title)
 }
 
+/// Accepts Tiptap JSON with a `doc` root that fits the rich-text size limit.
+/// Issue descriptions share this rule.
+pub(crate) fn is_rich_text(content: &str) -> bool {
+    content.len() <= MAX_CONTENT_BYTES
+        && serde_json::from_str::<serde_json::Value>(content)
+            .is_ok_and(|value| value.get("type").and_then(|kind| kind.as_str()) == Some("doc"))
+}
+
 fn valid_content(content: &str) -> Result<&str, DocumentError> {
-    if content.len() > MAX_CONTENT_BYTES {
-        return Err(DocumentError::InvalidContent);
-    }
-    match serde_json::from_str::<serde_json::Value>(content) {
-        Ok(value) if value.get("type").and_then(|kind| kind.as_str()) == Some("doc") => Ok(content),
-        _ => Err(DocumentError::InvalidContent),
+    if is_rich_text(content) {
+        Ok(content)
+    } else {
+        Err(DocumentError::InvalidContent)
     }
 }
 

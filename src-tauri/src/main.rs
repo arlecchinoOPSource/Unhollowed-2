@@ -2,6 +2,9 @@
 
 mod database;
 mod documents;
+// The IPC commands that use this module arrive with U2-007.
+#[allow(dead_code)]
+mod issues;
 mod projects;
 #[cfg(test)]
 mod test_support;

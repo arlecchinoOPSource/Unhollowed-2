@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added the issue data model: migration 5 with per-workspace ISS numbers allocated in a transaction, optional same-workspace projects, Tiptap descriptions, and a derived closed state.
 - Added workspace-scoped projects with creation, editing, search, status filters, and archiving.
 
 - Added local documents: create, list, and edit with Tiptap JSON, stored per workspace behind typed Tauri commands, with automatic saving and migration 3.
