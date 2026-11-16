@@ -47,6 +47,8 @@ export interface ListFilters {
   labelMatch: "any" | "all";
   /** A milestone ID, "none", or "" for any milestone. */
   milestone: string;
+  /** "" hides archived issues; "include" shows them too; "only" just them. */
+  archived: "" | "include" | "only";
   sort: IssueSortField;
   direction: "asc" | "desc";
 }
@@ -71,6 +73,10 @@ export function readFilters(params: URLSearchParams): ListFilters {
     labels: (params.get("labels") ?? "").split(",").filter(Boolean),
     labelMatch: params.get("match") === "all" ? "all" : "any",
     milestone: params.get("milestone") ?? "",
+    archived:
+      params.get("archived") === "include" || params.get("archived") === "only"
+        ? (params.get("archived") as "include" | "only")
+        : "",
     sort,
     direction:
       direction === "asc" || direction === "desc"
@@ -98,6 +104,7 @@ export function writeFilters(
   if (filters.labels.length > 0) params.set("labels", filters.labels.join(","));
   if (filters.labelMatch === "all") params.set("match", "all");
   if (filters.milestone) params.set("milestone", filters.milestone);
+  if (filters.archived) params.set("archived", filters.archived);
   if (filters.sort !== "updated") params.set("sort", filters.sort);
   if (filters.direction !== defaultDirection(filters.sort))
     params.set("dir", filters.direction);
@@ -116,6 +123,7 @@ export function resetFilters(filters: ListFilters): ListFilters {
     labels: [],
     labelMatch: "any",
     milestone: "",
+    archived: "",
   };
 }
 
@@ -127,7 +135,8 @@ export function hasFilters(filters: ListFilters): boolean {
     filters.project ||
     filters.due ||
     filters.labels.length > 0 ||
-    filters.milestone,
+    filters.milestone ||
+    filters.archived,
   );
 }
 
@@ -163,6 +172,7 @@ export function toQuery(
         ? [filters.milestone]
         : [],
     noMilestone: filters.milestone === "none",
+    archived: filters.archived || "exclude",
     sort: filters.sort,
     direction: filters.direction,
   };
@@ -193,9 +203,14 @@ export function toQuery(
   return query;
 }
 
-/** The list filters as stored in a saved view. */
+/**
+ * The list filters as stored in a saved view. Version 1 views do not store
+ * the archived filter, so saved views always hide archived issues.
+ */
 export function toViewFilters(filters: ListFilters): ViewFilters {
-  return { ...filters, labels: [...filters.labels] };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { archived, ...stored } = filters;
+  return { ...stored, labels: [...filters.labels] };
 }
 
 /**

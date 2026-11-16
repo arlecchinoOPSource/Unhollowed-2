@@ -59,16 +59,18 @@ pub struct Relation {
     number: i64,
     title: String,
     status: String,
+    /// Archived issues stay linked and are marked as archived.
+    archived: bool,
     kind: String,
 }
 
-async fn list(
+pub(crate) async fn list(
     db: &SqlitePool,
     workspace: &str,
     issue: &str,
 ) -> Result<Vec<Relation>, RelationError> {
     Ok(sqlx::query_as(
-        "SELECT i.id, i.number, i.title, i.status,
+        "SELECT i.id, i.number, i.title, i.status, i.archived_at IS NOT NULL AS archived,
            CASE
              WHEN r.kind = 'related' THEN 'related'
              WHEN r.kind = 'parent' AND r.source_id = ?2 THEN 'parent'
@@ -280,7 +282,8 @@ mod tests {
             migrator(9).await.run(&db).await.unwrap();
             let a = add_issue_before_upgrade(&db, DEFAULT_WORKSPACE, None).await;
             let b = add_issue_before_upgrade(&db, DEFAULT_WORKSPACE, None).await;
-            migrator(10).await.run(&db).await.unwrap();
+            // Upgrade through every later migration, as a user's database would.
+            migrator(i64::MAX).await.run(&db).await.unwrap();
             assert!(list(&db, DEFAULT_WORKSPACE, &a).await.unwrap().is_empty());
             let forward = tauri::async_runtime::spawn({
                 let (db, a, b) = (db.clone(), a.clone(), b.clone());

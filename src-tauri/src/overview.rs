@@ -119,7 +119,7 @@ impl Scope<'_> {
     async fn count(&self, condition: &str) -> Result<i64, OverviewError> {
         sqlx::query_scalar(&format!(
             "SELECT count(*) FROM issues
-             WHERE workspace_id = ?1 AND project_id = ?2 AND closed = 0 AND {condition}"
+             WHERE workspace_id = ?1 AND project_id = ?2 AND archived_at IS NULL AND closed = 0 AND {condition}"
         ))
         .bind(self.workspace)
         .bind(self.project)
@@ -133,7 +133,7 @@ impl Scope<'_> {
     async fn list(&self, condition: &str) -> Result<Vec<IssueSummary>, OverviewError> {
         sqlx::query_as(&format!(
             "SELECT {SUMMARY_FIELDS} FROM issues
-             WHERE workspace_id = ?1 AND project_id = ?2 AND closed = 0 AND {condition}
+             WHERE workspace_id = ?1 AND project_id = ?2 AND archived_at IS NULL AND closed = 0 AND {condition}
              ORDER BY due_date, number LIMIT ?5"
         ))
         .bind(self.workspace)
@@ -165,7 +165,7 @@ pub async fn overview(
                 coalesce(sum(status = 'blocked'), 0) AS blocked,
                 coalesce(sum(status = 'done'), 0) AS done,
                 coalesce(sum(status = 'canceled'), 0) AS canceled
-         FROM issues WHERE workspace_id = ? AND project_id = ?",
+         FROM issues WHERE workspace_id = ? AND project_id = ? AND archived_at IS NULL",
     )
     .bind(workspace)
     .bind(project_id)
@@ -192,7 +192,7 @@ pub async fn overview(
     let upcoming = scope.list(UPCOMING).await?;
     let undated_open: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM issues
-         WHERE workspace_id = ? AND project_id = ? AND closed = 0 AND due_date IS NULL",
+         WHERE workspace_id = ? AND project_id = ? AND archived_at IS NULL AND closed = 0 AND due_date IS NULL",
     )
     .bind(workspace)
     .bind(project_id)
@@ -212,14 +212,14 @@ pub async fn overview(
     let activity = sqlx::query_as(
         "SELECT kind, at, issue_id, number, title FROM (
              SELECT 'created' AS kind, created_at AS at, id AS issue_id, number, title
-             FROM issues WHERE workspace_id = ?1 AND project_id = ?2
+             FROM issues WHERE workspace_id = ?1 AND project_id = ?2 AND archived_at IS NULL
              UNION ALL
              SELECT 'completed', completed_at, id, number, title
-             FROM issues WHERE workspace_id = ?1 AND project_id = ?2
+             FROM issues WHERE workspace_id = ?1 AND project_id = ?2 AND archived_at IS NULL
                AND completed_at IS NOT NULL
              UNION ALL
              SELECT 'updated', updated_at, id, number, title
-             FROM issues WHERE workspace_id = ?1 AND project_id = ?2
+             FROM issues WHERE workspace_id = ?1 AND project_id = ?2 AND archived_at IS NULL
                AND updated_at > created_at
                AND updated_at IS NOT completed_at
          )

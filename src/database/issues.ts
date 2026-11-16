@@ -52,6 +52,8 @@ export interface IssueSummary {
   milestoneId: string | null;
   /** The repeat series this issue is an occurrence of, if any. */
   recurrenceId: string | null;
+  /** Set while archived. Archiving is separate from the issue's status. */
+  archivedAt: string | null;
   /** True while the issue's series is active. */
   recurring: boolean;
   /** Label IDs, including archived labels the issue already had. */
@@ -72,7 +74,7 @@ export function issueKey(issue: Pick<IssueSummary, "number">): string {
 // lands before the next screen loads its list.
 let writes: Promise<unknown> = Promise.resolve();
 
-function write(run: () => Promise<Issue>): Promise<Issue> {
+function write<T>(run: () => Promise<T>): Promise<T> {
   const result = writes.then(run);
   writes = result.catch(() => undefined);
   return result;
@@ -106,6 +108,8 @@ export interface IssueFilter {
   milestoneIds?: string[];
   /** Also match issues without a milestone. */
   noMilestone?: boolean;
+  /** `exclude` (the default), `include`, or `only` archived issues. */
+  archived?: "exclude" | "include" | "only";
 }
 
 export type IssueSortField =
@@ -237,6 +241,38 @@ export function setIssueDueDate(
   return write(() => invoke("set_issue_due_date", { id, dueDate }));
 }
 
+/** Archives an issue. It keeps its status and every link. */
+export function archiveIssue(id: string): Promise<Issue> {
+  return write(() => invoke("archive_issue", { id }));
+}
+
+/** Restores an archived issue exactly as it was. */
+export function restoreIssue(id: string): Promise<Issue> {
+  return write(() => invoke("restore_issue", { id }));
+}
+
+/** What permanently deleting an issue removes, and what prevents it. */
+export interface DeletionImpact {
+  /** The key to type to confirm, such as `ISS-12`. */
+  key: string;
+  archived: boolean;
+  labels: number;
+  documents: number;
+  objectives: number;
+  relationships: number;
+  subIssues: number;
+  activeSeries: boolean;
+}
+
+export function getIssueDeletionImpact(id: string): Promise<DeletionImpact> {
+  return read(() => invoke("get_issue_deletion_impact", { id }));
+}
+
+/** Permanently deletes an archived issue once `confirmKey` matches. */
+export function deleteIssue(id: string, confirmKey: string): Promise<void> {
+  return write(() => invoke<void>("delete_issue", { id, confirmKey }));
+}
+
 /** Sets or clears the issue's milestone. */
 export function setIssueMilestone(
   id: string,
@@ -289,6 +325,14 @@ export function issueError(error: unknown): string {
       return "Choose daily, weekly, or monthly, every 1 to 99.";
     case "recurrence_needs_due_date":
       return "Set a due date first. Repeats start from the due date.";
+    case "not_archived":
+      return "Archive the issue before deleting it permanently.";
+    case "has_sub_issues":
+      return "Remove or reassign its sub-issues before deleting it.";
+    case "active_series":
+      return "Stop repeating this issue before deleting it, so its series does not end silently.";
+    case "confirmation_mismatch":
+      return "Type the issue key exactly to confirm.";
     case "invalid_filter":
       return "These filters are not supported. Reset them and try again.";
     default:

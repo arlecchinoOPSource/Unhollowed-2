@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added issue archiving and restoring that keep status and every link, archived issues hidden by default with Hide, Include, and Only archived filters, and permanent deletion of archived issues only after an impact check, sub-issue and active-series blockers, and typing the issue key. Archiving a project keeps its issues. Adds migration 14.
 - Added workspace-wide search from the header (⌘K or Ctrl+K) across projects, issues, and milestones, with grouped and capped results, issue-number jumps, keyboard navigation, and protection against stale results.
 - Added progress rollups: objectives count their linked issues and sub-issues once each, missions roll up their objectives' issues without double counting, and objectives, missions, and milestones report blocked and canceled work alongside done ÷ non-canceled progress.
 - Added a project overview: completion that excludes canceled issues, open and closed totals, issues by status, overdue and coming-up work by local date, milestone progress, and recent activity labeled by its timestamps. Each number links to the matching issue list.

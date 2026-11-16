@@ -138,7 +138,8 @@ pub async fn search(
         .map_err(|_| SearchError::StorageFailed)?;
     let issue_total: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM issues
-         WHERE workspace_id = ?1 AND (instr(search_text, ?2) > 0 OR number IS ?3)",
+         WHERE workspace_id = ?1 AND archived_at IS NULL
+           AND (instr(search_text, ?2) > 0 OR number IS ?3)",
     )
     .bind(workspace)
     .bind(&text)
@@ -148,7 +149,8 @@ pub async fn search(
     .map_err(storage_failed)?;
     let issues = sqlx::query_as(&format!(
         "SELECT {SUMMARY_FIELDS} FROM issues
-         WHERE workspace_id = ?1 AND (instr(search_text, ?2) > 0 OR number IS ?3)
+         WHERE workspace_id = ?1 AND archived_at IS NULL
+           AND (instr(search_text, ?2) > 0 OR number IS ?3)
          ORDER BY number IS ?3 DESC, closed, updated_at DESC, number DESC LIMIT ?4"
     ))
     .bind(workspace)

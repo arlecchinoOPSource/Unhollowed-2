@@ -103,12 +103,12 @@ impl MilestoneInput {
 
 const FIELDS: &str = "id, project_id, title, description, due_date, state = 'closed' AS closed, \
      closed_at, created_at, updated_at, \
-     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND closed = 0) AS open_count, \
-     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND status = 'done') \
+     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND archived_at IS NULL AND closed = 0) AS open_count, \
+     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND archived_at IS NULL AND status = 'done') \
          AS completed_count, \
-     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND status = 'canceled') \
+     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND archived_at IS NULL AND status = 'canceled') \
          AS canceled_count, \
-     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND status = 'blocked') \
+     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND archived_at IS NULL AND status = 'blocked') \
          AS blocked_count";
 
 /// Open milestones first, then by due date with undated last, then title.

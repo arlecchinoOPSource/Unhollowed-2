@@ -81,6 +81,7 @@ test.beforeEach(async ({ page }) => {
         milestoneId: null,
         recurrenceId: null,
         recurring: false,
+        archivedAt: null,
         ...seed,
       }));
     let clock = 0;
@@ -341,7 +342,7 @@ test.beforeEach(async ({ page }) => {
                 )
                 .map((edge) => {
                   const isChild = edge.child === args.id;
-                  const { id, title, number, status } = find(
+                  const { id, title, number, status, archivedAt } = find(
                     isChild ? edge.parent : edge.child,
                   );
                   return {
@@ -349,6 +350,7 @@ test.beforeEach(async ({ page }) => {
                     title,
                     number,
                     status,
+                    archived: Boolean(archivedAt),
                     kind: isChild ? "parent" : "child",
                   };
                 });
@@ -390,7 +392,11 @@ test.beforeEach(async ({ page }) => {
                   (!(q.milestoneIds?.length || q.noMilestone) ||
                     (issue.milestoneId
                       ? (q.milestoneIds ?? []).includes(issue.milestoneId)
-                      : Boolean(q.noMilestone))),
+                      : Boolean(q.noMilestone))) &&
+                  (q.archived === "include" ||
+                    (q.archived === "only"
+                      ? Boolean(issue.archivedAt)
+                      : !issue.archivedAt)),
               );
               const open = matches.filter((issue) => !issue.closed).length;
               const inState = matches.filter(
@@ -579,6 +585,50 @@ test.beforeEach(async ({ page }) => {
                 activity,
               });
             }
+            case "archive_issue":
+            case "restore_issue": {
+              const issue = find(args.id);
+              issue.archivedAt =
+                command === "archive_issue"
+                  ? (issue.archivedAt ?? now())
+                  : null;
+              return structuredClone(issue);
+            }
+            case "get_issue_deletion_impact":
+            case "delete_issue": {
+              const issue = find(args.id);
+              const subIssues = relationships.filter(
+                (edge) => edge.parent === issue.id,
+              ).length;
+              const impact = {
+                key: `ISS-${issue.number}`,
+                archived: Boolean(issue.archivedAt),
+                labels: issue.labelIds.length,
+                documents: issueDocuments.filter(([id]) => id === issue.id)
+                  .length,
+                objectives: goals.links.filter(([, id]) => id === issue.id)
+                  .length,
+                relationships: relationships.filter(
+                  (edge) => edge.child === issue.id || edge.parent === issue.id,
+                ).length,
+                subIssues,
+                activeSeries: false,
+              };
+              if (command === "get_issue_deletion_impact") return impact;
+              const confirm = (args as { confirmKey: string }).confirmKey;
+              if (confirm.trim().toUpperCase() !== impact.key)
+                throw { code: "confirmation_mismatch" };
+              if (!impact.archived) throw { code: "not_archived" };
+              if (subIssues > 0) throw { code: "has_sub_issues" };
+              issues.splice(issues.indexOf(issue), 1);
+              for (let index = relationships.length - 1; index >= 0; index--)
+                if (
+                  relationships[index].child === issue.id ||
+                  relationships[index].parent === issue.id
+                )
+                  relationships.splice(index, 1);
+              return null;
+            }
             case "search_workspace": {
               const text = (args as { text: string }).text.trim().toLowerCase();
               const number = /^(iss-|#)?(\d+)$/.exec(text)?.[2];
@@ -748,6 +798,7 @@ test.beforeEach(async ({ page }) => {
                 milestoneId: null,
                 recurrenceId: null,
                 recurring: false,
+                archivedAt: null,
               };
               issues.push(issue);
               return structuredClone(issue);
@@ -2617,4 +2668,94 @@ test("searches the workspace from the header with keyboard navigation", async ({
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("button", { name: "Search" })).toBeFocused();
+});
+
+test("archives, restores, and permanently deletes an issue with confirmation", async ({
+  page,
+}) => {
+  await seedIssues(page, [
+    { title: "Old idea", status: "done" },
+    { title: "Child step" },
+    { title: "Keep me" },
+  ]);
+  // Make "Child step" a sub-issue of "Old idea".
+  await page.goto("/issues/seed-1");
+  await page.getByRole("button", { name: "Add relationship" }).click();
+  const relationships = page.getByRole("region", { name: "Relationships" });
+  await relationships.getByLabel("Relationship").selectOption("child");
+  await relationships
+    .getByRole("combobox", { name: "Issue", exact: true })
+    .selectOption("seed-2");
+  await relationships
+    .getByRole("button", { name: "Save relationship" })
+    .click();
+  await expect(
+    relationships.getByRole("link", { name: /Child step/ }),
+  ).toBeVisible();
+
+  // Archive: the issue keeps its status and leaves the default list.
+  await page.getByRole("button", { name: "Archive issue" }).click();
+  await expect(page.getByText("This issue is archived.")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: /^Status/ })).toHaveValue(
+    "done",
+  );
+  await page.getByRole("link", { name: "All issues" }).click();
+  await page.getByRole("button", { name: /^All/ }).click();
+  const list = page.getByRole("list", { name: "All issues" });
+  // Wait for the All list itself, so the next check is not vacuous.
+  await expect(list.getByRole("link", { name: "Keep me" })).toBeVisible();
+  await expect(list.getByRole("link", { name: "Old idea" })).toHaveCount(0);
+  await page.getByRole("combobox", { name: /^Archived/ }).selectOption("only");
+  await expect(list.getByRole("link", { name: "Old idea" })).toBeVisible();
+  await expect(list.getByText("Archived", { exact: true })).toBeVisible();
+
+  // The sub-issue still shows its archived parent.
+  await page.getByRole("combobox", { name: /^Archived/ }).selectOption("");
+  await list.getByRole("link", { name: "Child step" }).click();
+  await expect(
+    page.getByRole("region", { name: "Relationships" }).getByText("Archived"),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "All issues" }).click();
+
+  // Restore brings it back exactly.
+  await page.getByRole("combobox", { name: /^Archived/ }).selectOption("only");
+  await list.getByRole("link", { name: "Old idea" }).click();
+  await page.getByRole("button", { name: "Restore issue" }).click();
+  await expect(page.getByText("Issue restored.")).toBeVisible();
+  await expect(page.getByText("This issue is archived.")).toHaveCount(0);
+
+  // Deletion is offered only when archived, and blocked by sub-issues.
+  await page.getByRole("button", { name: "Archive issue" }).click();
+  await page.getByRole("button", { name: "Delete permanently…" }).click();
+  const panel = page.getByRole("region", { name: "Delete ISS-1 permanently" });
+  await expect(panel.getByRole("alert")).toContainText(
+    "It has 1 sub-issue. Remove or reassign them first.",
+  );
+  await panel.getByLabel("Type ISS-1 to confirm").fill("ISS-1");
+  await expect(
+    panel.getByRole("button", { name: "Delete ISS-1" }),
+  ).toHaveAttribute("aria-disabled", "true");
+  await panel.getByRole("button", { name: "Cancel" }).click();
+  await expect(
+    page.getByRole("button", { name: "Restore issue" }),
+  ).toBeFocused();
+
+  // Delete a leaf issue with the typed key.
+  await page.getByRole("link", { name: "All issues" }).click();
+  await page.getByRole("combobox", { name: /^Archived/ }).selectOption("");
+  await list.getByRole("link", { name: "Keep me" }).click();
+  await page.getByRole("button", { name: "Archive issue" }).click();
+  await page.getByRole("button", { name: "Delete permanently…" }).click();
+  const leaf = page.getByRole("region", { name: "Delete ISS-3 permanently" });
+  await expect(leaf.getByText("It has no links to remove.")).toBeVisible();
+  const confirm = leaf.getByLabel("Type ISS-3 to confirm");
+  await expect(confirm).toBeFocused();
+  await confirm.fill("ISS-2");
+  await expect(
+    leaf.getByRole("button", { name: "Delete ISS-3" }),
+  ).toHaveAttribute("aria-disabled", "true");
+  await confirm.fill("iss-3");
+  await leaf.getByRole("button", { name: "Delete ISS-3" }).click();
+  await expect(page).toHaveURL(/\/issues\?archived=only$/);
+  await expect(page.getByRole("link", { name: "Keep me" })).toHaveCount(0);
 });

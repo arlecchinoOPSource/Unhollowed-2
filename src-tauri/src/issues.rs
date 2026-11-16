@@ -7,8 +7,10 @@ use tauri::State;
 use tauri_plugin_sql::DbInstances;
 use uuid::Uuid;
 
+mod archive;
 mod query;
 mod recurrence;
+pub use archive::{delete, deletion_impact, set_archived, DeletionImpact};
 #[cfg(test)]
 pub use query::IssueFilter;
 pub(crate) use query::{index_missing, search_text};
@@ -44,6 +46,8 @@ pub struct IssueSummary {
     pub milestone_id: Option<String>,
     /// The series this issue is an occurrence of, if any.
     pub recurrence_id: Option<String>,
+    /// Set while the issue is archived. Archiving is separate from status.
+    pub archived_at: Option<String>,
     /// True while the issue's series is active (not stopped).
     pub recurring: bool,
     /// IDs of the issue's labels, including archived ones.
@@ -114,6 +118,14 @@ pub enum IssueError {
     InvalidRecurrence,
     /// A repeat rule is anchored on a due date, so the issue needs one.
     RecurrenceNeedsDueDate,
+    /// Only archived issues can be deleted permanently.
+    NotArchived,
+    /// The issue has sub-issues, which would lose their parent.
+    HasSubIssues,
+    /// The issue is the latest occurrence of an active repeat series.
+    ActiveSeries,
+    /// The typed confirmation does not match the issue's key.
+    ConfirmationMismatch,
     StorageFailed,
 }
 
@@ -185,7 +197,7 @@ impl IssueFields {
 macro_rules! summary_fields {
     () => {
         "id, number, project_id, title, status, priority, start_date, due_date, \
-         completed_at, closed, created_at, updated_at, milestone_id, recurrence_id, \
+         completed_at, closed, created_at, updated_at, milestone_id, recurrence_id, archived_at, \
          EXISTS (SELECT 1 FROM issue_recurrences AS r WHERE r.id = issues.recurrence_id \
                  AND r.stopped_at IS NULL) AS recurring, \
          (SELECT json_group_array(label_id) FROM (SELECT label_id FROM issue_labels \
@@ -221,7 +233,7 @@ pub async fn list(
 ) -> Result<Vec<IssueSummary>, IssueError> {
     sqlx::query_as(&format!(
         "SELECT {SUMMARY_FIELDS} FROM issues
-         WHERE workspace_id = ?1 AND (?2 IS NULL OR project_id = ?2)
+         WHERE workspace_id = ?1 AND (?2 IS NULL OR project_id = ?2) AND archived_at IS NULL
          ORDER BY updated_at DESC, number DESC"
     ))
     .bind(workspace)
@@ -666,6 +678,43 @@ pub async fn set_issue_labels(
 ) -> Result<Issue, IssueError> {
     let (pool, workspace) = scope(&instances).await?;
     set_labels(&pool, &workspace, &id, label_ids).await
+}
+
+#[tauri::command]
+pub async fn archive_issue(
+    instances: State<'_, DbInstances>,
+    id: String,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_archived(&pool, &workspace, &id, true).await
+}
+
+#[tauri::command]
+pub async fn restore_issue(
+    instances: State<'_, DbInstances>,
+    id: String,
+) -> Result<Issue, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_archived(&pool, &workspace, &id, false).await
+}
+
+#[tauri::command]
+pub async fn get_issue_deletion_impact(
+    instances: State<'_, DbInstances>,
+    id: String,
+) -> Result<DeletionImpact, IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    deletion_impact(&pool, &workspace, &id).await
+}
+
+#[tauri::command]
+pub async fn delete_issue(
+    instances: State<'_, DbInstances>,
+    id: String,
+    confirm_key: String,
+) -> Result<(), IssueError> {
+    let (pool, workspace) = scope(&instances).await?;
+    delete(&pool, &workspace, &id, &confirm_key).await
 }
 
 #[tauri::command]

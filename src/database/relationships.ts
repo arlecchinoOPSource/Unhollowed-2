@@ -15,6 +15,8 @@ export interface IssueRelationship {
   number: number;
   title: string;
   status: IssueStatus;
+  /** Archived issues stay linked and are marked as archived. */
+  archived: boolean;
   kind: RelationKind;
 }
 
