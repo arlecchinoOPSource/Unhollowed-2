@@ -8,7 +8,13 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import {
   completeIssue,
@@ -45,6 +51,7 @@ import {
 } from "./filters";
 import { LabelBadges, LabelPicker } from "../labels/LabelParts";
 import { PriorityBadge, StatusBadge } from "./IssueBadges";
+import { isIssueShortcut } from "./issueKeyboard";
 import "./issues.css";
 
 const PAGE_SIZE = 50;
@@ -89,6 +96,56 @@ export function IssueList({ projectId }: { projectId?: string }) {
   const [typedSearch, setTypedSearch] = useState<string | null>(null);
   const searchTimer = useRef<number>(undefined);
   const titleInput = useRef<HTMLInputElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const filterGroup = useRef<HTMLDivElement>(null);
+  const issueList = useRef<HTMLUListElement>(null);
+  const focusNewIssue = Boolean(
+    (location.state as { focusNewIssue?: boolean } | null)?.focusNewIssue,
+  );
+
+  useEffect(() => {
+    if (focusNewIssue) titleInput.current?.focus();
+  }, [focusNewIssue]);
+
+  useEffect(() => {
+    if (!desktop) return;
+    function focusSearch(event: KeyboardEvent) {
+      if (!isIssueShortcut(event, "KeyF")) return;
+      event.preventDefault();
+      searchInput.current?.focus();
+    }
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, [desktop]);
+
+  function moveBetweenRows(event: ReactKeyboardEvent<HTMLUListElement>) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+      return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    if (!(event.target instanceof HTMLElement)) return;
+    const className = event.target.matches(".issue-title")
+      ? "issue-title"
+      : event.target.matches(".issue-toggle")
+        ? "issue-toggle"
+        : null;
+    if (!className) return;
+    const controls = [
+      ...(issueList.current?.querySelectorAll<HTMLElement>(`.${className}`) ??
+        []),
+    ];
+    const index = controls.indexOf(event.target);
+    const next = controls[index + (event.key === "ArrowDown" ? 1 : -1)];
+    event.preventDefault();
+    next?.focus();
+  }
+
+  function leaveField(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    event.preventDefault();
+    filterGroup.current
+      ?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
+      ?.focus();
+  }
   const toggles = useRef(new Map<string, HTMLButtonElement>());
   const pendingFocus = useRef<number | null>(null);
   // Where the next page starts in the server's ordering. Issues that leave
@@ -364,11 +421,36 @@ export function IssueList({ projectId }: { projectId?: string }) {
 
   return (
     <div className="issues">
+      <details className="issue-shortcuts">
+        <summary>Keyboard shortcuts</summary>
+        <ul>
+          <li>
+            <kbd>Alt/Option</kbd> + <kbd>Shift</kbd> + <kbd>N</kbd> to focus New
+            issue
+          </li>
+          <li>
+            <kbd>Alt/Option</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> to focus
+            issue search
+          </li>
+          <li>
+            <kbd>↑</kbd> or <kbd>↓</kbd> to move between focused issue links or
+            completion buttons
+          </li>
+          <li>
+            <kbd>Enter</kbd> to open a focused issue, or <kbd>Space</kbd> to use
+            its completion button
+          </li>
+          <li>
+            <kbd>Escape</kbd> to leave a capture or search field
+          </li>
+        </ul>
+      </details>
       <form className="issue-create" onSubmit={create}>
         <label htmlFor="new-issue-title">New issue</label>
         <div>
           <input
             id="new-issue-title"
+            onKeyDown={leaveField}
             ref={titleInput}
             placeholder="Issue title"
             maxLength={200}
@@ -395,6 +477,8 @@ export function IssueList({ projectId }: { projectId?: string }) {
           Search issues
           <input
             type="search"
+            ref={searchInput}
+            onKeyDown={leaveField}
             placeholder="Search titles and descriptions"
             maxLength={200}
             value={typedSearch ?? filters.text}
@@ -587,7 +671,12 @@ export function IssueList({ projectId }: { projectId?: string }) {
         </div>
       )}
 
-      <div className="issue-filters" role="group" aria-label="Show issues">
+      <div
+        ref={filterGroup}
+        className="issue-filters"
+        role="group"
+        aria-label="Show issues"
+      >
         {(Object.keys(states) as State[]).map((value) => (
           <button
             type="button"
@@ -634,6 +723,8 @@ export function IssueList({ projectId }: { projectId?: string }) {
       )}
       {visible.length > 0 && (
         <ul
+          ref={issueList}
+          onKeyDown={moveBetweenRows}
           className="issue-list"
           aria-label={`${states[filters.state]} issues`}
           aria-busy={loading}

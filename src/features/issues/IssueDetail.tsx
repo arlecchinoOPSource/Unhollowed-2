@@ -35,6 +35,7 @@ import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
 import { LabelPicker } from "../labels/LabelParts";
 import { StatusBadge } from "./IssueBadges";
+import { IssueRelationships } from "./IssueRelationships";
 import "./issues.css";
 
 const SAVE_DELAY_MS = 700;
@@ -65,6 +66,11 @@ function IssueLoader({ id }: { id: string }) {
   const location = useLocation();
   const from = (location.state as { from?: unknown } | null)?.from;
   const back = typeof from === "string" ? from : "/issues";
+  const backLabel = back.endsWith("/goals")
+    ? "Missions & objectives"
+    : back.startsWith("/projects/")
+      ? "Project issues"
+      : "All issues";
   const [loaded, setLoaded] = useState<{
     issue: Issue;
     projects: Project[];
@@ -103,7 +109,7 @@ function IssueLoader({ id }: { id: string }) {
     <section>
       <Link className="issue-back" to={back}>
         <ArrowLeft size={16} aria-hidden="true" />
-        {back.startsWith("/projects/") ? "Project issues" : "All issues"}
+        {backLabel}
       </Link>
       {!desktop && <p>Open the desktop app to manage your local issues.</p>}
       {error && (
@@ -134,6 +140,7 @@ function IssueLoader({ id }: { id: string }) {
           milestones={loaded.milestones}
         />
       )}
+      {loaded && <IssueRelationships id={id} back={back} />}
     </section>
   );
 }

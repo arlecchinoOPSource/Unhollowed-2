@@ -2,10 +2,12 @@
 
 mod database;
 mod documents;
+mod goals;
 mod issues;
 mod labels;
 mod milestones;
 mod projects;
+mod relationships;
 #[cfg(test)]
 mod test_support;
 
@@ -14,6 +16,12 @@ fn main() {
         .plugin(database::plugin())
         .invoke_handler(tauri::generate_handler![
             database::database_status,
+            relationships::list_issue_relationships,
+            relationships::add_issue_relationship,
+            relationships::remove_issue_relationship,
+            goals::list_project_goals,
+            goals::save_project_mission,
+            goals::save_project_objective,
             documents::list_documents,
             documents::get_document,
             documents::create_document,

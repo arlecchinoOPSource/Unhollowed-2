@@ -26,6 +26,12 @@ export function ProjectDialog({
     return () => element.close();
   }, []);
 
+  function close() {
+    // Close while the dialog is still mounted so the browser restores focus.
+    dialog.current?.close();
+    onClose();
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
@@ -54,7 +60,7 @@ export function ProjectDialog({
     setError("");
     try {
       await save(input);
-      onClose();
+      close();
     } catch (cause) {
       setError(projectError(cause));
     } finally {
@@ -69,7 +75,7 @@ export function ProjectDialog({
       aria-labelledby="project-dialog-title"
       onCancel={(event) => {
         event.preventDefault();
-        if (!saving) onClose();
+        if (!saving) close();
       }}
     >
       <form onSubmit={submit}>
@@ -121,7 +127,7 @@ export function ProjectDialog({
             type="button"
             className="project-secondary"
             disabled={saving}
-            onClick={onClose}
+            onClick={close}
           >
             Cancel
           </button>
