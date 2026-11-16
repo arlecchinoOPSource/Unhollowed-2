@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added All Issues and issue detail pages with Open, Closed, and All filters, ISS numbers, status and priority indicators, quick completion and reopening, rich-text descriptions with autosave, properties, project links, and a project-scoped issue list.
+- Added typed issue commands to create, list, edit, complete, cancel, reopen, and move issues between projects and the Inbox, with idempotent lifecycle timestamps.
 - Added the issue data model: migration 5 with per-workspace ISS numbers allocated in a transaction, optional same-workspace projects, Tiptap descriptions, and a derived closed state.
 - Added workspace-scoped projects with creation, editing, search, status filters, and archiving.
 

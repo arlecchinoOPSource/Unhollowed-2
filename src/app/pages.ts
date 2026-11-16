@@ -5,6 +5,7 @@ import {
   CircleCheck,
   FolderKanban,
   House,
+  ListTodo,
   Network,
   Settings,
   Smile,
@@ -29,6 +30,12 @@ export const features = [
     title: "Projects",
     icon: FolderKanban,
     description: "Give your work a plan and track its progress.",
+  },
+  {
+    path: "/issues",
+    title: "Issues",
+    icon: ListTodo,
+    description: "Review, update, and complete your work.",
   },
   {
     path: "/calendar",

@@ -55,6 +55,13 @@ Project commands resolve the active workspace in Rust. Reads and changes match t
 
 Indexes lead with `workspace_id` for workspace and project lists.
 
+Issues are read and changed only through the commands in `src-tauri/src/issues.rs`: `list_issues` (optionally for one project), `get_issue`, `create_issue`, `update_issue`, `change_issue_status`, `complete_issue`, `cancel_issue`, `reopen_issue`, and `set_issue_project`. Each one resolves the active workspace in Rust, and errors are returned as `{ code }` objects. Lifecycle rules:
+
+- Entering done sets `completed_at` once. Any other status clears it.
+- Reopening returns a done or canceled issue to To Do and leaves an open issue's status unchanged.
+- Repeating a status, reopen, or project change is a no-op that keeps `updated_at` and `completed_at`, so retries are safe.
+- `update_issue` changes title, description, priority, and dates without affecting status or project. Archiving and deletion are not implemented yet.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.

@@ -25,7 +25,7 @@ export function Workspace() {
         </Link>
         <nav aria-label="Workspace">
           {pages.map(({ path, title, icon: Icon }) => (
-            <NavLink to={path} end={path !== "/projects"} key={path}>
+            <NavLink to={path} end={path === "/"} key={path}>
               <Icon size={17} aria-hidden="true" />
               {title}
             </NavLink>

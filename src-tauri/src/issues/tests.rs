@@ -408,3 +408,285 @@ fn an_unmigrated_database_reports_a_storage_error() {
         );
     });
 }
+
+fn pause() {
+    // Timestamps have millisecond precision. Waiting proves a retry kept them.
+    std::thread::sleep(std::time::Duration::from_millis(5));
+}
+
+#[test]
+fn lifecycle_transitions_keep_identity_and_track_completion_once() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let issue = create(&pool, DEFAULT_WORKSPACE, fields("Ship"), None)
+            .await
+            .unwrap();
+        let id = &issue.summary.id;
+        let same_identity = |changed: &Issue| {
+            assert_eq!(changed.summary.id, issue.summary.id);
+            assert_eq!(changed.summary.number, issue.summary.number);
+            assert_eq!(changed.summary.created_at, issue.summary.created_at);
+        };
+
+        let done = set_status(&pool, DEFAULT_WORKSPACE, id, "done")
+            .await
+            .unwrap();
+        same_identity(&done);
+        assert_eq!(done.summary.status, "done");
+        assert!(done.summary.closed);
+        assert!(done.summary.completed_at.is_some());
+        pause();
+        let retried = set_status(&pool, DEFAULT_WORKSPACE, id, "done")
+            .await
+            .unwrap();
+        assert_eq!(retried, done);
+
+        let canceled = set_status(&pool, DEFAULT_WORKSPACE, id, "canceled")
+            .await
+            .unwrap();
+        same_identity(&canceled);
+        assert!(canceled.summary.closed);
+        assert_eq!(canceled.summary.completed_at, None);
+
+        let reopened = reopen(&pool, DEFAULT_WORKSPACE, id).await.unwrap();
+        same_identity(&reopened);
+        assert_eq!(reopened.summary.status, "todo");
+        assert!(!reopened.summary.closed);
+        pause();
+        assert_eq!(
+            reopen(&pool, DEFAULT_WORKSPACE, id).await.unwrap(),
+            reopened
+        );
+
+        // Reopening an open issue keeps its progress.
+        let started = set_status(&pool, DEFAULT_WORKSPACE, id, "in_progress")
+            .await
+            .unwrap();
+        assert_eq!(
+            reopen(&pool, DEFAULT_WORKSPACE, id)
+                .await
+                .unwrap()
+                .summary
+                .status,
+            "in_progress"
+        );
+        assert_eq!(started.summary.completed_at, None);
+        let blocked = set_status(&pool, DEFAULT_WORKSPACE, id, "blocked")
+            .await
+            .unwrap();
+        assert!(!blocked.summary.closed);
+
+        pause();
+        let completed_again = set_status(&pool, DEFAULT_WORKSPACE, id, "done")
+            .await
+            .unwrap();
+        assert!(completed_again.summary.completed_at > done.summary.completed_at);
+        assert_eq!(
+            get(&pool, DEFAULT_WORKSPACE, id).await.unwrap(),
+            completed_again
+        );
+    });
+}
+
+#[test]
+fn moves_between_owned_projects_and_back_to_the_inbox() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        add_workspace(&pool, OTHER_WORKSPACE, "Other").await;
+        let first = project(&pool, DEFAULT_WORKSPACE, "First").await;
+        let second = project(&pool, DEFAULT_WORKSPACE, "Second").await;
+        let foreign = project(&pool, OTHER_WORKSPACE, "Theirs").await;
+        let issue = create(&pool, DEFAULT_WORKSPACE, fields("Wander"), None)
+            .await
+            .unwrap();
+        let id = &issue.summary.id;
+
+        for target in [Some(first.as_str()), Some(second.as_str()), None] {
+            let moved = set_project(&pool, DEFAULT_WORKSPACE, id, target)
+                .await
+                .unwrap();
+            assert_eq!(moved.summary.project_id.as_deref(), target);
+            assert_eq!(moved.summary.number, issue.summary.number);
+        }
+        let inbox = get(&pool, DEFAULT_WORKSPACE, id).await.unwrap();
+        pause();
+        assert_eq!(
+            set_project(&pool, DEFAULT_WORKSPACE, id, None)
+                .await
+                .unwrap(),
+            inbox
+        );
+        for target in [foreign.as_str(), "missing"] {
+            assert_eq!(
+                set_project(&pool, DEFAULT_WORKSPACE, id, Some(target)).await,
+                Err(IssueError::InvalidProject)
+            );
+        }
+        assert_eq!(get(&pool, DEFAULT_WORKSPACE, id).await.unwrap(), inbox);
+    });
+}
+
+#[test]
+fn edits_persist_and_invalid_edits_change_nothing() {
+    tauri::async_runtime::block_on(async {
+        let database = TempDatabase::new("issues-edit");
+        let pool = database.open().await;
+        migrator(i64::MAX).await.run(&pool).await.unwrap();
+        let issue = create(&pool, DEFAULT_WORKSPACE, fields("Original"), None)
+            .await
+            .unwrap();
+        let id = &issue.summary.id;
+        let done = set_status(&pool, DEFAULT_WORKSPACE, id, "done")
+            .await
+            .unwrap();
+
+        let edited = update(
+            &pool,
+            DEFAULT_WORKSPACE,
+            id,
+            IssueFields {
+                title: " Revised ".into(),
+                description: Some(DESCRIPTION.into()),
+                priority: Some("urgent".into()),
+                start_date: None,
+                due_date: Some("2026-12-31".into()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(edited.summary.title, "Revised");
+        assert_eq!(edited.description, DESCRIPTION);
+        assert_eq!(edited.summary.priority, "urgent");
+        assert_eq!(edited.summary.due_date.as_deref(), Some("2026-12-31"));
+        // Editing fields leaves the lifecycle alone.
+        assert_eq!(edited.summary.status, "done");
+        assert_eq!(edited.summary.completed_at, done.summary.completed_at);
+
+        let invalid = [
+            (fields(""), IssueError::InvalidTitle),
+            (
+                IssueFields {
+                    description: Some("[]".into()),
+                    ..fields("T")
+                },
+                IssueError::InvalidDescription,
+            ),
+            (
+                IssueFields {
+                    start_date: Some("2027-01-02".into()),
+                    due_date: Some("2027-01-01".into()),
+                    ..fields("T")
+                },
+                IssueError::InvalidDateRange,
+            ),
+        ];
+        for (input, error) in invalid {
+            assert_eq!(
+                update(&pool, DEFAULT_WORKSPACE, id, input).await,
+                Err(error)
+            );
+        }
+        assert_eq!(
+            set_status(&pool, DEFAULT_WORKSPACE, id, "closed").await,
+            Err(IssueError::InvalidStatus)
+        );
+        pool.close().await;
+
+        let pool = database.open().await;
+        migrator(i64::MAX).await.run(&pool).await.unwrap();
+        assert_eq!(get(&pool, DEFAULT_WORKSPACE, id).await.unwrap(), edited);
+        pool.close().await;
+    });
+}
+
+#[test]
+fn every_change_rejects_missing_and_cross_workspace_issues() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        add_workspace(&pool, OTHER_WORKSPACE, "Other").await;
+        let theirs = project(&pool, OTHER_WORKSPACE, "Theirs").await;
+        let issue = create(&pool, DEFAULT_WORKSPACE, fields("Private"), None)
+            .await
+            .unwrap();
+
+        for (workspace, id) in [
+            (OTHER_WORKSPACE, issue.summary.id.as_str()),
+            (DEFAULT_WORKSPACE, "missing"),
+        ] {
+            assert_eq!(get(&pool, workspace, id).await, Err(IssueError::NotFound));
+            assert_eq!(
+                update(&pool, workspace, id, fields("Taken")).await,
+                Err(IssueError::NotFound)
+            );
+            assert_eq!(
+                set_status(&pool, workspace, id, "done").await,
+                Err(IssueError::NotFound)
+            );
+            assert_eq!(
+                reopen(&pool, workspace, id).await,
+                Err(IssueError::NotFound)
+            );
+            assert_eq!(
+                set_project(&pool, workspace, id, None).await,
+                Err(IssueError::NotFound)
+            );
+        }
+        // A project in the other workspace cannot be used to reach the issue.
+        assert_eq!(
+            set_project(&pool, OTHER_WORKSPACE, &issue.summary.id, Some(&theirs)).await,
+            Err(IssueError::NotFound)
+        );
+        assert_eq!(
+            get(&pool, DEFAULT_WORKSPACE, &issue.summary.id)
+                .await
+                .unwrap(),
+            issue
+        );
+    });
+}
+
+#[test]
+fn serializes_the_shape_the_webview_expects() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let issue = create(&pool, DEFAULT_WORKSPACE, fields("Shape"), None)
+            .await
+            .unwrap();
+        let value = serde_json::to_value(&issue).unwrap();
+        let mut keys: Vec<_> = value.as_object().unwrap().keys().cloned().collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            [
+                "closed",
+                "completedAt",
+                "createdAt",
+                "description",
+                "dueDate",
+                "id",
+                "number",
+                "priority",
+                "projectId",
+                "startDate",
+                "status",
+                "title",
+                "updatedAt",
+            ]
+        );
+        assert_eq!(value["closed"], false);
+        assert_eq!(value["number"], 1);
+        assert_eq!(
+            serde_json::to_value(IssueError::InvalidDateRange).unwrap(),
+            serde_json::json!({ "code": "invalid_date_range" })
+        );
+        let input: IssueFields = serde_json::from_value(serde_json::json!({
+            "title": "From the webview",
+            "description": null,
+            "priority": "low",
+            "startDate": null,
+            "dueDate": "2026-12-01",
+        }))
+        .unwrap();
+        assert_eq!(input.due_date.as_deref(), Some("2026-12-01"));
+    });
+}
