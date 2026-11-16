@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a kanban board for All Issues and each project, with one column per status, the shared issue filters, drag-and-drop and keyboard Move menus, optimistic moves that roll back on failure, and paged columns for large boards.
 - Added optional project missions and objectives, issue links, and individual objective progress.
 - Added sub-issues, blocking dependencies, and related issues with cycle checks.
 - Added keyboard shortcuts for issue capture, search, and traversal.
