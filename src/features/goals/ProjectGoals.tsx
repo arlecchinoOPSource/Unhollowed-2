@@ -7,6 +7,7 @@ import {
   saveProjectObjective,
   type Mission,
   type Objective,
+  type Rollup,
 } from "../../database/goals";
 import { issueKey, listIssues } from "../../database/issues";
 import { isTauri } from "../../database/status";
@@ -207,6 +208,7 @@ function Goals({ projectId }: { projectId: string }) {
               <li className="project-card" key={mission.id}>
                 <h3>{mission.title}</h3>
                 <p>{mission.description}</p>
+                <RollupSummary title={mission.title} rollup={mission} />
                 <button
                   className="project-secondary"
                   disabled={Boolean(editing)}
@@ -236,18 +238,7 @@ function Goals({ projectId }: { projectId: string }) {
                     }
                   </p>
                 )}
-                <p>
-                  {objective.total
-                    ? `${objective.completed} of ${objective.total} issues done`
-                    : "No issues count toward progress yet."}
-                </p>
-                {objective.total > 0 && (
-                  <progress
-                    aria-label={`Progress for ${objective.title}`}
-                    max={objective.total}
-                    value={objective.completed}
-                  />
-                )}
+                <RollupSummary title={objective.title} rollup={objective} />
                 <ul>
                   {data.issues
                     .filter((issue) =>
@@ -296,5 +287,35 @@ function Goals({ projectId }: { projectId: string }) {
         </button>
       )}
     </section>
+  );
+}
+
+/**
+ * Progress for an objective or mission: done out of all counted issues,
+ * with blocked and canceled work called out. Empty groups show no bar.
+ */
+function RollupSummary({ title, rollup }: { title: string; rollup: Rollup }) {
+  const notes = [
+    rollup.blocked > 0 && `${rollup.blocked} blocked`,
+    rollup.canceled > 0 && `${rollup.canceled} canceled, not counted`,
+  ].filter(Boolean);
+  return (
+    <>
+      <p>
+        {rollup.total
+          ? `${rollup.completed} of ${rollup.total} issues done (${Math.round(
+              (rollup.completed / rollup.total) * 100,
+            )}%)`
+          : "No issues count toward progress yet."}
+        {notes.length > 0 && ` · ${notes.join(" · ")}`}
+      </p>
+      {rollup.total > 0 && (
+        <progress
+          aria-label={`Progress for ${title}`}
+          max={rollup.total}
+          value={rollup.completed}
+        />
+      )}
+    </>
   );
 }

@@ -250,28 +250,58 @@ test.beforeEach(async ({ page }) => {
               if (!project) throw { code: "not_found" };
               return project;
             }
-            case "list_project_goals":
+            case "list_project_goals": {
+              // Rollups as in the backend: each issue counted once per group.
+              const rollup = (ids: Set<string>) => {
+                const linked = [...ids].map((id) => find(id));
+                const count = (test: (issue: Issue) => boolean) =>
+                  linked.filter(test).length;
+                return {
+                  total: count((issue) => issue.status !== "canceled"),
+                  completed: count((issue) => issue.status === "done"),
+                  blocked: count((issue) => issue.status === "blocked"),
+                  canceled: count((issue) => issue.status === "canceled"),
+                };
+              };
+              const members = (objectiveIds: string[]) =>
+                new Set(
+                  goals.links
+                    .filter(([id]) => objectiveIds.includes(id))
+                    .map(([, id]) => id),
+                );
               return structuredClone({
                 ...goals,
-                objectives: goals.objectives.map((objective) => {
-                  const linked = goals.links
-                    .filter(([id]) => id === objective.id)
-                    .map(([, id]) => find(id));
-                  return {
-                    ...objective,
-                    total: linked.filter((issue) => issue.status !== "canceled")
-                      .length,
-                    completed: linked.filter((issue) => issue.status === "done")
-                      .length,
-                  };
-                }),
+                missions: goals.missions.map((mission) => ({
+                  ...mission,
+                  ...rollup(
+                    members(
+                      goals.objectives
+                        .filter(
+                          (objective) => objective.missionId === mission.id,
+                        )
+                        .map(({ id }) => id),
+                    ),
+                  ),
+                })),
+                objectives: goals.objectives.map((objective) => ({
+                  ...objective,
+                  ...rollup(members([objective.id])),
+                })),
               });
+            }
             case "save_project_mission": {
               const input = args.input as unknown as {
                 title: string;
                 description: string;
               };
-              goals.missions.push({ id: "sample-mission", ...input });
+              goals.missions.push({
+                id: "sample-mission",
+                ...input,
+                total: 0,
+                completed: 0,
+                blocked: 0,
+                canceled: 0,
+              });
               return;
             }
             case "save_project_objective": {
@@ -286,6 +316,8 @@ test.beforeEach(async ({ page }) => {
                 ...input,
                 completed: 0,
                 total: 0,
+                blocked: 0,
+                canceled: 0,
               });
               goals.links.push(
                 ...issueIds.map((id): [string, string] => [
@@ -798,6 +830,9 @@ test.beforeEach(async ({ page }) => {
                     canceledCount: linked.filter(
                       (issue) => issue.status === "canceled",
                     ).length,
+                    blockedCount: linked.filter(
+                      (issue) => issue.status === "blocked",
+                    ).length,
                   };
                 }),
               );
@@ -816,6 +851,7 @@ test.beforeEach(async ({ page }) => {
                 openCount: 0,
                 completedCount: 0,
                 canceledCount: 0,
+                blockedCount: 0,
                 createdAt: now(),
                 updatedAt: now(),
                 title: "",
@@ -1520,13 +1556,30 @@ test("creates project goals with optional issue and mission links", async ({
     .selectOption("sample-mission");
   await page.getByRole("checkbox", { name: /Publish brief/ }).check();
   await page.getByRole("button", { name: "Save objective" }).click();
-  await expect(page.getByText("1 of 1 issues done")).toBeVisible();
+  const card = (title: string) =>
+    page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { name: title }) });
+  // The objective and its mission both roll up the linked issue.
+  await expect(card("Publish the launch brief")).toContainText(
+    "1 of 1 issues done (100%)",
+  );
+  await expect(card("Launch studio")).toContainText(
+    "1 of 1 issues done (100%)",
+  );
   await page.getByRole("link", { name: /ISS-1 Publish brief/ }).click();
   await expect(page.getByLabel("Issue title")).toHaveValue("Publish brief");
+  // Reopening the issue updates both rollups.
+  await page.getByRole("button", { name: "Reopen issue" }).click();
+  await expect(page.getByText("Issue reopened.")).toBeVisible();
   await page.getByRole("link", { name: "Missions & objectives" }).click();
   await expect(
     page.getByRole("heading", { name: "Publish the launch brief" }),
   ).toBeVisible();
+  await expect(card("Publish the launch brief")).toContainText(
+    "0 of 1 issues done (0%)",
+  );
+  await expect(card("Launch studio")).toContainText("0 of 1 issues done (0%)");
 });
 
 test("shows child progress and navigates from a closed sub-issue to its parent", async ({

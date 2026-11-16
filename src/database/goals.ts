@@ -6,14 +6,25 @@ export interface Mission {
   description: string;
 }
 
-export interface Objective extends Mission {
-  missionId: string | null;
+/**
+ * Progress over a deduplicated set of issues: linked issues and their
+ * sub-issues in the same project, each counted once. `total` excludes
+ * canceled issues. Blocked issues count in `total` but not in `completed`.
+ */
+export interface Rollup {
   total: number;
   completed: number;
+  blocked: number;
+  canceled: number;
+}
+
+export interface Objective extends Mission, Rollup {
+  missionId: string | null;
 }
 
 export interface ProjectGoals {
-  missions: Mission[];
+  /** Each mission rolls up every issue of its objectives once. */
+  missions: (Mission & Rollup)[];
   objectives: Objective[];
   links: [objectiveId: string, issueId: string][];
 }

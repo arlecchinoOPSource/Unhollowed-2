@@ -20,6 +20,8 @@ export interface Milestone extends MilestoneInput {
   openCount: number;
   completedCount: number;
   canceledCount: number;
+  /** Open issues that are blocked, part of `openCount`. */
+  blockedCount: number;
   createdAt: string;
   updatedAt: string;
 }

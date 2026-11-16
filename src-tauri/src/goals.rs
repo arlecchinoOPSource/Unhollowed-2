@@ -30,11 +30,28 @@ impl From<sqlx::Error> for GoalError {
     }
 }
 
+/// Progress over a deduplicated set of issues. `total` excludes canceled
+/// issues, which are neither done nor outstanding; blocked issues count in
+/// `total` but not in `completed`. A group with `total` 0 has no progress.
+#[derive(Debug, Default, FromRow, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Rollup {
+    pub total: i64,
+    pub completed: i64,
+    pub blocked: i64,
+    pub canceled: i64,
+}
+
 #[derive(FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Mission {
     id: String,
     title: String,
     description: String,
+    /// Every issue of the mission's objectives, each counted once.
+    #[sqlx(flatten)]
+    #[serde(flatten)]
+    rollup: Rollup,
 }
 
 #[derive(FromRow, Serialize)]
@@ -44,8 +61,9 @@ pub struct Objective {
     title: String,
     description: String,
     mission_id: Option<String>,
-    total: i64,
-    completed: i64,
+    #[sqlx(flatten)]
+    #[serde(flatten)]
+    rollup: Rollup,
 }
 
 #[derive(Serialize)]
@@ -77,6 +95,23 @@ impl GoalText {
     }
 }
 
+/// Each objective's issues: its linked issues and their sub-issues at any
+/// depth, as distinct pairs. `UNION` removes repeats, which also ends the
+/// recursion. Each hop must stay inside project (?1) and workspace (?2).
+const MEMBERS: &str = "WITH RECURSIVE members (objective_id, issue_id) AS (
+         SELECT l.objective_id, l.issue_id FROM objective_issues AS l
+         JOIN objectives AS o ON o.id = l.objective_id WHERE o.project_id = ?1
+         UNION
+         SELECT m.objective_id, r.source_id FROM members AS m
+         JOIN issue_relationships AS r ON r.workspace_id = ?2 AND r.kind = 'parent' AND r.target_id = m.issue_id
+         JOIN issues AS child ON child.id = r.source_id AND child.project_id = ?1)";
+
+/// Rollup counts over the joined issues `i`.
+const ROLLUP: &str = "COUNT(CASE WHEN i.status <> 'canceled' THEN 1 END) AS total,
+         COUNT(CASE WHEN i.status = 'done' THEN 1 END) AS completed,
+         COUNT(CASE WHEN i.status = 'blocked' THEN 1 END) AS blocked,
+         COUNT(CASE WHEN i.status = 'canceled' THEN 1 END) AS canceled";
+
 async fn load(db: &SqlitePool, workspace: &str, project: &str) -> Result<ProjectGoals, GoalError> {
     let mut tx = db.begin().await?;
     let exists: bool = sqlx::query_scalar(
@@ -89,17 +124,32 @@ async fn load(db: &SqlitePool, workspace: &str, project: &str) -> Result<Project
     if !exists {
         return Err(GoalError::NotFound);
     }
-    let missions = sqlx::query_as("SELECT id, title, description FROM missions WHERE project_id = ? ORDER BY title COLLATE NOCASE, id")
-        .bind(project).fetch_all(&mut *tx).await?;
-    let objectives = sqlx::query_as(
-        "SELECT o.id, o.title, o.description, o.mission_id,
-            COUNT(CASE WHEN i.status <> 'canceled' THEN 1 END) AS total,
-            COUNT(CASE WHEN i.status = 'done' THEN 1 END) AS completed
-         FROM objectives o LEFT JOIN objective_issues l ON l.objective_id = o.id
-         LEFT JOIN issues i ON i.id = l.issue_id
-         WHERE o.project_id = ? GROUP BY o.id ORDER BY o.title COLLATE NOCASE, o.id",
-    )
+    let missions = sqlx::query_as(&format!(
+        "{MEMBERS},
+         mission_members AS (
+             SELECT DISTINCT o.mission_id, m.issue_id FROM members AS m
+             JOIN objectives AS o ON o.id = m.objective_id
+             WHERE o.mission_id IS NOT NULL)
+         SELECT ms.id, ms.title, ms.description, {ROLLUP}
+         FROM missions AS ms
+         LEFT JOIN mission_members AS mm ON mm.mission_id = ms.id
+         LEFT JOIN issues AS i ON i.id = mm.issue_id AND i.project_id = ?1
+         WHERE ms.project_id = ?1 GROUP BY ms.id ORDER BY ms.title COLLATE NOCASE, ms.id"
+    ))
     .bind(project)
+    .bind(workspace)
+    .fetch_all(&mut *tx)
+    .await?;
+    let objectives = sqlx::query_as(&format!(
+        "{MEMBERS}
+         SELECT o.id, o.title, o.description, o.mission_id, {ROLLUP}
+         FROM objectives AS o
+         LEFT JOIN members AS m ON m.objective_id = o.id
+         LEFT JOIN issues AS i ON i.id = m.issue_id AND i.project_id = ?1
+         WHERE o.project_id = ?1 GROUP BY o.id ORDER BY o.title COLLATE NOCASE, o.id"
+    ))
+    .bind(project)
+    .bind(workspace)
     .fetch_all(&mut *tx)
     .await?;
     let links = sqlx::query_as("SELECT l.objective_id, l.issue_id FROM objective_issues l JOIN objectives o ON o.id = l.objective_id WHERE o.project_id = ?")
@@ -339,7 +389,11 @@ mod tests {
                 .objectives
                 .remove(0);
             assert_eq!(
-                (objective.total, objective.completed, objective.mission_id),
+                (
+                    objective.rollup.total,
+                    objective.rollup.completed,
+                    objective.mission_id
+                ),
                 (0, 0, None)
             );
 
@@ -400,7 +454,10 @@ mod tests {
                     Some(mission.id.as_str())
                 );
                 assert_eq!(
-                    (goals.objectives[0].total, goals.objectives[0].completed),
+                    (
+                        goals.objectives[0].rollup.total,
+                        goals.objectives[0].rollup.completed
+                    ),
                     expected
                 );
             }
@@ -415,3 +472,6 @@ mod tests {
         });
     }
 }
+
+#[cfg(test)]
+mod rollup_tests;

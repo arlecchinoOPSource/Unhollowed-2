@@ -86,6 +86,12 @@ function Progress({ milestone }: { milestone: Milestone }) {
           </p>
         </>
       )}
+      {milestone.blockedCount > 0 && (
+        <p>
+          {milestone.blockedCount} of the open{" "}
+          {milestone.blockedCount === 1 ? "issue is" : "issues are"} blocked
+        </p>
+      )}
       {milestone.canceledCount > 0 && (
         <p>
           {milestone.canceledCount} canceled{" "}

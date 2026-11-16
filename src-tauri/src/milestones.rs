@@ -28,6 +28,8 @@ pub struct Milestone {
     pub open_count: i64,
     pub completed_count: i64,
     pub canceled_count: i64,
+    /// Open issues that are blocked, a subset of `open_count`.
+    pub blocked_count: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -105,7 +107,9 @@ const FIELDS: &str = "id, project_id, title, description, due_date, state = 'clo
      (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND status = 'done') \
          AS completed_count, \
      (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND status = 'canceled') \
-         AS canceled_count";
+         AS canceled_count, \
+     (SELECT count(*) FROM issues WHERE milestone_id = milestones.id AND status = 'blocked') \
+         AS blocked_count";
 
 /// Open milestones first, then by due date with undated last, then title.
 pub async fn list(pool: &SqlitePool, workspace: &str) -> Result<Vec<Milestone>, MilestoneError> {
