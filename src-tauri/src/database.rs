@@ -165,6 +165,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0026_habits.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 27,
+            description: "Add private daily check-ins",
+            sql: include_str!("../migrations/0027_daily_checkins.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

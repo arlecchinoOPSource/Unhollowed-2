@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod acceptance_tests;
 
+mod checkins;
 mod database;
 mod document_links;
 mod documents;
@@ -158,6 +159,10 @@ fn main() {
             habits::backup::restore_habits,
             habits::backup::undo_habit_restore,
             habits::stats::get_habit_statistics,
+            checkins::get_checkin,
+            checkins::list_checkins,
+            checkins::save_checkin,
+            checkins::delete_checkin,
             labels::list_labels,
             labels::create_label,
             labels::update_label,
