@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./dataChanges";
 import type { IssueQuery } from "./issues";
 
 /** Where a file was saved and how many records it holds. */

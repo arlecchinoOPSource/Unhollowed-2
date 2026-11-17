@@ -7,7 +7,9 @@ use crate::checkins::save as save_checkin;
 use crate::habits::{create as create_habit, set_completion};
 use crate::scheduling::recurrence::RepeatRule;
 use crate::scheduling::{create_event, EventInput};
-use crate::test_support::{add_workspace, migrated_pool, DEFAULT_WORKSPACE, OTHER_WORKSPACE};
+use crate::test_support::{
+    add_workspace, migrated_pool, migrator, TempDatabase, DEFAULT_WORKSPACE, OTHER_WORKSPACE,
+};
 
 const WS: &str = DEFAULT_WORKSPACE;
 const TODAY: &str = "2026-11-17";
@@ -552,5 +554,25 @@ fn a_few_thousand_issues_are_read_in_one_pass() {
         assert_eq!(i.open, 5000 - 1667);
         // Generous: a regression to per-row queries would be orders slower.
         assert!(elapsed < std::time::Duration::from_secs(5), "{elapsed:?}");
+    });
+}
+
+#[test]
+fn a_restart_recomputes_exactly_the_same_statistics() {
+    tauri::async_runtime::block_on(async {
+        let database = TempDatabase::new("analytics-restart");
+        let pool = database.open().await;
+        migrator(i64::MAX).await.run(&pool).await.unwrap();
+        seed(&pool).await;
+        let before = run(&pool, None).await;
+        let filtered = run(&pool, Some("p1")).await;
+        pool.close().await;
+
+        // Nothing is cached: reopening reads the same persisted records.
+        let pool = database.open().await;
+        migrator(i64::MAX).await.run(&pool).await.unwrap();
+        assert_eq!(run(&pool, None).await, before);
+        assert_eq!(run(&pool, Some("p1")).await, filtered);
+        pool.close().await;
     });
 }

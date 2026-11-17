@@ -181,3 +181,51 @@ test("the range controls reload and the toggle hides the trends", async ({
   await toggle.click();
   await expect(trends).toHaveCount(0);
 });
+
+const calls = (page: Page, command: string) =>
+  page.evaluate(
+    (name) =>
+      (window as unknown as { __calls?: Record<string, number> }).__calls?.[
+        name
+      ] ?? 0,
+    command,
+  );
+
+test("a successful habit write refreshes open trends; a failed one does not", async ({
+  page,
+}) => {
+  await installIpcMock(page);
+  await page.clock.setFixedTime(new Date("2026-11-17T10:00:00+01:00"));
+  await page.addInitScript((data) => {
+    Object.assign(window, {
+      __seedHabits: {
+        today: "2026-11-17",
+        habits: [{ name: "Walk", startDate: "2026-11-01" }],
+      },
+      __habitStats: data,
+    });
+  }, stats);
+  await page.goto("/habits");
+  await page.getByRole("button", { name: "Show trends" }).click();
+  await expect(
+    page.getByRole("term").filter({ hasText: "Completion rate" }),
+  ).toBeVisible();
+  const loaded = await calls(page, "get_habit_statistics");
+
+  const cell = page.getByRole("button", {
+    name: "Walk, Monday, November 16, 2026",
+    exact: true,
+  });
+  await dispatch(page, "fail-once", "set_habit_completion");
+  await cell.click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Could not save" }),
+  ).toBeVisible();
+  // The write failed, so nothing changed and nothing was re-read.
+  expect(await calls(page, "get_habit_statistics")).toBe(loaded);
+
+  await page.getByRole("button", { name: "Retry" }).first().click();
+  await expect
+    .poll(() => calls(page, "get_habit_statistics"))
+    .toBeGreaterThan(loaded);
+});

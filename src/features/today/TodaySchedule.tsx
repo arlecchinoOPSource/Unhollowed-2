@@ -8,6 +8,7 @@ import {
   type CalendarItem,
   type LinkedRecord,
 } from "../../database/events";
+import { useDataVersion } from "../../database/dataChanges";
 import { listRoutineHabits, type RoutineHabit } from "../../database/habits";
 import { issueKey } from "../../database/issues";
 import { newDraft } from "../calendar/eventDraft";
@@ -49,6 +50,7 @@ export function TodaySchedule({ today }: { today: string }) {
   const [items, setItems] = useState<CalendarItem[] | null>(null);
   const [links, setLinks] = useState<Record<string, LinkedRecord[]>>({});
   const [routines, setRoutines] = useState<Record<string, RoutineHabit[]>>({});
+  const changes = useDataVersion("calendar", "habits", "issues");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   // Bumped when the window regains focus, so a resumed app reloads.
@@ -104,7 +106,7 @@ export function TodaySchedule({ today }: { today: string }) {
     return () => {
       current = false;
     };
-  }, [today, zone, request]);
+  }, [today, zone, request, changes]);
 
   const agenda = items && buildAgenda(items, today);
   const workDay = settings.workDays.includes(parseLocalDate(today).getDay());

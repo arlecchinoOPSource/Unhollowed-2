@@ -595,6 +595,10 @@ export async function installIpcMock(page: Page) {
               })),
             );
           }
+          const counts = ((
+            window as unknown as { __calls?: Record<string, number> }
+          ).__calls ??= {});
+          counts[command] = (counts[command] ?? 0) + 1;
           const hold = held.get(command);
           if (hold) {
             held.delete(command);

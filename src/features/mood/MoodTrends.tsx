@@ -7,6 +7,7 @@ import {
   type CheckinPeriod,
   type CheckinPoint,
 } from "../../database/checkins";
+import { useDataVersion } from "../../database/dataChanges";
 import { fullDate } from "../calendar/monthGrid";
 import { localDate } from "../today/dates";
 
@@ -176,6 +177,7 @@ export function MoodTrends({ reload }: { reload: number }) {
   const [data, setData] = useState<CheckinAnalytics | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const changes = useDataVersion("checkins", "habits");
 
   useEffect(() => {
     let live = true;
@@ -185,11 +187,15 @@ export function MoodTrends({ reload }: { reload: number }) {
         setData(result);
         setError("");
       })
-      .catch((cause) => live && setError(checkinError(cause)));
+      .catch((cause) => {
+        if (!live) return;
+        setData(null);
+        setError(checkinError(cause));
+      });
     return () => {
       live = false;
     };
-  }, [days, compare, today, reload, retry]);
+  }, [days, compare, today, reload, retry, changes]);
 
   return (
     <section aria-labelledby="mood-trends-title" className="mood-trends">

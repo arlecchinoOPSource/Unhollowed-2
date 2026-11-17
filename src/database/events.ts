@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./dataChanges";
 
 /** A stored event. Ranges are half-open: the end is exclusive. */
 export interface CalendarEvent {
