@@ -631,12 +631,25 @@ pub async fn update_occurrence(
     workspace: &str,
     id: &str,
     key: &str,
+    input: EventInput,
+) -> Result<(), SchedulingError> {
+    let mut tx = pool.begin().await?;
+    update_occurrence_on(&mut tx, workspace, id, key, input).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// `update_occurrence` inside the caller's transaction.
+pub(crate) async fn update_occurrence_on(
+    tx: &mut SqliteConnection,
+    workspace: &str,
+    id: &str,
+    key: &str,
     mut input: EventInput,
 ) -> Result<(), SchedulingError> {
     clean_text(&mut input)?;
     let timing = event_timing(&input)?;
-    let mut tx = pool.begin().await?;
-    let (event, _, occurrence) = occurrence_of(&mut tx, workspace, id, key).await?;
+    let (event, _, occurrence) = occurrence_of(&mut *tx, workspace, id, key).await?;
     if input.all_day != event.all_day {
         return Err(SchedulingError::OccurrenceKind);
     }
@@ -719,7 +732,6 @@ pub async fn update_occurrence(
     .bind(end_at)
     .execute(&mut *tx)
     .await?;
-    tx.commit().await?;
     Ok(())
 }
 
@@ -731,7 +743,19 @@ pub async fn cancel_occurrence(
     key: &str,
 ) -> Result<(), SchedulingError> {
     let mut tx = pool.begin().await?;
-    occurrence_of(&mut tx, workspace, id, key).await?;
+    cancel_occurrence_on(&mut tx, workspace, id, key).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// `cancel_occurrence` inside the caller's transaction.
+pub(crate) async fn cancel_occurrence_on(
+    tx: &mut SqliteConnection,
+    workspace: &str,
+    id: &str,
+    key: &str,
+) -> Result<(), SchedulingError> {
+    occurrence_of(&mut *tx, workspace, id, key).await?;
     sqlx::query(&format!(
         "INSERT INTO event_exceptions (event_id, occurrence, canceled) VALUES (?, ?, 1)
          ON CONFLICT (event_id, occurrence) DO UPDATE SET canceled = 1, updated_at = {NOW}"
@@ -740,7 +764,6 @@ pub async fn cancel_occurrence(
     .bind(key)
     .execute(&mut *tx)
     .await?;
-    tx.commit().await?;
     Ok(())
 }
 
