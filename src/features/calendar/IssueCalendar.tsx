@@ -1,3 +1,4 @@
+import { newDraft } from "./eventDraft";
 import { DatePicker, useCalendarPreferences, validDate } from "./preferences";
 import { listCalendarItems, type CalendarItem } from "../../database/events";
 import { schedulingError } from "../../database/calendars";
@@ -509,6 +510,13 @@ export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
                       <td
                         key={date}
                         className={classes.join(" ")}
+                        onClick={(event) => {
+                          if (event.target !== event.currentTarget) return;
+                          dayButtons.current.get(date)?.focus();
+                          editing.openNew(
+                            newDraft(date, zone, editing.defaultCalendar),
+                          );
+                        }}
                         onDragOver={(event) => {
                           if (!event.dataTransfer.types.includes(DRAG_TYPE))
                             return;

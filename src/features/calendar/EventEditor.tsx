@@ -77,10 +77,9 @@ export function EventEditor({
   const title = useRef<HTMLInputElement>(null);
   const confirmButton = useRef<HTMLButtonElement>(null);
   const [current, setCurrent] = useState(event);
-  const [draft, setDraft] = useState<Draft>(() =>
-    event
-      ? draftFromEvent(event, deviceZone(), occurrence?.span)
-      : initialDraft!,
+  const [draft, setDraft] = useState<Draft>(
+    () =>
+      initialDraft ?? draftFromEvent(event!, deviceZone(), occurrence?.span),
   );
   const [scope, setScope] = useState<Scope>("this");
   const [saving, setSaving] = useState(false);

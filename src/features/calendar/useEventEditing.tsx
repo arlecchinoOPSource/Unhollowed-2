@@ -10,7 +10,7 @@ import {
   type CalendarItem,
 } from "../../database/events";
 import { EventEditor, type EventChange } from "./EventEditor";
-import type { Draft, OccurrenceSpan } from "./eventDraft";
+import { draftFromEvent, type Draft, type OccurrenceSpan } from "./eventDraft";
 
 const messages: Record<EventChange, (title: string) => string> = {
   created: (title) => `Created event ${title}.`,
@@ -41,13 +41,14 @@ export function useEventEditing({
   defaultCalendar: string;
   error: string;
   openNew: (draft: Draft) => void;
-  openItem: (item: CalendarItem) => Promise<void>;
+  openItem: (item: CalendarItem, proposed?: OccurrenceSpan) => Promise<void>;
   editor: ReactNode;
 } {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [error, setError] = useState("");
   const [request, setRequest] = useState(0);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const latestOpen = useRef(0);
   const opener = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -66,26 +67,33 @@ export function useEventEditing({
   }, [request]);
 
   function open(next: Editing) {
+    latestOpen.current += 1;
     opener.current = document.activeElement as HTMLElement | null;
     setError("");
     setEditing(next);
   }
 
-  async function openItem(item: CalendarItem) {
+  async function openItem(item: CalendarItem, proposed?: OccurrenceSpan) {
     setError("");
+    const attempt = ++latestOpen.current;
     try {
       const event = await getEvent(item.eventId ?? item.id);
+      if (attempt !== latestOpen.current) return;
       // An occurrence opens with its own times, in the event's zone.
       const span = item.allDay
         ? { start: item.startDate!, end: item.endDate! }
         : { start: item.localStart!, end: item.localEnd! };
       open({
         event,
+        draft: proposed
+          ? draftFromEvent(event, event.timeZone ?? "UTC", proposed)
+          : undefined,
         occurrence: item.occurrence
           ? { key: item.occurrence, span }
           : undefined,
       });
     } catch (cause) {
+      if (attempt !== latestOpen.current) return;
       setError(schedulingError(cause));
       onChanged();
     }
