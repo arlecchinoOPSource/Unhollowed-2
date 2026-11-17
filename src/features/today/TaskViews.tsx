@@ -15,6 +15,7 @@ import { isTauri } from "../../database/status";
 import { PriorityBadge, RepeatMark } from "../issues/IssueBadges";
 import { useIssueReferences } from "../issues/useIssueReferences";
 import { addDays, dayLabel } from "./dates";
+import { TodaySchedule } from "./TodaySchedule";
 import { useLocalToday } from "./useLocalToday";
 import "../issues/issues.css";
 import "./today.css";
@@ -355,6 +356,7 @@ function TaskViews({ mode }: { mode: Mode }) {
         <NavLink to={`/today/upcoming${search}`}>Upcoming</NavLink>
       </nav>
       {!desktop && <p>Open the desktop app to see your tasks.</p>}
+      {desktop && mode === "today" && <TodaySchedule today={today} />}
       {error && <p role="alert">{error}</p>}
       <p role="status" className="issue-message">
         {message}

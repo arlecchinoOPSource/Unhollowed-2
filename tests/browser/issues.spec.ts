@@ -1941,3 +1941,58 @@ test("schedules, moves, and deletes work sessions apart from the deadline", asyn
     .click();
   await expect(sessions.getByRole("listitem")).toHaveCount(1);
 });
+
+test.describe("Today schedule", () => {
+  test.use({ timezoneId: "UTC", locale: "en-US" });
+
+  test("Today shows events, free time, and deadlines ahead above the tasks", async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00Z"));
+    await page.addInitScript(() =>
+      Object.assign(window, {
+        __seedIssues: [
+          { title: "Late report", dueDate: "2026-11-10" },
+          { title: "Send invoice", dueDate: "2026-11-18" },
+        ],
+        __seedEvents: [
+          {
+            title: "Standup",
+            startLocal: "2026-11-16T13:00",
+            endLocal: "2026-11-16T14:00",
+          },
+          {
+            title: "Offsite",
+            allDay: true,
+            startDate: "2026-11-16",
+            endDate: "2026-11-17",
+          },
+        ],
+      }),
+    );
+    await page.goto("/today");
+    const schedule = page.getByRole("region", { name: "Schedule" });
+    await expect(
+      schedule.getByRole("button", { name: "Standup" }),
+    ).toBeVisible();
+    await expect(schedule.getByText("Offsite")).toBeVisible();
+    await expect(schedule.getByText(/Free in working hours/)).toBeVisible();
+    // The later deadline is under Coming up, and the overdue one in the tasks.
+    await expect(
+      schedule
+        .getByRole("list", { name: "Upcoming deadlines" })
+        .getByText("Send invoice"),
+    ).toBeVisible();
+    await expect(schedule.getByText("Late report")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Late report" })).toBeVisible();
+
+    // Quick create opens the shared editor and the new event joins the day.
+    await schedule.getByRole("button", { name: "New event" }).click();
+    const editor = page.getByRole("dialog", { name: "New event" });
+    await editor.getByLabel("Title").fill("Review");
+    await editor.getByLabel("Title").press("Enter");
+    await expect(
+      schedule.getByRole("button", { name: "Review" }),
+    ).toBeVisible();
+  });
+});

@@ -73,3 +73,58 @@
 .task-undated {
   margin-top: 18px;
 }
+
+.today-schedule {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.today-schedule h2,
+.today-schedule h3,
+.today-schedule p {
+  margin: 0;
+}
+
+.today-schedule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.agenda-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-time {
+  display: inline-block;
+  min-width: 7.5em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-list button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agenda-projects {
+  display: inline-flex;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.agenda-list [data-closed="true"] a {
+  color: var(--muted);
+  text-decoration: line-through;
+}
