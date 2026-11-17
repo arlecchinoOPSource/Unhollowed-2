@@ -141,6 +141,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0022_event_recurrence.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 23,
+            description: "Link calendar events to documents and projects",
+            sql: include_str!("../migrations/0023_event_links.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

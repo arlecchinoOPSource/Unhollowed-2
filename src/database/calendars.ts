@@ -82,6 +82,10 @@ export function schedulingError(cause: unknown): string {
       return "That calendar is no longer available.";
     case "not_found":
       return "That event is no longer available.";
+    case "document_not_found":
+      return "That document is no longer available.";
+    case "project_not_found":
+      return "That project is no longer available.";
     case "invalid_title":
       return "Enter a title of up to 200 characters.";
     case "invalid_location":

@@ -19,6 +19,7 @@ import {
   type RepeatFreq,
 } from "../../database/events";
 import { swatchStyle } from "../labels/LabelParts";
+import { EventLinks } from "./EventLinks";
 import {
   draftFromEvent,
   seriesInput,
@@ -459,6 +460,13 @@ export function EventEditor({
             />
           </label>
         </details>
+
+        {current && (
+          <details className="event-details">
+            <summary>Documents and projects</summary>
+            <EventLinks eventId={current.id} />
+          </details>
+        )}
 
         {error && <p role="alert">{error}</p>}
         <p role="status" className="event-notice">
