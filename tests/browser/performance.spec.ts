@@ -198,3 +198,94 @@ for (const count of [500, 2000]) {
     );
   });
 }
+
+/** 30 habits (five archived) with checks on about seven days in ten over
+ * five years: the month grid draws 30 columns by 30 rows. */
+function habitFixture() {
+  const habits = Array.from({ length: 30 }, (_, index) => ({
+    name: `Habit ${index + 1}`,
+    startDate: "2021-11-16",
+    archivedOn: index % 6 === 5 ? "2026-10-31" : null,
+  }));
+  const completions: [string, string][] = [];
+  const start = Date.UTC(2021, 10, 16);
+  for (let day = 0; day <= 1826; day += 1) {
+    const date = new Date(start + day * 86_400_000).toISOString().slice(0, 10);
+    if (date > "2026-11-16") break;
+    habits.forEach((habit, index) => {
+      if (habit.archivedOn && date > habit.archivedOn) return;
+      if ((day * 7 + index * 3) % 10 < 7)
+        completions.push([`habit-${index + 1}`, date]);
+    });
+  }
+  return { today: "2026-11-16", habits, completions };
+}
+
+test("renders habit tracking with 30 habits and five years of history", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await installIpcMock(page);
+  const fixture = habitFixture();
+  await page.addInitScript((data) => {
+    Object.assign(window, { __seedHabits: data });
+    const long = window as unknown as { __long: number };
+    long.__long = 0;
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) long.__long += entry.duration;
+    }).observe({ type: "longtask", buffered: true });
+  }, fixture);
+  await page.clock.setFixedTime(new Date("2026-11-16T10:00:00Z"));
+  const rows: string[] = [];
+  const measure = async (
+    name: string,
+    run: () => Promise<[number, number]>,
+  ) => {
+    const samples: [number, number][] = [];
+    for (let i = 0; i < 3; i += 1) samples.push(await run());
+    samples.sort((a, b) => a[0] - b[0]);
+    rows.push(
+      `| ${name} | ${samples[1][0]} ms | ${Math.round(samples[1][1])} ms |`,
+    );
+  };
+  const cell = page.getByRole("button", {
+    name: /^Habit 1, Monday, November 16, 2026/,
+  });
+
+  await measure("Month grid, 25 active habits by 30 rows", async () => {
+    await page.goto("/");
+    await expect(page.locator("h1").first()).toBeVisible();
+    return time(page, () => page.goto("/habits"), cell);
+  });
+  await measure("Previous month in the grid", async () => {
+    await page.goto("/habits");
+    await expect(cell).toBeVisible();
+    return time(
+      page,
+      () => page.getByRole("button", { name: /^Previous month/ }).click(),
+      page.getByRole("heading", { name: "October 2026" }),
+    );
+  });
+  await measure("History: open the year heatmap (366 days)", async () => {
+    await page.goto("/habits");
+    await expect(cell).toBeVisible();
+    await page.getByRole("button", { name: "Show history" }).click();
+    return time(
+      page,
+      () => page.getByRole("button", { name: "Year" }).click(),
+      page.locator('[data-date="2026-02-28"]'),
+    );
+  });
+  await measure("Trends: open the panel (reads 366 days)", async () => {
+    await page.goto("/habits");
+    await expect(cell).toBeVisible();
+    return time(
+      page,
+      () => page.getByRole("button", { name: "Show trends" }).click(),
+      page.getByRole("heading", { name: "Habit trends" }),
+    );
+  });
+  console.log(
+    `\n30 habits, ${fixture.completions.length} completions\n| Step | Time to content | Long tasks |\n|---|---:|---:|\n${rows.join("\n")}`,
+  );
+});

@@ -513,3 +513,158 @@ fn measure_calendar_sizes() {
         }
     });
 }
+
+/// Habits for `years` of history: 30 habits, five archived, each checked on
+/// roughly seven days in ten, plus a check-in every other day. Everything is
+/// inserted with set-based SQL so the fixture builds quickly.
+async fn habit_fixture(pool: &SqlitePool, habits: usize, years: i64) {
+    let days = years * 365;
+    for index in 0..habits {
+        let archived = index % 6 == 5;
+        sqlx::query(
+            "INSERT INTO habits (id, workspace_id, name, name_key, position, start_date, archived_on)
+             VALUES (?1, ?2, ?3, lower(?3), ?4, date(?5, ?6), CASE WHEN ?7 THEN date(?5, '-30 days') END)",
+        )
+        .bind(format!("habit-{index}"))
+        .bind(DEFAULT_WORKSPACE)
+        .bind(format!("Habit {index}"))
+        .bind(index as i64)
+        .bind(TODAY)
+        .bind(format!("-{days} days"))
+        .bind(archived)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query(
+        "WITH RECURSIVE d(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM d WHERE n < ?1)
+         INSERT INTO habit_completions (habit_id, workspace_id, date)
+         SELECT h.id, h.workspace_id, date(h.start_date, '+' || d.n || ' days')
+         FROM habits AS h JOIN d
+         WHERE date(h.start_date, '+' || d.n || ' days') <= coalesce(h.archived_on, ?2)
+           AND ((d.n * 7 + h.position * 3) % 10) < 7",
+    )
+    .bind(days)
+    .bind(TODAY)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "WITH RECURSIVE d(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM d WHERE n < ?1)
+         INSERT INTO daily_checkins (id, workspace_id, date, mood, energy, focus)
+         SELECT 'checkin-' || n, ?2, date(?3, '-' || n || ' days'),
+                1 + n % 5, CASE WHEN n % 3 = 0 THEN NULL ELSE 1 + (n + 1) % 5 END, 1 + (n + 2) % 5
+         FROM d WHERE n % 2 = 0",
+    )
+    .bind(days)
+    .bind(DEFAULT_WORKSPACE)
+    .bind(TODAY)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn measure_habits(habits: usize, years: i64) -> (Vec<(&'static str, Duration)>, (i64, i64)) {
+    let database = TempDatabase::new(&format!("perf-habits-{habits}-{years}"));
+    let pool = database.open().await;
+    migrator(i64::MAX).await.run(&pool).await.unwrap();
+    habit_fixture(&pool, habits, years).await;
+    let completions: i64 = sqlx::query_scalar("SELECT count(*) FROM habit_completions")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let checkins: i64 = sqlx::query_scalar("SELECT count(*) FROM daily_checkins")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let ws = DEFAULT_WORKSPACE;
+    let (from_30, from_366) = ("2026-10-18", "2025-11-17");
+    let mut rows = Vec::new();
+    macro_rules! time {
+        ($name:expr, $runs:expr, $call:expr) => {{
+            $call.await.unwrap();
+            let start = Instant::now();
+            for _ in 0..$runs {
+                $call.await.unwrap();
+            }
+            rows.push(($name, start.elapsed() / $runs));
+        }};
+    }
+    time!("Habits: list", 20, crate::habits::list(&pool, ws));
+    time!(
+        "Grid: one month",
+        20,
+        crate::habits::month(&pool, ws, 2026, 11, TODAY)
+    );
+    time!(
+        "History: one habit, all days",
+        20,
+        crate::habits::history(&pool, ws, "habit-0")
+    );
+    time!(
+        "Statistics: 30 days",
+        10,
+        crate::habits::stats::statistics(&pool, ws, from_30, TODAY, None, TODAY)
+    );
+    time!(
+        "Statistics: 366 days",
+        10,
+        crate::habits::stats::statistics(&pool, ws, from_366, TODAY, None, TODAY)
+    );
+    time!(
+        "Check-in trends: 366 days",
+        10,
+        crate::checkins::analytics::analytics(&pool, ws, from_366, TODAY, true, TODAY)
+    );
+    time!(
+        "Dashboard analytics: 30 days",
+        10,
+        crate::analytics::workspace_analytics(&pool, ws, from_30, TODAY, None, "UTC", TODAY)
+    );
+    time!(
+        "Dashboard analytics: 366 days",
+        10,
+        crate::analytics::workspace_analytics(&pool, ws, from_366, TODAY, None, "UTC", TODAY)
+    );
+    time!(
+        "Backup: export all history",
+        5,
+        crate::habits::backup::backup_json(&pool, ws)
+    );
+    let (backup, ..) = crate::habits::backup::backup_json(&pool, ws).await.unwrap();
+    let folder = std::env::temp_dir().join(format!("perf-habit-copies-{habits}-{years}"));
+    let start = Instant::now();
+    let preview = crate::habits::backup::restore(&pool, ws, &backup, None, &folder)
+        .await
+        .unwrap();
+    rows.push(("Restore: preview", start.elapsed()));
+    let start = Instant::now();
+    crate::habits::backup::restore(&pool, ws, &backup, Some(&preview.token), &folder)
+        .await
+        .unwrap();
+    rows.push(("Restore: replace all history", start.elapsed()));
+    let _ = std::fs::remove_dir_all(&folder);
+    pool.close().await;
+    (rows, (completions, checkins))
+}
+
+#[test]
+#[ignore]
+fn measure_habit_sizes() {
+    tauri::async_runtime::block_on(async {
+        let (small, small_size) = measure_habits(10, 1).await;
+        let (large, large_size) = measure_habits(30, 5).await;
+        println!(
+            "\nSmall: 10 habits, 1 year, {} completions, {} check-ins. Large: 30 habits, 5 years, {} completions, {} check-ins.",
+            small_size.0, small_size.1, large_size.0, large_size.1
+        );
+        println!("\n| Operation | Small | Large |\n|---|---:|---:|");
+        for ((name, a), (_, b)) in small.iter().zip(&large) {
+            println!(
+                "| {name} | {:.2} ms | {:.2} ms |",
+                a.as_secs_f64() * 1000.0,
+                b.as_secs_f64() * 1000.0
+            );
+        }
+    });
+}

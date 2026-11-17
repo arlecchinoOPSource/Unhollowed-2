@@ -353,7 +353,7 @@ export function HabitManager({
                       <button
                         type="button"
                         data-move="-1"
-                        aria-label={`Move ${habit.name} up`}
+                        aria-label={`Move up, ${habit.name}`}
                         disabled={busy || position === 0}
                         onClick={() => move(habit, -1)}
                       >
@@ -362,7 +362,7 @@ export function HabitManager({
                       <button
                         type="button"
                         data-move="1"
-                        aria-label={`Move ${habit.name} down`}
+                        aria-label={`Move down, ${habit.name}`}
                         disabled={busy || position === active.length - 1}
                         onClick={() => move(habit, 1)}
                       >

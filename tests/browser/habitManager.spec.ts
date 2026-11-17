@@ -81,9 +81,9 @@ test("reorders habits by keyboard and keeps focus on a move control", async ({
   page,
 }) => {
   const dialog = await open(page);
-  const down = dialog.getByRole("button", { name: "Move Walk down" });
+  const down = dialog.getByRole("button", { name: "Move down, Walk" });
   await expect(
-    dialog.getByRole("button", { name: "Move Walk up" }),
+    dialog.getByRole("button", { name: "Move up, Walk" }),
   ).toBeDisabled();
   await down.focus();
   await page.keyboard.press("Enter");
@@ -91,7 +91,7 @@ test("reorders habits by keyboard and keeps focus on a move control", async ({
   expect(await names(page)).toEqual(["Later", "Read", "Walk"]);
   // Walk is now last, so focus moves to its remaining move control.
   await expect(
-    dialog.getByRole("button", { name: "Move Walk up" }),
+    dialog.getByRole("button", { name: "Move up, Walk" }),
   ).toBeFocused();
   await expect(
     dialog.getByRole("list", { name: "Active habits" }).getByRole("listitem"),

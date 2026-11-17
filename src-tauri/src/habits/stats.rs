@@ -183,6 +183,30 @@ fn buckets(
     out
 }
 
+/// A stored `YYYY-MM-DD` date. The database already refuses anything else, so
+/// this reads the digits directly instead of running a general parser over
+/// every completion in the workspace.
+fn stored_date(text: &str) -> Option<Date> {
+    let b = text.as_bytes();
+    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return None;
+    }
+    let digits = |range: std::ops::Range<usize>| {
+        b[range].iter().try_fold(0i16, |n, c| {
+            c.is_ascii_digit().then(|| n * 10 + i16::from(c - b'0'))
+        })
+    };
+    Date::new(digits(0..4)?, digits(5..7)? as i8, digits(8..10)? as i8).ok()
+}
+
+/// The week and month boundaries `compute` would produce for `from..=to`,
+/// with empty counts. Other readers use them to line up with habit statistics
+/// without reading any habit data.
+pub fn boundaries(from: Date, to: Date, today: Date) -> (Vec<Bucket>, Vec<Bucket>) {
+    let stats = compute(&[], None, from, to, today);
+    (stats.weeks, stats.months)
+}
+
 /// All statistics for `from..=to`. `selected` limits habits (`None` is all of
 /// them); the practice streak always covers every habit.
 pub fn compute(
@@ -268,7 +292,7 @@ pub async fn statistics(
             .await
             .map_err(storage_failed)?;
     for (id, date) in rows {
-        if let Ok(date) = valid_date(&date) {
+        if let Some(date) = stored_date(&date) {
             done.entry(id).or_default().insert(date);
         }
     }

@@ -129,8 +129,76 @@ Chromium (Playwright), Apple M5:
 
 At 500 events every view meets the 200 ms target, though Agenda has one 74 ms task. At 2,000 events Month and Agenda miss both the time target and the 50 ms task limit. That is a month holding about 70 events a day, far denser than personal use, and a day view of that many events draws columns too narrow to read. The calendar loads at most 2,000 items per window and says so when it truncates. Rendering only the visible days of Month and Agenda is the likely fix if it is needed.
 
+## Habits, check-ins, and the dashboard
+
+U2-P4-21 measured these on synthetic data and checked accessibility with data loaded. Separate evidence is kept for the native database, the browser UI, and automated checks.
+
+### Backend
+
+`perf_tests::measure_habit_sizes` builds disposable file databases. _Small_ is 10 habits and 1 year (2,541 completions, 183 check-ins). _Large_ is 30 habits, five of them archived, and 5 years: 38,241 completions checked on about seven days in ten, and 913 check-ins. Queries are the mean of 10 to 20 runs after a warm-up; restore runs once.
+
+```sh
+cargo test --release --manifest-path src-tauri/Cargo.toml measure_habit_sizes -- --ignored --nocapture
+```
+
+Release build, Apple M5, macOS 26.5.1, after the fix below:
+
+| Operation                     |    Small |     Large |
+| ----------------------------- | -------: | --------: |
+| Habits: list                  |  0.08 ms |   0.13 ms |
+| Grid: one month               |  0.24 ms |   0.47 ms |
+| History: one habit, all days  |  0.47 ms |   2.49 ms |
+| Statistics: 30 days           |  3.49 ms |  59.55 ms |
+| Statistics: 366 days          |  3.47 ms |  64.26 ms |
+| Check-in trends: 366 days     |  4.17 ms |  71.68 ms |
+| Dashboard analytics: 30 days  |  3.61 ms |  69.77 ms |
+| Dashboard analytics: 366 days |  4.60 ms |  67.66 ms |
+| Backup: export all history    |  3.49 ms |  67.67 ms |
+| Restore: preview              |  3.85 ms |  75.30 ms |
+| Restore: replace all history  | 14.80 ms | 219.95 ms |
+
+The daily-use queries (list, grid, one habit's history) are far inside one frame at both sizes. **Fixed:** the dashboard analytics took 140 ms at the large size because the check-in analytics asked the habit engine for statistics just to get week and month boundaries; they now compute the boundaries alone unless the habit comparison is requested (70 ms). **Not fixed:** statistics still read every completion in the workspace, because streaks need the whole history, and take about 60 ms at 38,000 completions regardless of the period. Faster date parsing was tried and changed nothing, so the cost is reading and grouping the rows. That is over one frame but well under a perceptible delay, and it runs once when a panel opens. If it matters, the candidates are computing streaks in SQL or caching per-habit streaks keyed by the habit's revision.
+
+### Rendering
+
+`tests/browser/performance.spec.ts` seeds the in-memory IPC mock with the large fixture (30 habits, 38,311 completions) and times navigation to first content, the median of three runs, with the main-thread long tasks over 50 ms.
+
+```sh
+PERF=1 npx playwright test performance -g "habit tracking" --reporter=line
+```
+
+Chromium (Playwright), Apple M5:
+
+| Step                                      | Time to content | Long tasks |
+| ----------------------------------------- | --------------: | ---------: |
+| Month grid, 25 active habits by 30 rows   |          320 ms |     116 ms |
+| Previous month in the grid                |          135 ms |      74 ms |
+| History: open the year heatmap (366 days) |           56 ms |       none |
+| Trends: open the panel (reads 366 days)   |           78 ms |       none |
+
+The mock filters all 38,000 records on every read, so the grid rows include that cost and overstate the UI. The full grid draws about 750 checkbox buttons and keeps the ARIA grid semantics, with one Tab stop. The first load misses the 200 ms target and has a task over 50 ms. No change was made without evidence that the UI, not the mock, is the cause; that is the first thing to establish with a native profile.
+
+### Accessibility
+
+`tests/browser/trackingAccessibility.spec.ts` runs axe-core (WCAG 2.0 to 2.2 A and AA) with data loaded in light and dark mode, with reduced motion requested, on:
+
+- **Habits:** the grid, the trends panel with its tables open, the history month and year views, Manage habits with routines and history open, the deletion review, the Ember import preview, and Backup and restore.
+- **Check-ins:** the form, an edited record, and the trends with the habit comparison on.
+- **Dashboard:** every section with its details open, the Sections list, an invalid custom period, and a project filter.
+- **Focus and motion:** it tabs through `/habits` (with trends and history open), `/mood`, and `/dashboards` and fails on a stop without a visible indicator, and fails if any element in the page animates or transitions under reduced motion.
+- **Reflow:** it fails if these pages scroll sideways at 620 px, the minimum window width, with the year heatmap open.
+
+Color is never the only signal: the grid, history, and charts also use symbols, borders, text, and data tables, and `habitDashboard`, `habitHistory`, and `moodTrends` specs assert them.
+
+| Defect found                                                                    | Where                    | Fix                                                        |
+| ------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------- |
+| Move buttons' names ("Move Walk up") did not contain their visible text         | Manage habits            | Names now start with the visible text: "Move up, Walk"     |
+| Delete button's fallback red failed contrast in dark mode                       | Habit deletion review    | The danger style uses the text color with a heavier border |
+| A details panel nested inside another details panel failed the target-size rule | Dashboard Habits section | The data table is one details panel, not two               |
+
 ## Gaps
 
 - **Relationship picker at large sizes.** Adding a relationship loads every issue and renders one `<select>` option per issue: 42 ms backend and 80 ms rendering at 2,000 to 5,000 issues, and slow to scan by keyboard. It meets the target at the representative size. A searchable picker backed by `query_issues` would remove the full load. This is tracked in #52 rather than built speculatively here.
 - **Native WebKit.** The rendering and accessibility checks run in Chromium. The macOS app uses WebKit, so check focus rings, date fields, and contrast in the native smoke test.
-- **Screen readers.** Automated checks do not replace a pass with VoiceOver, which has not been run.
+- **Screen readers.** Automated checks do not replace a pass with VoiceOver or a Windows screen reader. Neither has been run for the habit, check-in, or dashboard screens.
+- **Habit statistics at 38,000 completions.** About 60 ms per read, and the grid's first load, are recorded above and not optimized.
