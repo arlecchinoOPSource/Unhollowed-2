@@ -6,6 +6,7 @@ import { useLocalToday } from "../today/useLocalToday";
 import { CalendarSearch } from "./CalendarSearch";
 import { IssueCalendar } from "./IssueCalendar";
 import { OverdueIssues } from "./OverdueIssues";
+import { ReminderSettings } from "./ReminderSettings";
 import { TimelineView } from "./TimelineView";
 import { readView } from "./ViewSwitch";
 import { monthOf } from "./monthGrid";
@@ -116,6 +117,7 @@ export function CalendarPage() {
         />
       )}
       <PreferenceControls current={settings} save={save} error={error} />
+      {isTauri() && <ReminderSettings />}
     </CalendarPreferences.Provider>
   );
 }

@@ -5,6 +5,7 @@ import { pages } from "../../app/pages";
 import { GlobalSearch } from "../search/GlobalSearch";
 import { isTauri } from "../../database/status";
 import { isIssueShortcut } from "../../features/issues/issueKeyboard";
+import { ReminderRunner } from "../../features/calendar/ReminderRunner";
 import { SidebarViews } from "../../features/views/SidebarViews";
 import { useTheme } from "../../stores/theme";
 
@@ -79,6 +80,7 @@ export function Workspace() {
           </div>
         </header>
         <main id="main" tabIndex={-1}>
+          <ReminderRunner />
           <Outlet />
         </main>
       </div>

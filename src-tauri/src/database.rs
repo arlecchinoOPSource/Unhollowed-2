@@ -147,6 +147,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0023_event_links.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 24,
+            description: "Add local event reminders and their deliveries",
+            sql: include_str!("../migrations/0024_event_reminders.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

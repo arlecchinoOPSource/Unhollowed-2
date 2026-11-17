@@ -28,6 +28,7 @@ fn main() {
         // Used only from Rust to ask where to save exports. The webview has no
         // dialog permissions.
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             database::database_status,
             relationships::list_issue_relationships,
@@ -53,6 +54,12 @@ fn main() {
             scheduling::create_calendar_event,
             scheduling::get_calendar_event,
             scheduling::create_issue_work_block,
+            scheduling::reminders::get_reminders_enabled,
+            scheduling::reminders::set_reminders_enabled,
+            scheduling::reminders::get_event_reminder,
+            scheduling::reminders::set_event_reminder,
+            scheduling::reminders::claim_due_reminders,
+            scheduling::reminders::send_test_notification,
             scheduling::links::get_event_links,
             scheduling::links::link_event_document,
             scheduling::links::unlink_event_document,
