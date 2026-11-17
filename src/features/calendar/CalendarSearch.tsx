@@ -128,6 +128,7 @@ export function CalendarSearch({
     return (
       <div className="calendar-search-bar">
         <button
+          data-calendar-search-toggle
           type="button"
           className="calendar-search-toggle"
           aria-expanded={false}
@@ -194,6 +195,7 @@ export function CalendarSearch({
         <Search aria-hidden="true" size={16} />
         <input
           ref={input}
+          data-calendar-search
           type="search"
           role="combobox"
           aria-label="Search titles and descriptions"

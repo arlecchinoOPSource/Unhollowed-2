@@ -10,6 +10,8 @@ const ROUTES = [
   "/today/upcoming",
   "/calendar",
   "/calendar?view=day",
+  "/calendar?view=week",
+  "/calendar?view=agenda",
   "/calendar?view=workweek",
   "/calendar?view=month",
   "/calendar/calendars",
@@ -174,6 +176,22 @@ for (const scheme of ["light", "dark"] as const) {
   }) => {
     test.setTimeout(60_000);
     await page.emulateMedia({ colorScheme: scheme });
+    await page.addInitScript(() =>
+      Object.assign(window, {
+        __seedEvents: [
+          {
+            title: "Planning",
+            startLocal: "2026-11-18T09:00",
+            endLocal: "2026-11-18T10:00",
+          },
+          {
+            title: "Design review",
+            startLocal: "2026-11-18T09:30",
+            endLocal: "2026-11-18T10:30",
+          },
+        ],
+      }),
+    );
     const found: string[] = [];
 
     // Workspace search with grouped results and an active option.
@@ -222,6 +240,26 @@ for (const scheme of ["light", "dark"] as const) {
     await editor.getByLabel("Ends").selectOption("until");
     await scan(page, "event editor", found);
     await page.keyboard.press("Escape");
+
+    // The timeline with overlaps, a deadline, and every panel open, then a
+    // saved event's editor with its reminder and links open.
+    await page.goto("/calendar?view=day&date=2026-11-18");
+    await expect(
+      page.getByRole("button", { name: /^09:00–10:00\s*Planning/ }),
+    ).toBeVisible();
+    for (const summary of await page.locator("summary").all())
+      await summary.click();
+    await scan(page, "calendar panels", found);
+    await page.getByRole("button", { name: /^09:00–10:00\s*Planning/ }).click();
+    const saved = page.getByRole("dialog", { name: "Edit event" });
+    await saved.getByText("Reminder", { exact: true }).click();
+    await saved.getByText("Documents and projects").click();
+    await expect(saved.getByLabel("Link a document")).toBeVisible();
+    await scan(page, "saved event editor", found);
+    await page.keyboard.press("Escape");
+    await page.goto("/today");
+    await expect(page.getByRole("region", { name: "Schedule" })).toBeVisible();
+    await scan(page, "today schedule", found);
 
     expect(found, found.join("\n")).toEqual([]);
   });

@@ -284,6 +284,27 @@ A timed event can have one reminder, set under **Reminder** in the editor for a 
 - The UID of an imported event is kept in `events.ics_uid` (migration 0025), unique per workspace.
 - Not included: Google or Microsoft sync, invitations, subscriptions to calendar URLs, and updating events from a newer file.
 
+### Keyboard and accessibility
+
+The calendar works without a pointer. **Keyboard shortcuts** at the foot of the calendar page lists them, and `src/features/calendar/calendarKeyboard.ts` defines them.
+
+| Keys (Alt/Option + Shift +) | Action                                         |
+| --------------------------- | ---------------------------------------------- |
+| `T`                         | Go to today, keeping the view                  |
+| `,` and `.`                 | Previous and next day, week, or month, by view |
+| `1` to `5`                  | Day, Week, Workweek, Month, Agenda             |
+| `G`                         | Focus **Go to date**                           |
+| `S`                         | Open and focus calendar search                 |
+| `E`                         | New event                                      |
+
+- **No collisions.** Calendar shortcuts use the same Alt/Option + Shift chord as Issues (which owns `N` and `F`), so they never clash with typing, the system, or the browser. The rule is shared (`shortcutAllowed`): shortcuts do nothing while a field, select, or text box has focus, behind a modal dialog, with another modifier, or when held down. They change the URL as the on-screen controls do, and a polite status announces a changed view or **Today**.
+- **Moving between events.** In Day, Week, and Workweek, Up and Down move between the items of a day, Home and End jump to the first and last, and Left and Right go to the nearest neighboring day with items. Month keeps its arrow, Home, End, and Page Up and Down day navigation.
+- **Moving an event by keyboard.** With an event focused, Alt/Option + an arrow proposes moving it one grid step (Up, Down) or one day (Left, Right), and Alt/Option + Shift + Up or Down proposes a different end. A proposal opens the editor with the new times, like a drag does, so nothing changes until it is saved. A proposal that cannot be scheduled says so.
+- **Open and dismiss.** Enter opens the focused event. The editor is a modal dialog: focus stays inside it, Escape closes it, and focus returns to what opened it. A stale close can no longer end a newer dialog.
+- **Not by color alone.** Each item type has a mark besides its color: deadlines have a flag and a dashed edge, work blocks a timer, repeating events a repeat symbol, overlapping items a dashed outline, and every item's name states its type. Closed items are struck through and say so.
+- **Motion** follows the system's reduced-motion setting, and focus uses the shared focus ring.
+- **Checks.** The browser tests run axe (WCAG 2.2 AA) in light and dark mode on every calendar view and on the timeline with its panels open, a saved event's editor, and the Today schedule, and check that every control shows focus. Screen reader behavior (VoiceOver on macOS, Narrator or NVDA on Windows) is not covered by automated tests and needs a manual pass.
+
 ### Calendar libraries
 
 The bundled FullCalendar packages were evaluated and not used. FullCalendar injects its styles at run time, which the production CSP (`style-src 'self'`) blocks, and its time grid does not match the keyboard and focus behavior above. The month grid and the timeline are built on the shared theme tokens instead, with offline layout code that has unit tests.

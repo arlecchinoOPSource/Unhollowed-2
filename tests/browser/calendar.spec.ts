@@ -946,3 +946,130 @@ test("explains a refused .ics file and a canceled export", async ({ page }) => {
   await transfer.getByRole("button", { name: "Export calendar…" }).click();
   await expect(transfer.getByRole("status")).toHaveText("Export canceled.");
 });
+
+test.describe("calendar keyboard", () => {
+  const alt = (key: string) => `Alt+Shift+${key}`;
+
+  test("shortcuts change view and date, announce, and respect fields and dialogs", async ({
+    page,
+  }) => {
+    await page.goto("/calendar?view=week&date=2026-11-18");
+    await expect(
+      page.getByRole("heading", { name: /November 16/ }),
+    ).toBeVisible();
+    await page.keyboard.press(alt("Digit4"));
+    await expect(page).toHaveURL(/view=month/);
+    await expect(
+      page.getByRole("status").filter({ hasText: "Month view." }),
+    ).toBeAttached();
+    await page.keyboard.press(alt("Digit1"));
+    await expect(page).toHaveURL(/view=day/);
+    await expect(page).toHaveURL(/date=2026-11-18/);
+    await page.keyboard.press(alt("Period"));
+    await expect(page).toHaveURL(/date=2026-11-19/);
+    await page.keyboard.press(alt("Comma"));
+    await page.keyboard.press(alt("Comma"));
+    await expect(page).toHaveURL(/date=2026-11-17/);
+    await page.keyboard.press(alt("KeyT"));
+    await expect(page).toHaveURL(/date=2026-11-16/);
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "Showing today in Day view." }),
+    ).toBeAttached();
+
+    // S opens the search, and typing in a field never triggers a shortcut.
+    await page.keyboard.press(alt("KeyS"));
+    await expect(
+      page.getByRole("combobox", { name: /Search titles/ }),
+    ).toBeFocused();
+    await page.keyboard.press(alt("Digit5"));
+    await expect(page).toHaveURL(/view=day/);
+    // Out of the field, G focuses the date field, where shortcuts are off.
+    await page.locator("body").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press(alt("KeyG"));
+    await expect(page.getByLabel("Go to date")).toBeFocused();
+    await page.keyboard.press(alt("Period"));
+    await page.waitForTimeout(200);
+    await expect(page).toHaveURL(/date=2026-11-16$/);
+
+    // E opens the editor, shortcuts stay off behind it, and focus returns.
+    await page.locator("body").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press(alt("KeyE"));
+    const editor = page.getByRole("dialog", { name: "New event" });
+    await expect(editor).toBeVisible();
+    await expect(editor.getByLabel("Title")).toBeFocused();
+    await page.keyboard.press(alt("Digit5"));
+    await expect(page).toHaveURL(/view=day/);
+    await page.keyboard.press("Escape");
+    await expect(editor).toBeHidden();
+    await expect(page.getByRole("button", { name: "New event" })).toBeFocused();
+  });
+
+  test("moves through events, proposes a move or end, and restores focus", async ({
+    page,
+  }) => {
+    await page.addInitScript(() =>
+      Object.assign(window, {
+        __seedEvents: [
+          {
+            title: "Standup",
+            startLocal: "2026-11-18T09:00",
+            endLocal: "2026-11-18T09:30",
+          },
+          {
+            title: "Review",
+            startLocal: "2026-11-18T13:00",
+            endLocal: "2026-11-18T14:00",
+          },
+          {
+            title: "Retro",
+            startLocal: "2026-11-19T10:00",
+            endLocal: "2026-11-19T11:00",
+          },
+        ],
+      }),
+    );
+    await page.goto("/calendar?view=week&date=2026-11-18");
+    const standup = page.getByRole("button", {
+      name: /^09:00–09:30\s*Standup/,
+    });
+    const review = page.getByRole("button", { name: /^13:00–14:00\s*Review/ });
+    const retro = page.getByRole("button", { name: /^10:00–11:00\s*Retro/ });
+    await standup.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(review).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(standup).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(retro).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(standup).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(review).toBeFocused();
+
+    // Alt+Down proposes 30 minutes later. The editor opens to review it.
+    await standup.focus();
+    await page.keyboard.press("Alt+ArrowDown");
+    const editor = page.getByRole("dialog", { name: "Edit event" });
+    await expect(editor.getByLabel("Start time")).toHaveValue("09:30");
+    await expect(editor.getByLabel("End time")).toHaveValue("10:00");
+    await page.keyboard.press("Escape");
+    await expect(editor).toBeHidden();
+    await expect(standup).toBeFocused();
+
+    // Alt+Right proposes the next day, and Alt+Shift+Down a later end.
+    await page.keyboard.press("Alt+ArrowRight");
+    await expect(editor.getByLabel("Start date")).toHaveValue("2026-11-19");
+    await page.keyboard.press("Escape");
+    await expect(editor).toBeHidden();
+    await expect(standup).toBeFocused();
+    await page.keyboard.press("Alt+Shift+ArrowDown");
+    await expect(editor.getByLabel("Start time")).toHaveValue("09:00");
+    await expect(editor.getByLabel("End time")).toHaveValue("10:00");
+    await editor.getByRole("button", { name: "Save event" }).click();
+    await expect(
+      page.getByRole("button", { name: /^09:00–10:00\s*Standup/ }),
+    ).toBeVisible();
+  });
+});

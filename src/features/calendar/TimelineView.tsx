@@ -1,10 +1,18 @@
 import { increments, type CalendarSettings } from "./settings";
-import { CalendarPlus, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
+import {
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  Flag,
+  Repeat,
+  Timer,
+} from "lucide-react";
 import {
   useEffect,
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
 } from "react";
@@ -347,6 +355,115 @@ export function TimelineView({
     createAt(firstShown, start);
   }
 
+  /** Every control of every item in `scope`, in reading order. */
+  function controlsIn(scope: ParentNode) {
+    return Array.from(
+      scope.querySelectorAll<HTMLElement>(
+        ".timeline-item :is(a, button), .timeline-band :is(a, button)",
+      ),
+    );
+  }
+
+  /**
+   * Keyboard use of events. Arrow keys move focus between items, Alt/Option
+   * with arrows proposes moving the focused event by one grid step or one
+   * day, and Alt/Option+Shift with Up or Down proposes a new end. A proposal
+   * opens the editor with the new times, as a drag does, so nothing changes
+   * until it is saved.
+   */
+  function itemKeys(event: KeyboardEvent<HTMLDivElement>) {
+    const target = event.target;
+    if (
+      !(target instanceof HTMLElement) ||
+      event.metaKey ||
+      event.ctrlKey ||
+      !target.closest(".timeline-item, .timeline-band") ||
+      ![
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight",
+        "Home",
+        "End",
+      ].includes(event.key)
+    )
+      return;
+    const vertical = event.key === "ArrowUp" || event.key === "ArrowDown";
+    const horizontal = event.key === "ArrowLeft" || event.key === "ArrowRight";
+    const sign = event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1;
+    const handle = target.closest<HTMLElement>("[data-schedule-item]");
+    const item = handle
+      ? visible.find(({ id }) => id === handle.dataset.scheduleItem)
+      : undefined;
+
+    if (event.altKey) {
+      if (!item || (event.shiftKey && !vertical) || (!vertical && !horizontal))
+        return;
+      if (item.allDay && vertical) return;
+      event.preventDefault();
+      setError("");
+      const step = settings.increment;
+      // The proposal moves the start, or with Shift the end, by one step
+      // or one day, across midnight when it has to.
+      const resizing = event.shiftKey;
+      const wallTime = resizing ? item.end : item.start;
+      const from = item.allDay ? item.startDate : wallTime;
+      if (!from) return;
+      const day = from.slice(0, 10);
+      const minute = item.allDay ? 0 : minutesOf(from.slice(11, 16));
+      const total = minute + (vertical && !item.allDay ? sign * step : 0);
+      const shifted = addDays(
+        day,
+        Math.floor(total / MINUTES_PER_DAY) +
+          (horizontal || item.allDay ? sign : 0),
+      );
+      const span = proposedSpan(
+        item,
+        item.allDay && vertical ? day : shifted,
+        clock(((total % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY),
+        zone,
+        resizing ? "resize" : "move",
+        step,
+      );
+      if (span) void editing.openItem(item, span);
+      else
+        setError(
+          "This time range cannot be scheduled. Choose another time or edit the event.",
+        );
+      return;
+    }
+    if (event.shiftKey) return;
+
+    const column = target.closest<HTMLElement>("[data-schedule-timeline]");
+    const scope = column ?? target.closest<HTMLElement>(".timeline-allday");
+    const list = scope ? controlsIn(scope) : [];
+    const index = list.indexOf(target);
+    if (index < 0) return;
+    let next: HTMLElement | undefined;
+    if (event.key === "Home") next = list[0];
+    else if (event.key === "End") next = list[list.length - 1];
+    else if (vertical) next = list[index + sign];
+    else if (column) {
+      // Side to side visits the nearest day that has items.
+      const columns = Array.from(
+        event.currentTarget.querySelectorAll<HTMLElement>(
+          "[data-schedule-timeline]",
+        ),
+      );
+      const at = columns.indexOf(column);
+      for (let i = at + sign; i >= 0 && i < columns.length; i += sign) {
+        const found = controlsIn(columns[i]);
+        if (found.length) {
+          next = found[Math.min(index, found.length - 1)];
+          break;
+        }
+      }
+    }
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+  }
+
   const gridStyle = {
     "--days": days.length,
     "--slot-lines": MINUTES_PER_DAY / settings.increment,
@@ -391,7 +508,12 @@ export function TimelineView({
         >
           Today
         </button>
-        <button type="button" className="calendar-new-event" onClick={newEvent}>
+        <button
+          type="button"
+          className="calendar-new-event"
+          data-new-event
+          onClick={newEvent}
+        >
           <CalendarPlus size={15} aria-hidden="true" /> New event
         </button>
         <DatePicker date={date} />
@@ -442,6 +564,7 @@ export function TimelineView({
         aria-labelledby="timeline-range"
         aria-busy={loaded?.key !== key}
         style={gridStyle}
+        onKeyDown={itemKeys}
         onPointerDown={begin}
         onPointerMove={move}
         onPointerUp={finish}
@@ -526,6 +649,7 @@ export function TimelineView({
             >
               {item.kind === "deadline" ? (
                 <Link to={`/issues/${item.issueId}`}>
+                  <Flag size={12} aria-hidden="true" />
                   <span className="visually-hidden">
                     {item.closed
                       ? "Completed deadline: "
@@ -681,7 +805,9 @@ function TimelineBlock({
     >
       {item.kind === "workBlock" ? (
         <Link to={`/issues/${item.issueId}`}>
-          <span className="timeline-item-time">{times}</span>
+          <span className="timeline-item-time">
+            <Timer size={11} aria-hidden="true" /> {times}
+          </span>
           <span className="timeline-item-title">
             <span className="visually-hidden">Work block: </span>
             {issueKey({ number: item.issueNumber! })} {item.title}

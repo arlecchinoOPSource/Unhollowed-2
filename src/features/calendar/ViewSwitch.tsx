@@ -24,6 +24,20 @@ export function readView(
     : defaultView;
 }
 
+/** The URL parameters after switching to `view`, keeping `date` in view. */
+export function switchedParams(
+  params: URLSearchParams,
+  view: CalendarView,
+  date: string,
+): URLSearchParams {
+  const next = new URLSearchParams(params);
+  next.set("view", view);
+  next.set("date", date);
+  if (view === "month" || view === "agenda") next.set("month", monthOf(date));
+  else next.delete("month");
+  return next;
+}
+
 /**
  * Switches between Day, Week, Workweek, and Month, keeping the date in
  * view: timeline views use `date`, and Month uses `month`.
@@ -38,18 +52,7 @@ export function ViewSwitch({ date }: { date: string }) {
           key={view}
           type="button"
           aria-pressed={current === view}
-          onClick={() => {
-            const next = new URLSearchParams(params);
-            next.set("view", view);
-            if (view === "month" || view === "agenda") {
-              next.set("month", monthOf(date));
-              next.set("date", date);
-            } else {
-              next.set("date", date);
-              next.delete("month");
-            }
-            setParams(next);
-          }}
+          onClick={() => setParams(switchedParams(params, view, date))}
         >
           {label}
         </button>

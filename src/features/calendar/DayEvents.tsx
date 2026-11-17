@@ -82,6 +82,7 @@ export function DayEvents({
         <button
           type="button"
           className="calendar-new-event"
+          data-new-event
           onClick={() =>
             editing.openNew(newDraft(day, zone, editing.defaultCalendar))
           }
