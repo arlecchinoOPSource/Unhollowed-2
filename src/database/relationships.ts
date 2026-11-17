@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./dataChanges";
 import type { IssueStatus } from "./issues";
 
 export const relationKinds = {

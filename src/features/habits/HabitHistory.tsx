@@ -19,6 +19,7 @@ import {
   monthTitle,
   shiftMonth,
 } from "../calendar/monthGrid";
+import { useDataVersion } from "../../database/dataChanges";
 import { localDate } from "../today/dates";
 import { cellState, FIRST_MONTH, LAST_MONTH, monthDates } from "./gridRules";
 
@@ -91,6 +92,7 @@ export function HabitHistory({ reload }: { reload: number }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const changes = useDataVersion("habits");
   const moved = useRef(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -116,7 +118,7 @@ export function HabitHistory({ reload }: { reload: number }) {
     return () => {
       live = false;
     };
-  }, [reload, retry]);
+  }, [reload, retry, changes]);
 
   useEffect(() => {
     if (!habitId) return;
@@ -127,7 +129,7 @@ export function HabitHistory({ reload }: { reload: number }) {
     return () => {
       live = false;
     };
-  }, [habitId, reload, retry]);
+  }, [habitId, reload, retry, changes]);
 
   const habit = habits?.find(({ id }) => id === habitId);
   const month = focus.slice(0, 7);

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./dataChanges";
 import { labelColors, type LabelColor } from "./labels";
 
 /** Calendars share the label palette, so each color is named and readable. */

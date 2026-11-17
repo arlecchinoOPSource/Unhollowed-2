@@ -999,9 +999,14 @@ test.describe("Today and Upcoming", () => {
     await expect(
       page.getByText("ISS-1 is now due tomorrow and moved to Upcoming."),
     ).toBeVisible();
+    // The task list drops it. The schedule's Coming up now lists its new
+    // deadline, because it re-reads when an issue changes.
     await expect(
-      page.getByRole("link", { name: "Renew passport" }),
+      page.getByRole("link", { name: "Renew passport", exact: true }),
     ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Deadline: ISS-1 Renew passport" }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Complete ISS-2: Pay rent" }),
     ).toBeFocused();

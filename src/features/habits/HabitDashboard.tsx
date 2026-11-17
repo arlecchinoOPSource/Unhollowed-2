@@ -5,6 +5,7 @@ import {
   type HabitBucket,
   type HabitStatistics,
 } from "../../database/habits";
+import { useDataVersion } from "../../database/dataChanges";
 import { fullDate } from "../calendar/monthGrid";
 import { localDate } from "../today/dates";
 
@@ -226,6 +227,7 @@ export function HabitDashboard({ reload }: { reload: number }) {
   const [stats, setStats] = useState<HabitStatistics | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const changes = useDataVersion("habits");
 
   useEffect(() => {
     let live = true;
@@ -235,11 +237,16 @@ export function HabitDashboard({ reload }: { reload: number }) {
         setStats(result);
         setError("");
       })
-      .catch((cause) => live && setError(habitError(cause)));
+      .catch((cause) => {
+        if (!live) return;
+        // Never leave the last good numbers on screen beside an error.
+        setStats(null);
+        setError(habitError(cause));
+      });
     return () => {
       live = false;
     };
-  }, [from, to, reload, retry]);
+  }, [from, to, reload, retry, changes]);
 
   const preset = (days: number) => {
     setFrom(shift(today, 1 - days));

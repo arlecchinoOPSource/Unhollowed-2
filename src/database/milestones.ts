@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./dataChanges";
 
 export interface MilestoneInput {
   title: string;

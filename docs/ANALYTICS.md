@@ -52,3 +52,14 @@ Habits and mood call the engines that own their formulas; they are not recompute
 ## Size and cost
 
 Each source is one aggregate query over indexed workspace columns, so cost follows the size of the period, not the number of fields requested. A test reads 5000 issues in one pass.
+
+## Keeping views current
+
+Mounted views refresh from a small client-side signal, `src/database/dataChanges.ts`. It is not a datastore: no values are cached or copied, only a version number per source.
+
+- **Publishing.** The database wrappers import `invoke` from `dataChanges`, which resolves exactly as Tauri's does and, only after a write has succeeded (SQLite has committed), publishes the sources that write can affect. `MUTATIONS` lists every writing command and its sources; reads never publish. A failed write publishes nothing, so no view refreshes or claims freshness for a change that did not happen.
+- **Sources.** `habits`, `checkins`, `issues`, `projects`, `milestones`, `calendar`. A write names every source it can change: completing an issue wakes issues, projects, and milestones, since objectives and milestone progress derive from it.
+- **Reading.** A view calls `useDataVersion(...sources)` and puts the result in its effect dependencies, so it reads again exactly when one of its sources changes. There is no polling and no timer. The habit trends, habit history, mood trends, and Today schedule subscribe; the screens that write (the habit grid, the check-in form) already hold their own state and do not re-read after their own edits.
+- **Stale answers.** Each read belongs to one run of its effect. When the period, filter, or sources change, the earlier request is superseded and its answer is ignored whenever it arrives, so a slow older response cannot replace a newer one.
+- **Failed reads.** A failed read clears the previous numbers and shows the error with a retry, instead of leaving old values on screen as if they were current.
+- **Restart.** Nothing is persisted by this layer. After a restart every number is recomputed from the stored records, and a test confirms the results are identical.

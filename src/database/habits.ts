@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./dataChanges";
 
 /**
  * Typed wrappers for the habit commands in `src-tauri/src/habits.rs`. Each
