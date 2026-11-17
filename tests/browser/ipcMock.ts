@@ -680,7 +680,20 @@ export async function installIpcMock(page: Page) {
               const hits = milestones.filter((milestone) =>
                 milestone.title.toLowerCase().includes(text),
               );
+              const documentHits = documents.filter(
+                (item) =>
+                  item.title.toLowerCase().includes(text) ||
+                  item.content.toLowerCase().includes(text),
+              );
               return structuredClone({
+                documents: documentHits
+                  .slice(0, 8)
+                  .map(({ id, title }) => ({
+                    id,
+                    title,
+                    preview: `${title} body`,
+                  })),
+                documentTotal: documentHits.length,
                 projects: found.slice(0, 8).map(({ id, name, status }) => ({
                   id,
                   name,

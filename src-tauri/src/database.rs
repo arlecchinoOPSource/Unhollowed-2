@@ -117,6 +117,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0018_document_references.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 19,
+            description: "Index workspace document text for local search",
+            sql: include_str!("../migrations/0019_document_search.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
