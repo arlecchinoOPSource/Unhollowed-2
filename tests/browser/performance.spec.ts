@@ -35,13 +35,17 @@ async function time(
   page: Page,
   action: () => Promise<unknown>,
   ready: Locator,
+  /** Dense clusters can squeeze items to nothing, so views may only need to
+   * have rendered them. */
+  state: "visible" | "attached" = "visible",
 ): Promise<[number, number]> {
   await page.evaluate(() => {
     (window as unknown as { __long: number }).__long = 0;
   });
   const start = Date.now();
   await action();
-  await expect(ready).toBeVisible({ timeout: 30_000 });
+  if (state === "visible") await expect(ready).toBeVisible({ timeout: 30_000 });
+  else await ready.waitFor({ state, timeout: 30_000 });
   const elapsed = Date.now() - start;
   const long = await page.evaluate(
     () => (window as unknown as { __long: number }).__long,
@@ -133,6 +137,64 @@ for (const count of [500, 2000]) {
     );
     console.log(
       `\n${count} issues\n| Page | Time to content | Long tasks |\n|---|---:|---:|\n${rows.join("\n")}`,
+    );
+  });
+}
+
+/** Timed events across November 2026, in clusters so the views overlap. */
+function events(count: number) {
+  return Array.from({ length: count }, (_, index) => {
+    const day = String(1 + (index % 28)).padStart(2, "0");
+    const hour = String(8 + (index % 9)).padStart(2, "0");
+    return {
+      title: `Meeting ${index + 1} about launch plans`,
+      startLocal: `2026-11-${day}T${hour}:00`,
+      endLocal: `2026-11-${day}T${hour}:45`,
+      timeZone: "UTC",
+    };
+  });
+}
+
+for (const count of [500, 2000]) {
+  test(`renders the calendar views with ${count} events`, async ({ page }) => {
+    test.setTimeout(180_000);
+    await installIpcMock(page);
+    await page.addInitScript((data) => {
+      Object.assign(window, { __seedEvents: data });
+      const long = window as unknown as { __long: number };
+      long.__long = 0;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) long.__long += entry.duration;
+      }).observe({ type: "longtask", buffered: true });
+    }, events(count));
+    await page.clock.setFixedTime(new Date("2026-11-16T10:00:00Z"));
+    const rows: string[] = [];
+    for (const [name, url, ready] of [
+      ["Day", "/calendar?view=day&date=2026-11-18", /Meeting \d+ about/],
+      ["Week", "/calendar?view=week&date=2026-11-18", /Meeting \d+ about/],
+      ["Month", "/calendar?view=month&month=2026-11", /Meeting \d+ about/],
+      ["Agenda", "/calendar?view=agenda&month=2026-11", /Meeting \d+ about/],
+    ] as const) {
+      const samples: [number, number][] = [];
+      for (let run = 0; run < 3; run += 1) {
+        await page.goto("/");
+        await expect(page.locator("h1").first()).toBeVisible();
+        samples.push(
+          await time(
+            page,
+            () => page.goto(url),
+            page.getByText(ready).first(),
+            "attached",
+          ),
+        );
+      }
+      samples.sort((a, b) => a[0] - b[0]);
+      rows.push(
+        `| ${name} | ${samples[1][0]} ms | ${Math.round(samples[1][1])} ms |`,
+      );
+    }
+    console.log(
+      `\n${count} events\n| View | Time to content | Long tasks |\n|---|---:|---:|\n${rows.join("\n")}`,
     );
   });
 }

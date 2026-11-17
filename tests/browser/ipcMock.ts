@@ -1107,11 +1107,12 @@ export async function installIpcMock(page: Page) {
               };
               // The instant a wall-clock time is in a zone, as the backend
               // stores it.
+              const formats = new Map<string, Intl.DateTimeFormat>();
               const toInstant = (local: string, zone: string) => {
                 const wanted = Date.parse(`${local}:00Z`);
-                let guess = wanted;
-                for (let pass = 0; pass < 3; pass++) {
-                  const parts = new Intl.DateTimeFormat("en-CA", {
+                let format = formats.get(zone);
+                if (!format) {
+                  format = new Intl.DateTimeFormat("en-CA", {
                     timeZone: zone,
                     year: "numeric",
                     month: "2-digit",
@@ -1119,7 +1120,12 @@ export async function installIpcMock(page: Page) {
                     hour: "2-digit",
                     minute: "2-digit",
                     hourCycle: "h23",
-                  }).formatToParts(new Date(guess));
+                  });
+                  formats.set(zone, format);
+                }
+                let guess = wanted;
+                for (let pass = 0; pass < 3; pass++) {
+                  const parts = format.formatToParts(new Date(guess));
                   const part = (type: string) =>
                     parts.find((item) => item.type === type)!.value;
                   const shownWall = Date.parse(
@@ -1353,6 +1359,44 @@ export async function installIpcMock(page: Page) {
               const event = findEvent(args.id);
               events.splice(events.indexOf(event), 1);
               return null;
+            }
+            case "search_calendar_items": {
+              seededEvents();
+              const { text } = (args as unknown as { search: { text: string } })
+                .search;
+              const needle = text.trim().toLowerCase();
+              const found = events.filter((event) =>
+                `${event.title} ${event.description}`
+                  .toLowerCase()
+                  .includes(needle),
+              );
+              return {
+                items: found.map((event) => ({
+                  kind: "event",
+                  id: event.id,
+                  eventId: event.id,
+                  occurrence: null,
+                  recurring: false,
+                  title: event.title,
+                  calendarId: event.calendarId,
+                  color: "blue",
+                  issueId: null,
+                  issueNumber: null,
+                  closed: false,
+                  allDay: event.allDay,
+                  startDate: event.startDate,
+                  endDate: event.endDate,
+                  start: event.startLocal,
+                  end: event.endLocal,
+                  startAt: event.startAt,
+                  endAt: event.endAt,
+                  timeZone: event.timeZone,
+                  localStart: event.startLocal,
+                  localEnd: event.endLocal,
+                })),
+                upcoming: found.length,
+                truncated: false,
+              };
             }
             case "pick_ics_file":
               return (

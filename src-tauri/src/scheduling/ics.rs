@@ -25,7 +25,7 @@ use tauri_plugin_sql::DbInstances;
 /// The largest file read or written.
 pub const MAX_BYTES: usize = 5 * 1024 * 1024;
 /// The most events one file may contain.
-pub const MAX_EVENTS: usize = 2_000;
+pub const MAX_EVENTS: usize = 20_000;
 
 const PRODUCT: &str = "-//Unhollowed 2//Calendar//EN";
 const UID_SUFFIX: &str = "@unhollowed-2";
