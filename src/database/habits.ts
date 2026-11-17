@@ -43,6 +43,45 @@ export interface HabitDeletionImpact {
   revision: number;
 }
 
+/** One habit an Ember import adds, in the order it will have. */
+export interface ImportedHabit {
+  name: string;
+  startDate: string;
+  archivedOn: string | null;
+  completions: number;
+}
+
+/** What an import does. A preview and an import return the same report. */
+export interface HabitImportReport {
+  /** The whole file is refused, and why. Nothing changed. */
+  fatal: string | null;
+  /** Habits the file collides with, when that is the reason. */
+  conflicts: string[];
+  habits: ImportedHabit[];
+  completions: number;
+  /** Pass back to `importHabits`; it changes when the file or habits change. */
+  token: string;
+  applied: boolean;
+}
+
+export interface PickedBackup {
+  name: string;
+  content: string;
+}
+
+/** The native open dialog. `null` when the user cancels. */
+export const pickHabitBackup = (): Promise<PickedBackup | null> =>
+  invoke("pick_habit_backup");
+
+export const previewHabitImport = (
+  content: string,
+): Promise<HabitImportReport> => invoke("preview_habit_import", { content });
+
+export const importHabits = (
+  content: string,
+  token: string,
+): Promise<HabitImportReport> => invoke("import_habits", { content, token });
+
 export const listHabits = (): Promise<Habit[]> => invoke("list_habits");
 
 export const createHabit = (
@@ -113,6 +152,10 @@ export function habitError(error: unknown): string {
       return "Archive the habit before deleting it.";
     case "changed":
       return "This habit changed since you reviewed it. Review the deletion again.";
+    case "file_failed":
+      return "Could not read that file.";
+    case "file_too_large":
+      return "That file is larger than 32 MiB.";
     default:
       return "Could not save to local habit storage. Try again.";
   }

@@ -1756,6 +1756,145 @@ export async function installIpcMock(page: Page) {
                 if (key.startsWith(`${id}|`)) state.done.delete(key);
               return null;
             }
+            case "pick_habit_backup":
+              // Tests choose the file with window.__pickedBackup; null cancels.
+              return (
+                (
+                  window as unknown as {
+                    __pickedBackup?: { name: string; content: string } | null;
+                  }
+                ).__pickedBackup ?? null
+              );
+            case "preview_habit_import":
+            case "import_habits": {
+              const state = habitState();
+              const { content, token } = args as unknown as {
+                content: string;
+                token?: string;
+              };
+              const refuse = (fatal: string, conflicts: string[] = []) => ({
+                fatal,
+                conflicts,
+                habits: [],
+                completions: 0,
+                token: "",
+                applied: false,
+              });
+              let backup: {
+                format?: string;
+                version?: number;
+                encoding?: string;
+                habits: {
+                  id: string;
+                  name: string;
+                  sortOrder: number;
+                  startDate: string;
+                  archivedAt: string | null;
+                }[];
+                completions: [string, string][];
+              };
+              try {
+                backup = JSON.parse(content);
+              } catch {
+                return refuse(
+                  "This is not a JSON file, so it is not an Ember backup.",
+                );
+              }
+              if (backup.encoding === "daily-bitmask-v1")
+                return refuse(
+                  "This is an Ember website snapshot, not a backup. Import it into Ember desktop first, then export a backup there and choose that file.",
+                );
+              if (backup.format !== "ember-backup")
+                return refuse("This is not an Ember desktop backup.");
+              if ((backup.version ?? 0) > 1)
+                return refuse(
+                  `This backup was made by a newer Ember (version ${backup.version}). This app reads version 1 only.`,
+                );
+              const incoming = [...backup.habits].sort(
+                (a, b) => a.sortOrder - b.sortOrder,
+              );
+              const sourceIds = new Set(
+                state.habits.map((habit) => habit.sourceId),
+              );
+              const repeated = incoming
+                .filter((habit) => sourceIds.has(habit.id))
+                .map((habit) => habit.name);
+              const sameName = incoming
+                .filter(
+                  (habit) =>
+                    !habit.archivedAt &&
+                    !sourceIds.has(habit.id) &&
+                    state.habits.some(
+                      (mine) =>
+                        !mine.archivedOn &&
+                        mine.name.toLowerCase() === habit.name.toLowerCase(),
+                    ),
+                )
+                .map((habit) => habit.name);
+              if (repeated.length || sameName.length)
+                return refuse(
+                  [
+                    repeated.length &&
+                      `Already imported from this backup: ${repeated.join(", ")}.`,
+                    sameName.length &&
+                      `Active habits here already have these names: ${sameName.join(", ")}. Rename or archive them, then import again. Habits are never merged by name.`,
+                  ]
+                    .filter(Boolean)
+                    .join(" "),
+                  [...repeated, ...sameName],
+                );
+              const current = `${content.length}:${state.habits
+                .map((habit) => `${habit.id}.${habit.revision}`)
+                .join(",")}`;
+              if (token !== undefined && token !== current)
+                return refuse(
+                  "Your habits or the file changed since the preview. Review the import again.",
+                );
+              const days = new Map<string, string[]>();
+              for (const [id, date] of backup.completions)
+                days.set(id, [...(days.get(id) ?? []), date]);
+              const habits = incoming.map((habit) => ({
+                name: habit.name,
+                startDate: habit.startDate,
+                archivedOn: habit.archivedAt,
+                completions: days.get(habit.id)?.length ?? 0,
+              }));
+              const applied = token !== undefined;
+              if (applied) {
+                let next =
+                  Math.max(-1, ...state.habits.map((habit) => habit.position)) +
+                  1;
+                let id = Math.max(
+                  0,
+                  ...state.habits.map((habit) => Number(habit.id.slice(6))),
+                );
+                for (const habit of incoming) {
+                  id += 1;
+                  state.habits.push({
+                    id: `habit-${id}`,
+                    name: habit.name,
+                    position: next++,
+                    startDate: habit.startDate,
+                    archivedOn: habit.archivedAt,
+                    source: "ember",
+                    sourceId: habit.id,
+                    revision: 0,
+                    createdAt: now(),
+                    updatedAt: now(),
+                  });
+                  for (const date of days.get(habit.id) ?? [])
+                    state.done.add(`habit-${id}|${date}`);
+                }
+              }
+              return {
+                fatal: null,
+                conflicts: [],
+                habits,
+                completions: habits.reduce((sum, h) => sum + h.completions, 0),
+                token: current,
+                applied,
+              };
+            }
             case "get_habit_month": {
               const state = habitState();
               const { year, month } = args as unknown as {

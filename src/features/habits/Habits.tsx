@@ -25,6 +25,7 @@ import {
 import { shortcutAllowed } from "../issues/issueKeyboard";
 import { localDate, msUntilNextLocalMidnight } from "../today/dates";
 import { cellKey, HabitGrid } from "./HabitGrid";
+import { HabitImport } from "./HabitImport";
 import { HabitManager } from "./HabitManager";
 import { FIRST_MONTH, LAST_MONTH, monthDates } from "./gridRules";
 import "./habits.css";
@@ -63,6 +64,7 @@ export function Habits() {
   const [status, setStatus] = useState("");
   const [addError, setAddError] = useState("");
   const [managing, setManaging] = useState(false);
+  const [importing, setImporting] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -270,12 +272,25 @@ export function Habits() {
             <button
               type="button"
               className="action"
+              onClick={() => setImporting(true)}
+            >
+              Import from Ember
+            </button>
+            <button
+              type="button"
+              className="action"
               onClick={() => setManaging(true)}
             >
               Manage habits
             </button>
           </form>
           {addError && <p role="alert">{addError}</p>}
+          {importing && (
+            <HabitImport
+              onClose={() => setImporting(false)}
+              onChanged={() => setReload((count) => count + 1)}
+            />
+          )}
           {managing && (
             <HabitManager
               onClose={() => setManaging(false)}
