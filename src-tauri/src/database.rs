@@ -123,6 +123,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0019_document_search.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 20,
+            description: "Add calendars, events, and issue work blocks",
+            sql: include_str!("../migrations/0020_scheduling.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
