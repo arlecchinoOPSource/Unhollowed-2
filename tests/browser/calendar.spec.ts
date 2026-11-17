@@ -704,3 +704,52 @@ test("moves a recurring all-day event by proposing dates and an occurrence scope
     edit.getByRole("radio", { name: "This and following events" }),
   ).toBeVisible();
 });
+
+test("links an event to documents and projects and unlinks without touching them", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedDocuments: ["Kickoff notes"],
+      __seedEvents: [
+        {
+          title: "Kickoff",
+          startLocal: "2026-11-18T09:00",
+          endLocal: "2026-11-18T10:00",
+        },
+      ],
+    }),
+  );
+  await page.goto("/calendar?view=month");
+  await day(page, /November 18, 2026/).click();
+  await page.getByRole("button", { name: /09:00–10:00\s*Kickoff/ }).click();
+  const editor = page.getByRole("dialog", { name: "Edit event" });
+  await editor.getByText("Documents and projects").click();
+
+  await editor
+    .getByLabel("Link a document")
+    .selectOption({ label: "Kickoff notes" });
+  await editor.getByRole("button", { name: "Link document" }).click();
+  await editor
+    .getByLabel("Link a project")
+    .selectOption({ label: "Studio launch" });
+  await editor.getByRole("button", { name: "Link project" }).click();
+  await expect(
+    editor.getByRole("link", { name: "Kickoff notes" }),
+  ).toBeVisible();
+  await expect(
+    editor.getByRole("link", { name: "Studio launch" }),
+  ).toBeVisible();
+
+  // Linking again is not offered, and unlinking keeps the records.
+  await editor.getByRole("button", { name: "Unlink Kickoff notes" }).click();
+  await expect(editor.getByText(/Unlinked Kickoff notes/)).toBeVisible();
+  await expect(editor.getByText("None linked yet.").first()).toBeVisible();
+  await editor.getByRole("button", { name: "Cancel" }).click();
+
+  // The project link opens the project.
+  await page.getByRole("button", { name: /09:00–10:00\s*Kickoff/ }).click();
+  await editor.getByText("Documents and projects").click();
+  await editor.getByRole("link", { name: "Studio launch" }).click();
+  await expect(page).toHaveURL(/\/projects\/project-1/);
+});

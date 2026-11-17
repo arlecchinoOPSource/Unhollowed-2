@@ -259,3 +259,38 @@ export function updateWorkBlock(
 export function deleteWorkBlock(id: string): Promise<void> {
   return invoke("delete_issue_work_block", { id });
 }
+
+/** A document or project an event links to, by its current name. */
+export interface LinkedRecord {
+  id: string;
+  title: string;
+  /** Archived records stay linked and can still be opened. */
+  archived: boolean;
+}
+
+export interface EventLinks {
+  documents: LinkedRecord[];
+  projects: LinkedRecord[];
+}
+
+export type LinkTarget = "document" | "project";
+
+export function getEventLinks(eventId: string): Promise<EventLinks> {
+  return invoke("get_event_links", { eventId });
+}
+
+export function linkEventRecord(
+  eventId: string,
+  target: LinkTarget,
+  id: string,
+): Promise<EventLinks> {
+  return invoke(`link_event_${target}`, { eventId, id });
+}
+
+export function unlinkEventRecord(
+  eventId: string,
+  target: LinkTarget,
+  id: string,
+): Promise<EventLinks> {
+  return invoke(`unlink_event_${target}`, { eventId, id });
+}

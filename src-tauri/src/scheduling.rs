@@ -7,6 +7,7 @@
 
 pub(crate) mod calendars;
 pub(crate) mod events;
+pub(crate) mod links;
 pub(crate) mod recurrence;
 pub(crate) mod search;
 pub(crate) mod time;
@@ -38,6 +39,10 @@ pub enum SchedulingError {
     CalendarNotFound,
     /// The issue does not exist in the active workspace.
     IssueNotFound,
+    /// The document does not exist in the active workspace.
+    DocumentNotFound,
+    /// The project does not exist in the active workspace.
+    ProjectNotFound,
     InvalidTitle,
     InvalidLocation,
     /// Only http and https addresses with a host are accepted.

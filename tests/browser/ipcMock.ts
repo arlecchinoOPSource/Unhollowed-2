@@ -252,6 +252,8 @@ export async function installIpcMock(page: Page) {
       };
     }
 
+    const eventDocuments: [string, string][] = [];
+    const eventProjects: [string, string][] = [];
     const issueDocuments: [string, string][] = [];
     const projectDocuments: [string, string][] = [];
     const milestones: Milestone[] = [];
@@ -1319,6 +1321,48 @@ export async function installIpcMock(page: Page) {
               const event = findEvent(args.id);
               events.splice(events.indexOf(event), 1);
               return null;
+            }
+            case "get_event_links":
+            case "link_event_document":
+            case "unlink_event_document":
+            case "link_event_project":
+            case "unlink_event_project": {
+              const { eventId, id } = args as unknown as {
+                eventId: string;
+                id: string;
+              };
+              findEvent(eventId);
+              const table = command.endsWith("document")
+                ? eventDocuments
+                : eventProjects;
+              const index = table.findIndex(
+                ([event, target]) => event === eventId && target === id,
+              );
+              if (command.startsWith("link_") && index < 0)
+                table.push([eventId, id]);
+              if (command.startsWith("unlink_") && index >= 0)
+                table.splice(index, 1);
+              return {
+                documents: eventDocuments
+                  .filter(([event]) => event === eventId)
+                  .map(([, target]) => ({
+                    id: target,
+                    title: documents.find((item) => item.id === target)!.title,
+                    archived: false,
+                  })),
+                projects: eventProjects
+                  .filter(([event]) => event === eventId)
+                  .map(([, target]) => {
+                    const project = projects.find(
+                      (item) => item.id === target,
+                    )!;
+                    return {
+                      id: target,
+                      title: project.name,
+                      archived: project.status === "archived",
+                    };
+                  }),
+              };
             }
             case "update_event_occurrence":
             case "cancel_event_occurrence": {

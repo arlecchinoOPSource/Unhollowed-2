@@ -85,6 +85,9 @@ Recurring timed events (U2-P3-04) repeat their wall-clock time in their own zone
 | `create_calendar_event`                               | Creates a timed or all-day event, in the default calendar unless `calendarId` names an active one |
 | `get_calendar_event`                                  | One event                                                                                         |
 | `create_issue_work_block` / `delete_issue_work_block` | Adds or removes time for an issue                                                                 |
+| `get_event_links`                                     | An event's linked documents and projects, by current name, with an `archived` flag                |
+| `link_event_document` / `unlink_event_document`       | Adds or removes a document link. Linking twice changes nothing                                    |
+| `link_event_project` / `unlink_event_project`         | The same for projects                                                                             |
 | `update_issue_work_block`                             | Moves or resizes a session. Only its times and zone change                                        |
 | `list_issue_work_blocks`                              | An issue's sessions, earliest first, including those of closed and archived issues                |
 
@@ -222,6 +225,17 @@ A work session reserves time to work on one issue. It is a `work_blocks` row of 
 - **Permanent deletion** removes the issue's sessions with it. The confirmation lists how many work sessions go. Deletion needs an archived issue, so no visible session disappears without that warning.
 - **Standalone focus blocks** (sessions without an issue) are not supported. Each session needs an issue, and `work_blocks.issue_id` is required. An event serves the standalone case.
 - Not included: time tracking, analytics, and completing an issue from a session.
+
+### Event links
+
+An event can link to existing documents and projects, so meeting notes and project context open straight from it. The editor shows them under **Documents and projects** for a saved event.
+
+- **Storage.** `event_documents` and `event_projects` hold only an event ID and a target ID, scoped by workspace. Nothing from a document or project is copied, so renaming either keeps the link and the list shows the current name.
+- **Ownership.** The event, the target, and the link share one workspace. Commands return `not_found`, `document_not_found`, or `project_not_found` first, and triggers refuse cross-workspace rows written any other way.
+- **Duplicates.** A pair links once. Linking again changes nothing.
+- **Archived targets** stay linked, are marked "(archived)", and open as usual. The project picker offers only active projects.
+- **Repeating events.** Links belong to the event, so every occurrence shares them. Duplicating or splitting a series does not copy links.
+- **Removing.** Unlinking deletes only the link row. Deleting an event, document, or project deletes its links and never the other record. A target that is gone simply no longer appears.
 
 ### Calendar libraries
 
