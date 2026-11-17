@@ -1,0 +1,21 @@
+.graph-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+
+.graph-tools label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.graph-canvas {
+  height: clamp(20rem, 60vh, 44rem);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-block: 1rem;
+}

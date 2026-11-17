@@ -31,3 +31,20 @@ export function updateDocument(
 ): Promise<WorkspaceDocument> {
   return invoke("update_document", { id, title, content });
 }
+
+export interface DocumentRevision {
+  id: number;
+  title: string;
+  savedAt: string;
+}
+
+export function listDocumentRevisions(id: string): Promise<DocumentRevision[]> {
+  return invoke("list_document_revisions", { id });
+}
+
+export function restoreDocumentRevision(
+  id: string,
+  revision: number,
+): Promise<WorkspaceDocument> {
+  return invoke("restore_document_revision", { id, revision });
+}

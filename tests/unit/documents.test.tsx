@@ -2,11 +2,12 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { getDocument } from "../../src/database/documents";
 import {
-  createDocument,
-  getDocument,
-  listDocuments,
-} from "../../src/database/documents";
+  addLibraryDocument,
+  loadLibrary,
+  updateLibraryDocument,
+} from "../../src/database/documentLibrary";
 import { isTauri } from "../../src/database/status";
 import { Documents } from "../../src/features/documents/Documents";
 
@@ -18,10 +19,13 @@ vi.mock("../../src/database/documentLinks", () => ({
   getDocumentUsage: vi.fn(() => Promise.resolve({ issues: [], projects: [] })),
 }));
 vi.mock("../../src/database/documents", () => ({
-  listDocuments: vi.fn(),
   getDocument: vi.fn(),
-  createDocument: vi.fn(),
   updateDocument: vi.fn(),
+}));
+vi.mock("../../src/database/documentLibrary", () => ({
+  loadLibrary: vi.fn(),
+  addLibraryDocument: vi.fn(),
+  updateLibraryDocument: vi.fn(),
 }));
 
 const content = JSON.stringify({
@@ -35,6 +39,10 @@ const content = JSON.stringify({
 });
 const stored = {
   id: "doc-1",
+  folderId: null,
+  favorite: false,
+  archivedAt: null,
+  openedAt: null,
   title: "Trip notes",
   content,
   createdAt: "2026-11-14T10:00:00.000Z",
@@ -43,6 +51,7 @@ const stored = {
 
 beforeEach(() => {
   vi.mocked(isTauri).mockReturnValue(true);
+  vi.mocked(updateLibraryDocument).mockResolvedValue(stored);
 });
 afterEach(cleanup);
 
@@ -55,11 +64,14 @@ test("explains that documents need the desktop app in the browser", () => {
   );
   expect(screen.getByRole("heading", { name: "Documents" })).toBeVisible();
   expect(screen.getByText(/stored locally in the desktop app/)).toBeVisible();
-  expect(listDocuments).not.toHaveBeenCalled();
+  expect(loadLibrary).not.toHaveBeenCalled();
 });
 
 test("lists saved documents and reopens one with its formatting", async () => {
-  vi.mocked(listDocuments).mockResolvedValue([stored]);
+  vi.mocked(loadLibrary).mockResolvedValue({
+    documents: [stored],
+    folders: [],
+  });
   vi.mocked(getDocument).mockResolvedValue(stored);
   render(
     <MemoryRouter>
@@ -75,12 +87,11 @@ test("lists saved documents and reopens one with its formatting", async () => {
 });
 
 test("creates a document and opens it in the editor", async () => {
-  vi.mocked(listDocuments).mockResolvedValue([]);
-  vi.mocked(createDocument).mockResolvedValue({
+  vi.mocked(loadLibrary).mockResolvedValue({ documents: [], folders: [] });
+  vi.mocked(addLibraryDocument).mockResolvedValue({
     ...stored,
     id: "doc-2",
     title: "Untitled",
-    content: '{"type":"doc","content":[{"type":"paragraph"}]}',
   });
   vi.mocked(getDocument).mockResolvedValue({
     ...stored,
@@ -102,8 +113,8 @@ test("creates a document and opens it in the editor", async () => {
 });
 
 test("reports a failed creation", async () => {
-  vi.mocked(listDocuments).mockResolvedValue([]);
-  vi.mocked(createDocument).mockRejectedValue({ code: "storage_failed" });
+  vi.mocked(loadLibrary).mockResolvedValue({ documents: [], folders: [] });
+  vi.mocked(addLibraryDocument).mockRejectedValue({ code: "storage_failed" });
   render(
     <MemoryRouter>
       <Documents />
@@ -111,6 +122,6 @@ test("reports a failed creation", async () => {
   );
   fireEvent.click(await screen.findByRole("button", { name: /New document/ }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Could not create a document.",
+    "Could not update the document library.",
   );
 });
