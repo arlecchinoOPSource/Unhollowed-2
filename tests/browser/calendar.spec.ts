@@ -474,7 +474,9 @@ test.describe("timeline views", () => {
     page,
   }) => {
     await page.goto("/calendar?view=day&date=2026-11-20");
-    await page.getByLabel("Grid", { exact: true }).selectOption("15");
+    await page
+      .getByRole("combobox", { name: "Grid", exact: true })
+      .selectOption("15");
     const day = page.getByRole("group", { name: "Friday, November 20" });
     const hour = (await day.boundingBox())!.height / 24;
     // Bring 15:00 into view, then click 15:20, which snaps down to 15:15.
@@ -494,7 +496,9 @@ test.describe("timeline views", () => {
     ).toBeVisible();
     // The grid setting is remembered.
     await page.reload();
-    await expect(page.getByLabel("Grid", { exact: true })).toHaveValue("15");
+    await expect(
+      page.getByRole("combobox", { name: "Grid", exact: true }),
+    ).toHaveValue("15");
   });
 
   test("places items by wall clock on a daylight-saving day", async ({
