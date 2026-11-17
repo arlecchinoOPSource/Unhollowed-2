@@ -103,6 +103,35 @@ export function listCalendarItems(
   return invoke("list_calendar_items", { range: { from, to, timeZone } });
 }
 
+/** What `search_calendar_items` takes. See docs/CALENDAR.md. */
+export interface CalendarSearchInput {
+  /** Matched against titles and descriptions. Blank lists upcoming items. */
+  text: string;
+  timeZone: string;
+  /** The viewer's local date, which results are ordered around. */
+  today: string;
+  /** Absent means every kind, and an empty list means none. */
+  kinds?: ItemKind[];
+  /** Absent means every visible calendar, and an empty list means none. */
+  calendarIds?: string[];
+  includeCompleted: boolean;
+}
+
+export interface CalendarSearchResults {
+  /** Upcoming items soonest first, then earlier items, most recent first. */
+  items: CalendarItem[];
+  /** How many leading items end on or after `today`. */
+  upcoming: number;
+  /** More matched than were returned. */
+  truncated: boolean;
+}
+
+export function searchCalendarItems(
+  search: CalendarSearchInput,
+): Promise<CalendarSearchResults> {
+  return invoke("search_calendar_items", { search });
+}
+
 export function getEvent(id: string): Promise<CalendarEvent> {
   return invoke("get_calendar_event", { id });
 }

@@ -8,6 +8,7 @@
 pub(crate) mod calendars;
 pub(crate) mod events;
 pub(crate) mod recurrence;
+pub(crate) mod search;
 pub(crate) mod time;
 
 use crate::database::{active_workspace, pool, DatabaseError};
@@ -171,7 +172,7 @@ pub struct WorkBlock {
     pub updated_at: String,
 }
 
-const WORK_BLOCK_FIELDS: &str =
+pub(crate) const WORK_BLOCK_FIELDS: &str =
     "id, issue_id, time_zone, start_local, end_local, start_at, end_at, created_at, updated_at";
 
 #[derive(Clone, Debug, Deserialize)]
@@ -558,7 +559,7 @@ pub struct ItemRange {
     pub time_zone: String,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ItemKind {
     Event,
@@ -648,12 +649,12 @@ pub(crate) struct EventRow {
 }
 
 #[derive(FromRow)]
-struct BlockRow {
+pub(crate) struct BlockRow {
     #[sqlx(flatten)]
-    block: WorkBlock,
-    title: String,
-    number: i64,
-    closed: bool,
+    pub block: WorkBlock,
+    pub title: String,
+    pub number: i64,
+    pub closed: bool,
 }
 
 /// An item with only its identity set.
@@ -736,6 +737,42 @@ pub(crate) fn event_item(event: Event, color: String, window: &Window) -> Calend
     item.event_id = Some(event.id);
     item.calendar_id = Some(event.calendar_id);
     item.color = Some(color);
+    item
+}
+
+/// A deadline projected from an issue's due date.
+pub(crate) fn deadline_item(
+    id: String,
+    number: i64,
+    title: String,
+    due: &str,
+    closed: bool,
+) -> CalendarItem {
+    let next = time::date(due)
+        .and_then(|day| time::add_days(day, 1))
+        .map(|day| day.to_string());
+    let mut item = blank(ItemKind::Deadline, id.clone(), title);
+    set_dates(&mut item, due, next.as_deref().unwrap_or_default());
+    item.issue_id = Some(id);
+    item.issue_number = Some(number);
+    item.closed = closed;
+    item
+}
+
+/// A work block, titled after its issue.
+pub(crate) fn block_item(row: BlockRow, window: &Window) -> CalendarItem {
+    let block = row.block;
+    let mut item = blank(ItemKind::WorkBlock, block.id, row.title);
+    set_times(
+        &mut item,
+        &block.time_zone,
+        (&block.start_local, &block.end_local),
+        (&block.start_at, &block.end_at),
+        window,
+    );
+    item.issue_id = Some(block.issue_id);
+    item.issue_number = Some(row.number);
+    item.closed = row.closed;
     item
 }
 
@@ -928,30 +965,10 @@ pub async fn list_items(
         items.push(event_item(row.event, row.color, &window));
     }
     for (id, number, title, due, closed) in deadlines {
-        let next = time::date(&due)
-            .and_then(|day| time::add_days(day, 1))
-            .map(|day| day.to_string());
-        let mut item = blank(ItemKind::Deadline, id.clone(), title);
-        set_dates(&mut item, &due, next.as_deref().unwrap_or_default());
-        item.issue_id = Some(id);
-        item.issue_number = Some(number);
-        item.closed = closed;
-        items.push(item);
+        items.push(deadline_item(id, number, title, &due, closed));
     }
     for row in blocks {
-        let block = row.block;
-        let mut item = blank(ItemKind::WorkBlock, block.id, row.title);
-        set_times(
-            &mut item,
-            &block.time_zone,
-            (&block.start_local, &block.end_local),
-            (&block.start_at, &block.end_at),
-            &window,
-        );
-        item.issue_id = Some(block.issue_id);
-        item.issue_number = Some(row.number);
-        item.closed = row.closed;
-        items.push(item);
+        items.push(block_item(row, &window));
     }
     // Recurring events are expanded for this window only.
     items.extend(recurrence::occurrences(&mut conn, workspace, &window, MAX_ITEMS + 1).await?);
