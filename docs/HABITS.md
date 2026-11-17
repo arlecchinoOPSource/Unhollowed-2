@@ -109,7 +109,7 @@ Every command resolves the active workspace in Rust and returns `{ code }` error
 - **Today** is the device's date as Rust reports it. Its row is marked with an outline and the word Today, and scrolled into view. The page reloads the month after local midnight.
 - **Unavailable cells** (future, before the start, after the archive day) are dashed and hatched, show a dash, and say why in their name. They stay focusable but cannot be changed.
 - **Saving.** A click shows the new state at once and saves it. Each cell has at most one save in flight; a further click while it runs is sent when it returns, so the stored state always ends as the last click. The status line announces each save. A failed save restores the cell, keeps focus on it, and shows the error with Retry.
-- **Adding a habit** by name starts it today. Renaming, start dates, ordering, archiving, and deletion get their screens in U2-P4-05.
+- **Adding a habit** by name starts it today. **Manage habits** (U2-P4-05) opens a dialog beside the add form. Each active habit can be renamed, moved up or down, or archived; each archived habit can be restored, shows its completed days under History, or be deleted. Moving swaps a habit with its nearest active neighbor and saves the whole order. After every change the list reloads from storage, the grid refreshes, the change is announced, and focus stays on the control that was used (or its nearest remaining one). **Delete** first shows how many completed days, and between which dates, will be lost. If the habit changed after that preview, Rust refuses, and the dialog fetches the preview again with a notice. A failed delete keeps the habit under review. Start dates have no screen yet.
 
 ## Import sources (U2-P4-06)
 

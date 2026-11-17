@@ -1634,7 +1634,7 @@ export async function installIpcMock(page: Page) {
               )
                 throw { code: "duplicate_name" };
               const habit: Habit = {
-                id: `habit-${state.habits.length + 1}`,
+                id: `habit-${Math.max(0, ...state.habits.map((item) => Number(item.id.slice(6)))) + 1}`,
                 name,
                 position: state.habits.length,
                 startDate: state.today,
@@ -1647,6 +1647,114 @@ export async function installIpcMock(page: Page) {
               };
               state.habits.push(habit);
               return structuredClone(habit);
+            }
+            case "rename_habit": {
+              const state = habitState();
+              const { id, name: raw } = args as unknown as {
+                id: string;
+                name: string;
+              };
+              const name = String(raw).trim();
+              if (!name || name.length > 60) throw { code: "invalid_name" };
+              const habit = state.habits.find((item) => item.id === id);
+              if (!habit) throw { code: "not_found" };
+              if (
+                !habit.archivedOn &&
+                state.habits.some(
+                  (other) =>
+                    other.id !== id &&
+                    !other.archivedOn &&
+                    other.name.toLowerCase() === name.toLowerCase(),
+                )
+              )
+                throw { code: "duplicate_name" };
+              habit.name = name;
+              habit.revision += 1;
+              return structuredClone(habit);
+            }
+            case "reorder_habits": {
+              const state = habitState();
+              const { ids } = args as unknown as { ids: string[] };
+              const known = state.habits.map((habit) => habit.id).sort();
+              if (JSON.stringify([...ids].sort()) !== JSON.stringify(known))
+                throw { code: "invalid_order" };
+              ids.forEach((id, position) => {
+                state.habits.find((habit) => habit.id === id)!.position =
+                  position;
+              });
+              state.habits.sort((a, b) => a.position - b.position);
+              return structuredClone(state.habits);
+            }
+            case "archive_habit": {
+              const state = habitState();
+              const habit = state.habits.find((item) => item.id === args.id);
+              if (!habit) throw { code: "not_found" };
+              if (!habit.archivedOn) {
+                habit.archivedOn =
+                  state.today > habit.startDate ? state.today : habit.startDate;
+                habit.revision += 1;
+              }
+              return structuredClone(habit);
+            }
+            case "restore_habit": {
+              const state = habitState();
+              const habit = state.habits.find((item) => item.id === args.id);
+              if (!habit) throw { code: "not_found" };
+              if (
+                habit.archivedOn &&
+                state.habits.some(
+                  (other) =>
+                    !other.archivedOn &&
+                    other.name.toLowerCase() === habit.name.toLowerCase(),
+                )
+              )
+                throw { code: "duplicate_name" };
+              if (habit.archivedOn) {
+                habit.archivedOn = null;
+                habit.revision += 1;
+              }
+              return structuredClone(habit);
+            }
+            case "list_habit_history": {
+              const state = habitState();
+              return [...state.done]
+                .map((key) => key.split("|"))
+                .filter(([id]) => id === args.id)
+                .map(([, date]) => date)
+                .sort();
+            }
+            case "get_habit_deletion_impact": {
+              const state = habitState();
+              const habit = state.habits.find((item) => item.id === args.id);
+              if (!habit) throw { code: "not_found" };
+              const dates = [...state.done]
+                .map((key) => key.split("|"))
+                .filter(([id]) => id === habit.id)
+                .map(([, date]) => date)
+                .sort();
+              return {
+                name: habit.name,
+                archived: habit.archivedOn !== null,
+                completions: dates.length,
+                firstDate: dates[0] ?? null,
+                lastDate: dates.at(-1) ?? null,
+                revision: habit.revision,
+              };
+            }
+            case "delete_habit": {
+              const state = habitState();
+              const { id, revision } = args as unknown as {
+                id: string;
+                revision: number;
+              };
+              const habit = state.habits.find((item) => item.id === id);
+              if (!habit) throw { code: "not_found" };
+              if (!habit.archivedOn) throw { code: "not_archived" };
+              if (habit.revision !== revision) throw { code: "changed" };
+              state.habits = state.habits.filter((item) => item.id !== id);
+              for (const key of [...state.done])
+                if (key.startsWith(`${id}|`)) state.done.delete(key);
+              return null;
             }
             case "get_habit_month": {
               const state = habitState();

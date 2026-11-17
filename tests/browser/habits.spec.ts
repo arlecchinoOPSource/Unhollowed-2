@@ -108,7 +108,7 @@ test("keyboard users move among cells, toggle, and hear the save state", async (
   page,
 }) => {
   await page.goto("/habits");
-  await page.getByRole("button", { name: "Add habit" }).focus();
+  await page.getByRole("button", { name: "Manage habits" }).focus();
   await page.keyboard.press("Tab");
   // One Tab stop, starting on today's row.
   const start = cell(page, "Walk, Tuesday, November 17, 2026");

@@ -217,3 +217,61 @@
   border: 2px solid var(--text);
   outline: 2px dashed var(--muted);
 }
+
+.habit-manager {
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100% - 48px);
+}
+
+.habit-manager-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.habit-manager-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.habit-manager-name {
+  flex: 1 1 10em;
+  overflow-wrap: anywhere;
+}
+
+.habit-manager-list button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.habit-manager-list button:disabled {
+  opacity: 0.5;
+}
+
+.habit-manager-list details {
+  flex-basis: 100%;
+}
+
+.habit-manager-list details ul {
+  max-height: 10em;
+  overflow: auto;
+}
+
+.habit-manager-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.habit-manager .danger {
+  border-color: var(--danger, #b3261e);
+  color: var(--danger, #b3261e);
+}

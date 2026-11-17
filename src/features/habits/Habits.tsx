@@ -25,6 +25,7 @@ import {
 import { shortcutAllowed } from "../issues/issueKeyboard";
 import { localDate, msUntilNextLocalMidnight } from "../today/dates";
 import { cellKey, HabitGrid } from "./HabitGrid";
+import { HabitManager } from "./HabitManager";
 import { FIRST_MONTH, LAST_MONTH, monthDates } from "./gridRules";
 import "./habits.css";
 
@@ -61,6 +62,7 @@ export function Habits() {
   const [failure, setFailure] = useState<Failure | null>(null);
   const [status, setStatus] = useState("");
   const [addError, setAddError] = useState("");
+  const [managing, setManaging] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -265,8 +267,21 @@ export function Habits() {
             <button className="action" type="submit">
               Add habit
             </button>
+            <button
+              type="button"
+              className="action"
+              onClick={() => setManaging(true)}
+            >
+              Manage habits
+            </button>
           </form>
           {addError && <p role="alert">{addError}</p>}
+          {managing && (
+            <HabitManager
+              onClose={() => setManaging(false)}
+              onChanged={() => setReload((count) => count + 1)}
+            />
+          )}
         </>
       )}
       <p role="status" className="habit-status">
