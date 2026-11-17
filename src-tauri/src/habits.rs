@@ -62,6 +62,8 @@ pub enum HabitError {
     InvalidFormat,
     /// The private copy made before a restore could not be written.
     CopyFailed,
+    /// Only a recurring event can be linked as a routine.
+    NotRecurring,
     /// A statistics period that ends before it starts or is over 100 years.
     InvalidRange,
     StorageFailed,
@@ -604,6 +606,9 @@ mod backup_tests;
 pub mod import;
 #[cfg(test)]
 mod import_tests;
+pub mod routines;
+#[cfg(test)]
+mod routines_tests;
 #[cfg(test)]
 mod schema_tests;
 pub mod stats;

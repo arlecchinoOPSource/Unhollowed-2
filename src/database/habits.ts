@@ -180,6 +180,57 @@ export const getHabitStatistics = (
 ): Promise<HabitStatistics> =>
   invoke("get_habit_statistics", { from, to, habitIds });
 
+/** A recurring calendar event a habit happens with. */
+export interface Routine {
+  eventId: string;
+  title: string;
+  repeatFreq: "daily" | "weekly" | "monthly" | "yearly";
+  repeatInterval: number;
+  /** The series' first day, for opening it in the calendar. */
+  startDate: string;
+}
+
+/** An active habit that happens with an event, for the daily agenda. */
+export interface RoutineHabit {
+  eventId: string;
+  habitId: string;
+  name: string;
+}
+
+export const listHabitRoutines = (habitId: string): Promise<Routine[]> =>
+  invoke("list_habit_routines", { habitId });
+
+/** Every recurring event in the workspace. */
+export const listRoutineChoices = (): Promise<Routine[]> =>
+  invoke("list_routine_choices");
+
+/** Each resolves with the habit's routines after the change. */
+export const linkHabitRoutine = (
+  habitId: string,
+  eventId: string,
+): Promise<Routine[]> => invoke("link_habit_routine", { habitId, eventId });
+
+export const unlinkHabitRoutine = (
+  habitId: string,
+  eventId: string,
+): Promise<Routine[]> => invoke("unlink_habit_routine", { habitId, eventId });
+
+export const listRoutineHabits = (
+  eventIds: string[],
+): Promise<RoutineHabit[]> => invoke("list_routine_habits", { eventIds });
+
+export function routineLabel(routine: Routine): string {
+  const unit = {
+    daily: "day",
+    weekly: "week",
+    monthly: "month",
+    yearly: "year",
+  }[routine.repeatFreq];
+  return routine.repeatInterval === 1
+    ? routine.repeatFreq
+    : `every ${routine.repeatInterval} ${unit}s`;
+}
+
 export const listHabits = (): Promise<Habit[]> => invoke("list_habits");
 
 export const createHabit = (
@@ -256,6 +307,8 @@ export function habitError(error: unknown): string {
       return "That file is larger than 32 MiB.";
     case "copy_failed":
       return "A private copy of your current habits could not be saved, so nothing was replaced.";
+    case "not_recurring":
+      return "Only a repeating event can be a routine.";
     case "invalid_range":
       return "Choose a start on or before the end, within 100 years.";
     case "invalid_format":

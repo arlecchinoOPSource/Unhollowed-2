@@ -178,6 +178,17 @@ Streaks are always whole numbers and `0` when there is none.
 - **Keyboard.** One Tab stop. In the month view, arrows move a day or a week; in the year view, columns are weeks, so left and right move a week and up and down a day. Page Up and Page Down change the month or year. Enter or Space selects a day, and the detail line (announced politely) states the date and its state.
 - **Back to the grid.** The detail line links to `/habits?habit=ID&date=YYYY-MM-DD`. The checkbox grid opens that month and focuses that habit's cell. Choosing another month drops the link, so it cannot pull focus back later.
 
+## Routines (U2-P4-14)
+
+A habit can be linked to the repeating calendar events it happens with, such as a daily walk. The calendar's recurrence and agenda queries stay the only schedule; nothing here expands occurrences or keeps a second recurrence engine.
+
+- **Storage.** `habit_events` (migration 0028) holds only `habit_id`, `event_id`, and `workspace_id`, so a link follows both records by ID: a renamed habit or event shows its new name, and nothing is copied.
+- **Rules.** Both ends must be in the same workspace, so a habit or event of another workspace is _not found_; SQLite also refuses it with a trigger. Only a repeating event can be linked (a one-time event is refused). Linking twice or unlinking a missing link changes nothing.
+- **Archive and delete.** Archiving a habit keeps its links, and it leaves the daily agenda because only active habits are shown there. Deleting the habit or the event removes only the link, never the other record or any completion.
+- **Completion stays explicit.** Linking, unlinking, and every occurrence never create or change a completion, or the habit's revision. Checking a day is only done through the habit commands.
+- **Screens.** In **Manage habits**, each active habit has a _Routines_ section to link a repeating event, open the series in the calendar (at its first day), or unlink it. The Today schedule shows the active habits linked to each of today's events, with a link to that habit and day in the checkbox grid.
+- **Commands.** `list_habit_routines`, `list_routine_choices`, `link_habit_routine`, `unlink_habit_routine`, `list_routine_habits`.
+
 ## Parity fixtures
 
 Synthetic data only; never commit real history. U2-P4-02 to U2-P4-04 and U2-P4-06 turn these into tests.

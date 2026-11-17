@@ -8,6 +8,7 @@ import {
   type CalendarItem,
   type LinkedRecord,
 } from "../../database/events";
+import { listRoutineHabits, type RoutineHabit } from "../../database/habits";
 import { issueKey } from "../../database/issues";
 import { newDraft } from "../calendar/eventDraft";
 import {
@@ -47,6 +48,7 @@ export function TodaySchedule({ today }: { today: string }) {
   const settings = useCalendarPreferences();
   const [items, setItems] = useState<CalendarItem[] | null>(null);
   const [links, setLinks] = useState<Record<string, LinkedRecord[]>>({});
+  const [routines, setRoutines] = useState<Record<string, RoutineHabit[]>>({});
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   // Bumped when the window regains focus, so a resumed app reloads.
@@ -79,8 +81,21 @@ export function TodaySchedule({ today }: { today: string }) {
             ),
           ),
         );
+        // Habits that happen with these events. A failed read leaves them out.
+        const habits = await listRoutineHabits(
+          events.map((item) => item.eventId!),
+        ).catch(() => [] as RoutineHabit[]);
         if (!current) return;
         setError("");
+        setRoutines(
+          habits.reduce<Record<string, RoutineHabit[]>>(
+            (byEvent, habit) => ({
+              ...byEvent,
+              [habit.eventId]: [...(byEvent[habit.eventId] ?? []), habit],
+            }),
+            {},
+          ),
+        );
         setLinks(Object.fromEntries(found));
         setItems(loaded);
       },
@@ -130,8 +145,15 @@ export function TodaySchedule({ today }: { today: string }) {
 
   function context(item: CalendarItem) {
     const projects = (item.eventId && links[item.eventId]) || [];
-    return projects.length > 0 ? (
+    const habits = (item.eventId && routines[item.eventId]) || [];
+    return projects.length > 0 || habits.length > 0 ? (
       <span className="agenda-projects">
+        {habits.map(({ habitId, name }) => (
+          <Link key={habitId} to={`/habits?habit=${habitId}&date=${today}`}>
+            <span className="visually-hidden">Habit: </span>
+            {name}
+          </Link>
+        ))}
         {projects.map(({ id, title, archived }) => (
           <Link key={id} to={`/projects/${id}`}>
             {title}
