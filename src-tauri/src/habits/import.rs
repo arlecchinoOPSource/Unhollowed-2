@@ -339,18 +339,18 @@ pub struct PickedFile {
     pub content: String,
 }
 
-/// Asks for a backup with the native dialog and reads it. `None` when the user
-/// cancels. Files over 32 MiB or not valid UTF-8 are refused. The file is only
-/// read.
-#[tauri::command]
-pub async fn pick_habit_backup<R: Runtime>(
+/// Asks for a `.json` file with the native dialog and reads it. `None` when
+/// the user cancels. Files over 32 MiB or not valid UTF-8 are refused. The
+/// file is only read.
+pub(super) async fn pick<R: Runtime>(
     app: AppHandle<R>,
+    label: &'static str,
 ) -> Result<Option<PickedFile>, HabitError> {
     tauri::async_runtime::spawn_blocking(move || {
         let Some(path) = app
             .dialog()
             .file()
-            .add_filter("Ember backup", &["json"])
+            .add_filter(label, &["json"])
             .blocking_pick_file()
         else {
             return Ok(None);
@@ -372,6 +372,13 @@ pub async fn pick_habit_backup<R: Runtime>(
     })
     .await
     .map_err(|_| HabitError::FileFailed)?
+}
+
+#[tauri::command]
+pub async fn pick_habit_backup<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Option<PickedFile>, HabitError> {
+    pick(app, "Ember backup").await
 }
 
 #[tauri::command]

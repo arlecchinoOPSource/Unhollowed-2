@@ -58,6 +58,10 @@ pub enum HabitError {
     FileFailed,
     /// The chosen backup is over the size limit.
     FileTooLarge,
+    /// A history export was asked for in a format other than csv or json.
+    InvalidFormat,
+    /// The private copy made before a restore could not be written.
+    CopyFailed,
     StorageFailed,
 }
 
@@ -592,6 +596,9 @@ pub async fn set_habit_completion(
     set_completion(&pool, &workspace, &id, &date, done, &local_today()).await
 }
 
+pub mod backup;
+#[cfg(test)]
+mod backup_tests;
 pub mod import;
 #[cfg(test)]
 mod import_tests;
