@@ -190,3 +190,70 @@ export const getProgressAnalytics = (
   timeZone: string,
 ): Promise<ProgressAnalytics> =>
   invoke("get_progress_analytics", { from, to, projectId, timeZone });
+
+/** Scheduled activity. Minutes are scheduled time, never time spent. */
+export interface ScheduleLoad {
+  events: number;
+  allDayEvents: number;
+  timedEvents: number;
+  workBlocks: number;
+  /** Open issues due in the period. */
+  deadlines: number;
+  eventMinutes: number;
+  workBlockMinutes: number;
+  /** Minutes covered by at least one timed event or work session. */
+  busyMinutes: number;
+  /** Minutes counted twice because items overlap. */
+  overlapMinutes: number;
+}
+
+export interface ScheduleBucket extends ScheduleLoad {
+  start: string;
+  end: string;
+}
+
+export interface ScheduleProjectLoad {
+  kind: "project" | "unassigned" | "shared";
+  projectId: string | null;
+  name: string;
+  events: number;
+  eventMinutes: number;
+  workBlocks: number;
+  workBlockMinutes: number;
+  deadlines: number;
+}
+
+export interface UpcomingItem {
+  kind: "event" | "work_block" | "deadline";
+  id: string;
+  title: string;
+  allDay: boolean;
+  when: string;
+}
+
+export interface ScheduleAnalytics {
+  from: string;
+  to: string;
+  today: string;
+  timeZone: string;
+  projectId: string | null;
+  truncated: boolean;
+  totals: ScheduleLoad;
+  days: ScheduleBucket[];
+  weeks: ScheduleBucket[];
+  projects: ScheduleProjectLoad[];
+  upcoming: {
+    events: number;
+    workBlocks: number;
+    deadlines: number;
+    next: UpcomingItem[];
+  };
+}
+
+export const getScheduleAnalytics = (
+  from: string,
+  to: string,
+  projectId: string | null,
+  timeZone: string,
+): Promise<ScheduleAnalytics> =>
+  invoke("get_schedule_analytics", { from, to, projectId, timeZone });

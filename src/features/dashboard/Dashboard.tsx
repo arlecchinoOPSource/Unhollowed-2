@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
 import { ProgressSection } from "./ProgressSection";
+import { ScheduleSection } from "./ScheduleSection";
 import "./dashboard.css";
 
 /**
@@ -64,6 +65,7 @@ export function Dashboard() {
             </div>
           </div>
           <ProgressSection project={project || null} days={days} />
+          <ScheduleSection project={project || null} days={days} />
         </>
       )}
     </section>
