@@ -87,6 +87,7 @@ fn main() {
             overview::get_project_overview,
             search::search_workspace,
             portability::export_project_data,
+            portability::save_document_file,
             portability::export_issues_csv,
             portability::preview_import,
             portability::import_project_data,

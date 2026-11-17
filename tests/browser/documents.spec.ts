@@ -42,16 +42,7 @@ async function setup(page: Page, version?: number) {
       __TAURI_INTERNALS__: {
         invoke(
           command: string,
-          {
-            id,
-            title,
-            content,
-            data,
-            input,
-            name,
-            parentId,
-            folder,
-          }: {
+          args: {
             id?: string;
             title?: string;
             content?: string;
@@ -60,8 +51,11 @@ async function setup(page: Page, version?: number) {
             name?: string;
             parentId?: string | null;
             folder?: string | null;
+            format?: string;
           } = {},
         ) {
+          const { id, title, content, data, input, name, parentId, folder } =
+            args;
           const document = documents.find((item) => item.id === id);
           switch (command) {
             case "list_document_library":
@@ -100,6 +94,9 @@ async function setup(page: Page, version?: number) {
               return { documents, links: [{ source: "one", target: "two" }] };
             case "list_document_references":
               return [];
+            case "save_document_file":
+              Reflect.set(window, "savedDocumentFile", args);
+              return "test";
             case "list_documents":
               return structuredClone(documents);
             case "get_document":
@@ -248,6 +245,15 @@ test("persists a table and local image reference across document switches", asyn
   await page.getByRole("button", { name: "First draft" }).click();
   await expect(editor.locator("tr")).toHaveCount(4);
   await expect(image).toBeVisible();
+  await page.getByText("Export document", { exact: true }).click();
+  await page.getByLabel("File format").selectOption("html");
+  await page.getByRole("button", { name: "Save document file" }).click();
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(window, "savedDocumentFile")))
+    .toMatchObject({
+      format: "html",
+      content: expect.stringContaining('<img src="data:image/png;base64,'),
+    });
 });
 
 test("prints the selected paper geometry and an explicit page break", async ({
@@ -367,4 +373,54 @@ test("opens a local graph and finds a neighboring document", async ({
   await page.getByRole("searchbox", { name: "Find a document" }).fill("second");
   await page.getByRole("link", { name: "Second draft" }).click();
   await expect(page).toHaveURL(/doc=two$/);
+});
+
+test("imports Markdown as a separate document and exports Markdown, text, and HTML", async ({
+  page,
+}) => {
+  await setup(page);
+  const file = page.getByLabel("Import Markdown or text");
+  await file.setInputFiles({
+    name: "Field notes.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      "# Field notes\n\n**Observation** with [reference](https://example.com).\n\n![Remote illustration](https://example.com/image.png)",
+    ),
+  });
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await expect(
+    editor.getByRole("heading", { name: "Field notes" }),
+  ).toBeVisible();
+  await expect(editor.locator("strong")).toHaveText("Observation");
+  await expect(editor.locator("img")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Markdown image references were imported as alternative text.",
+    ),
+  ).toBeVisible();
+  await page.getByText("Export document", { exact: true }).click();
+  const chooseFormat = page.getByLabel("File format");
+  const save = page.getByRole("button", { name: "Save document file" });
+  const result = () =>
+    page.evaluate(() => Reflect.get(window, "savedDocumentFile"));
+  for (const [format, marker] of [
+    ["md", "**Observation**"],
+    ["txt", "Observation with reference"],
+    ["html", "<strong>Observation</strong>"],
+  ]) {
+    await chooseFormat.selectOption(format);
+    await save.click();
+    await expect.poll(result).toMatchObject({
+      title: "Field notes",
+      format,
+      content: expect.stringContaining(marker),
+    });
+  }
+  expect((await result()).content).toContain('href="https://example.com/"');
+  await file.setInputFiles({
+    name: "Plain.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Line one\n\nLine three"),
+  });
+  await expect(editor.locator("p")).toHaveText(["Line one", "", "Line three"]);
 });

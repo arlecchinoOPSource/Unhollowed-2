@@ -979,6 +979,38 @@ async fn save_with_dialog(
     .map_err(|_| PortError::WriteFailed)?
 }
 
+#[tauri::command]
+pub async fn save_document_file(
+    app: AppHandle,
+    title: String,
+    format: String,
+    content: String,
+) -> Result<Option<String>, PortError> {
+    let filter = match format.as_str() {
+        "txt" => ("Plain text", "txt"),
+        "md" => ("Markdown", "md"),
+        "html" => ("HTML", "html"),
+        _ => return Err(PortError::WriteFailed),
+    };
+    if content.len() > 32 * 1024 * 1024 {
+        return Err(PortError::WriteFailed);
+    }
+    let name: String = title
+        .chars()
+        .map(|c| {
+            if c.is_control() || "/\\:*?\"<>|".contains(c) {
+                '_'
+            } else {
+                c
+            }
+        })
+        .take(100)
+        .collect();
+    let name = name.trim_matches(|c: char| c.is_whitespace() || c == '.');
+    let name = if name.is_empty() { "Untitled" } else { name };
+    save_with_dialog(app, format!("{name}.{format}"), filter, content).await
+}
+
 async fn scope(instances: &DbInstances) -> Result<(SqlitePool, String), PortError> {
     let pool = pool(instances).await?;
     let workspace = active_workspace(&pool).await?;

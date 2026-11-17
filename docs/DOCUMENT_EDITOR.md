@@ -9,3 +9,16 @@ Document autosave is debounced by 700 ms. Writes for an ID run in order across e
 SQLite checkpoints the displaced content up to once every five minutes per document. An explicit restore always checkpoints the displaced version in the same transaction. The latest 20 checkpoints per document are kept. The revision picker is disabled until current edits are saved or discarded.
 
 Find matches literal text without regard to case inside a block, including across adjacent formatting runs. Replace all is one undoable change. The heading outline navigates to headings, and Focus Mode centers the writing area. Escape or the visible exit control restores the normal layout.
+
+## File transfer
+
+Import UTF-8 Markdown and plain text from the library to create a new
+document. Markdown keeps common headings, lists, tables, links, and emphasis.
+Embedded HTML is treated as text and image links become alternative text.
+The import limit is 512 KiB.
+
+Export Markdown, text, or basic HTML from the editor. HTML embeds managed
+images locally and includes supported editor styles and print settings.
+Workspace links appear as their visible labels in portable documents.
+Markdown and plain text omit page layout, images, and custom typography.
+Use Print to save a PDF with the platform print dialog.

@@ -50,6 +50,7 @@ export function Documents() {
     setParams({ doc: id });
   }
   const [error, setError] = useState("");
+  const [importNotice, setImportNotice] = useState("");
 
   useEffect(() => {
     if (!desktop) return;
@@ -237,6 +238,45 @@ export function Documents() {
             >
               <FilePlus size={15} aria-hidden="true" /> New document
             </button>
+            <label className="word-controls">
+              Import Markdown or text
+              <input
+                type="file"
+                accept=".md,.markdown,.txt"
+                disabled={busy}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  if (!file) return;
+                  setImportNotice("");
+                  void run(async () => {
+                    try {
+                      const { readWritingFile } =
+                        await import("./editor/fileTransfer");
+                      const { title, content, warning } =
+                        await readWritingFile(file);
+                      const imported = await addLibraryDocument(
+                        title,
+                        content,
+                        folder === "all" ? null : folder || null,
+                      );
+                      upsert(imported);
+                      setView("active");
+                      setSearch("");
+                      setActiveId(imported.id);
+                      setImportNotice(warning ?? "Document imported.");
+                    } catch (error) {
+                      setError(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not import the selected document.",
+                      );
+                    }
+                  });
+                }}
+              />
+            </label>
+            {importNotice && <p role="status">{importNotice}</p>}
             <LibraryControls
               folders={folders}
               selected={selected}

@@ -10,6 +10,7 @@ import {
   PageSurface,
 } from "./editor/DocumentLayout";
 import { DocumentImage } from "./editor/DocumentImage";
+import { DocumentExport } from "./editor/DocumentExport";
 import { DocumentInsert } from "./editor/DocumentInsert";
 import { EditorContent } from "@tiptap/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -306,6 +307,7 @@ function EditorBody({
           <>
             <DocumentToolbar editor={editor} />
             <DocumentInsert editor={editor} documentId={id} />
+            <DocumentExport editor={editor} id={id} title={title} />
             <DocumentLayout editor={editor} setPageMode={setPageMode} />
             <DocumentNavigation editor={editor} />
           </>
