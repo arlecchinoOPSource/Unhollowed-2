@@ -156,7 +156,11 @@ export function ProgressSection({
 
   return (
     <section aria-labelledby="progress-title" className="dash-section">
-      <h2 id="progress-title">Projects and issues</h2>
+      <div className="dash-head">
+        <h2 id="progress-title">Projects and issues</h2>
+        <Link to={issuesLink(project)}>Open issues</Link>
+        <Link to="/projects">Open projects</Link>
+      </div>
       {error && (
         <div role="alert">
           <p>{error}</p>

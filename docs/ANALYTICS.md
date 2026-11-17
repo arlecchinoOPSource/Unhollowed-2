@@ -89,3 +89,21 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Period and weeks.** At most 366 days. Weeks run Monday to Sunday, clipped to the period, and add up their days' minutes.
 - **Upcoming.** Today through the next 6 days, whatever the period, with the next 10 items in time order, each labeled by kind.
 - **Limits.** The calendar lists at most 2000 items per read. When it has more, `truncated` is true and the screen says the counts may be low.
+
+## The workspace dashboard (U2-P4-19)
+
+`/dashboards` composes the sections above under one **period** (last 30, 90, or 365 days) and one optional **project** filter, so every card and chart covers the same days. Each section reads on its own and has its own loading, empty, and error state with a retry, so one failing source never blanks the page.
+
+| Section                 | Source                                                                                                         | Links to                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| At a glance             | `get_workspace_analytics`: open, completed in the period, overdue, habit completion, scheduled events and time | The issue list with the same project and the matching `state`, `status`, or `due` filter; `/habits`; `/calendar` |
+| Projects and issues     | `get_progress_analytics`                                                                                       | Issues, projects, deadlines, milestones                                                                          |
+| Schedule                | `get_schedule_analytics`                                                                                       | The calendar                                                                                                     |
+| Habits                  | `get_habit_statistics`                                                                                         | `/habits`                                                                                                        |
+| Mood, energy, and focus | `get_checkin_analytics`                                                                                        | `/mood`                                                                                                          |
+
+- **Availability.** Habits and check-ins belong to no project. With a project selected, the Habits card and section say they are not part of a project, and the mood section is omitted, instead of showing unfiltered numbers. The habit engine is not even asked.
+- **Mood is optional.** The mood section appears only when the period has at least one check-in (or when reading failed, to offer a retry). A workspace that does not use check-ins never sees an empty prompt for them.
+- **Invalidation.** Sections subscribe to the sources they read (see "Keeping views current"), so a completed habit, issue, or event refreshes the cards that depend on it without reloading the page.
+- **Reflow.** Cards use a grid that becomes one column on narrow screens, and wide tables scroll inside their own section so the page itself does not scroll sideways.
+- **Not included.** Layout editing, saved layouts, and any combined productivity score.

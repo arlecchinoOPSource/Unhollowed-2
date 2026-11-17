@@ -91,3 +91,31 @@
 .dash-details {
   max-width: 640px;
 }
+
+.dash-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+.dash-head h2 {
+  margin-right: auto;
+}
+
+.dash-section {
+  margin: 0 0 28px;
+  min-width: 0;
+  /* Wide tables scroll inside their section, never the page. */
+  overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+  .dash-tiles {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-controls {
+    align-items: stretch;
+  }
+}

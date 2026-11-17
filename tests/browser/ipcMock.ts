@@ -599,6 +599,9 @@ export async function installIpcMock(page: Page) {
             window as unknown as { __calls?: Record<string, number> }
           ).__calls ??= {});
           counts[command] = (counts[command] ?? 0) + 1;
+          ((
+            window as unknown as { __lastArgs?: Record<string, unknown> }
+          ).__lastArgs ??= {})[command] = args;
           const hold = held.get(command);
           if (hold) {
             held.delete(command);
@@ -2319,6 +2322,83 @@ export async function installIpcMock(page: Page) {
                 projects: [],
                 upcoming: { events: 0, workBlocks: 0, deadlines: 0, next: [] },
                 ...(window as unknown as { __schedule?: object }).__schedule,
+                projectId: a.projectId,
+              });
+            }
+            case "get_workspace_analytics": {
+              // Tests supply the engine's output as window.__workspace; the
+              // arithmetic is covered by the Rust tests.
+              const a = args as unknown as {
+                from: string;
+                to: string;
+                projectId: string | null;
+              };
+              const gap = (reason: string) => ({
+                availability: "not_applicable",
+                reason,
+                data: null,
+              });
+              const ok = (data: object) => ({
+                availability: "available",
+                reason: null,
+                data,
+              });
+              const given = (
+                window as unknown as { __workspace?: Record<string, object> }
+              ).__workspace;
+              return structuredClone({
+                period: {
+                  from: a.from,
+                  to: a.to,
+                  days: 30,
+                  today: "2026-11-17",
+                  timeZone: "Europe/Paris",
+                },
+                issues: ok({
+                  created: 0,
+                  completed: 0,
+                  due: 0,
+                  dueCompleted: 0,
+                  duePercent: null,
+                  open: 0,
+                  overdue: 0,
+                }),
+                projects: ok({}),
+                objectives: ok({}),
+                milestones: ok({}),
+                calendar: ok({
+                  events: 0,
+                  allDayEvents: 0,
+                  timedEvents: 0,
+                  scheduledMinutes: 0,
+                  workBlocks: 0,
+                  workBlockMinutes: 0,
+                  truncated: false,
+                }),
+                habits: a.projectId
+                  ? gap("Habits and check-ins do not belong to a project.")
+                  : ok({
+                      eligible: 0,
+                      completed: 0,
+                      percent: null,
+                      practice: { current: 0, longest: 0 },
+                    }),
+                mood: a.projectId
+                  ? gap("Habits and check-ins do not belong to a project.")
+                  : ok({}),
+                ...given,
+                // Habits and check-ins have no project: a filter always
+                // makes them not applicable, whatever the fixture holds.
+                ...(a.projectId
+                  ? {
+                      habits: gap(
+                        "Habits and check-ins do not belong to a project.",
+                      ),
+                      mood: gap(
+                        "Habits and check-ins do not belong to a project.",
+                      ),
+                    }
+                  : {}),
                 projectId: a.projectId,
               });
             }

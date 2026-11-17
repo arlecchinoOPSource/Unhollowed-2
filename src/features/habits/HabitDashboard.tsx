@@ -64,7 +64,13 @@ function Axes({ first, last }: { first: string; last: string }) {
  * dashed empty slot, never as a zero-height bar, so "no data" and "0%" differ
  * by shape and label, not only color.
  */
-function Bars({ buckets, name }: { buckets: HabitBucket[]; name: string }) {
+export function Bars({
+  buckets,
+  name,
+}: {
+  buckets: HabitBucket[];
+  name: string;
+}) {
   const inner = W - PAD.left - PAD.right;
   const slot = inner / Math.max(buckets.length, 1);
   const width = Math.max(Math.min(slot - 2, 40), 1);
@@ -177,7 +183,7 @@ function Curve({ buckets }: { buckets: HabitBucket[] }) {
   );
 }
 
-function Table({
+export function Table({
   caption,
   buckets,
 }: {
