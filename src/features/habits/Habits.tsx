@@ -6,6 +6,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { useSearchParams } from "react-router";
 import {
   createHabit,
   getHabitMonth,
@@ -26,6 +27,7 @@ import { shortcutAllowed } from "../issues/issueKeyboard";
 import { localDate, msUntilNextLocalMidnight } from "../today/dates";
 import { cellKey, HabitGrid } from "./HabitGrid";
 import { HabitBackup } from "./HabitBackup";
+import { HabitHistory } from "./HabitHistory";
 import { HabitDashboard } from "./HabitDashboard";
 import { HabitImport } from "./HabitImport";
 import { HabitManager } from "./HabitManager";
@@ -51,7 +53,23 @@ const monthNames = Array.from({ length: 12 }, (_, index) =>
  */
 export function Habits() {
   const desktop = isTauri();
-  const [month, setMonth] = useState(() => monthOf(localDate(new Date())));
+  const [params, setParams] = useSearchParams();
+  // A history link lands on one habit and date: /habits?habit=ID&date=DATE.
+  const linkDate = params.get("date");
+  const linked =
+    linkDate && /^\d{4}-\d{2}-\d{2}$/.test(linkDate) && params.get("habit")
+      ? { habitId: params.get("habit")!, date: linkDate }
+      : null;
+  const [month, setMonth] = useState(() =>
+    monthOf(linked?.date ?? localDate(new Date())),
+  );
+  // A link followed while the page is open moves to its month too.
+  const linkKey = linked ? `${linked.habitId}|${linked.date}` : "";
+  const [seenLink, setSeenLink] = useState(linkKey);
+  if (seenLink !== linkKey) {
+    setSeenLink(linkKey);
+    if (linked) setMonth(monthOf(linked.date));
+  }
   const [data, setData] = useState<HabitMonth | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -68,6 +86,7 @@ export function Habits() {
   const [managing, setManaging] = useState(false);
   const [importing, setImporting] = useState(false);
   const [trends, setTrends] = useState(false);
+  const [history, setHistory] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -103,9 +122,15 @@ export function Habits() {
     return () => window.clearTimeout(timer);
   }, [today]);
 
-  const go = useCallback((next: string) => {
-    if (next >= FIRST_MONTH && next <= LAST_MONTH) setMonth(next);
-  }, []);
+  const go = useCallback(
+    (next: string) => {
+      if (next < FIRST_MONTH || next > LAST_MONTH) return;
+      setMonth(next);
+      // Leaving the linked month drops the link so it cannot pull focus back.
+      setParams({}, { replace: true });
+    },
+    [setParams],
+  );
   const goToday = useCallback(() => go(monthOf(today)), [go, today]);
 
   useEffect(() => {
@@ -276,6 +301,15 @@ export function Habits() {
             <button
               type="button"
               className="action"
+              aria-expanded={history}
+              aria-controls="habit-history"
+              onClick={() => setHistory((open) => !open)}
+            >
+              {history ? "Hide history" : "Show history"}
+            </button>
+            <button
+              type="button"
+              className="action"
               aria-expanded={trends}
               aria-controls="habit-trends"
               onClick={() => setTrends((open) => !open)}
@@ -325,6 +359,11 @@ export function Habits() {
           )}
         </>
       )}
+      {desktop && history && (
+        <div id="habit-history">
+          <HabitHistory reload={reload} />
+        </div>
+      )}
       {desktop && trends && (
         <div id="habit-trends">
           <HabitDashboard reload={reload} />
@@ -373,7 +412,7 @@ export function Habits() {
       {data && data.habits.length > 0 && (
         <div ref={gridRef}>
           <HabitGrid
-            key={month}
+            key={`${month}|${linkKey}`}
             caption={`Habits, ${title}`}
             dates={monthDates(month)}
             habits={data.habits}
@@ -381,6 +420,7 @@ export function Habits() {
             isDone={isDone}
             isSaving={(key) => pending.has(key)}
             failedKey={failure ? cellKey(failure.habit.id, failure.date) : null}
+            target={linked}
             onToggle={(habit, date) =>
               void save(habit, date, !isDone(cellKey(habit.id, date)))
             }

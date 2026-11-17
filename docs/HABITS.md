@@ -170,6 +170,14 @@ Streaks are always whole numbers and `0` when there is none.
 - **Text equivalents.** Each chart has a label, hover titles, and a _Data table_ with the same periods. The per-habit table repeats rates and streaks as text.
 - **States.** No habits, nothing eligible in the period, loading, and a failed load with **Retry** each have their own message.
 
+## Habit history (U2-P4-10)
+
+**Show history** on the habits page shows one habit as a month calendar or a year heatmap, with a habit picker, previous and next month or year, and the same eligibility and completion data as the checkbox grid (`list_habits`, `list_habit_history`, and the backend's today).
+
+- **Day states** follow the documented rules: _Completed_; _Missed_ (eligible, past, no completion); _Not done yet today_; _Not active_ before the start or after the archive day (the archive day itself is eligible); and _Future_. Each cell carries a symbol (✓ × ○ –, none for future), a border style, and an accessible name such as "Tuesday, February 29, 2028: Completed", so no state depends on color. Leap days and year boundaries come from the shared month rules.
+- **Keyboard.** One Tab stop. In the month view, arrows move a day or a week; in the year view, columns are weeks, so left and right move a week and up and down a day. Page Up and Page Down change the month or year. Enter or Space selects a day, and the detail line (announced politely) states the date and its state.
+- **Back to the grid.** The detail line links to `/habits?habit=ID&date=YYYY-MM-DD`. The checkbox grid opens that month and focuses that habit's cell. Choosing another month drops the link, so it cannot pull focus back later.
+
 ## Parity fixtures
 
 Synthetic data only; never commit real history. U2-P4-02 to U2-P4-04 and U2-P4-06 turn these into tests.
