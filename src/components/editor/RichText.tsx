@@ -8,6 +8,8 @@ import StarterKit from "@tiptap/starter-kit";
 import { Bold, Heading2, Italic, List, ListOrdered } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+const sharedExtensions = [StarterKit];
+
 /**
  * A Tiptap editor for a rich-text field stored as Tiptap JSON. `onChange`
  * receives the serialized JSON after each edit.
@@ -19,13 +21,14 @@ export function useRichTextEditor(
   label: string,
   content: string,
   onChange: (content: string) => void,
+  extensions: UseEditorOptions["extensions"] = sharedExtensions,
 ): Editor | null {
   const change = useRef(onChange);
   useEffect(() => {
     change.current = onChange;
   });
   const [options] = useState<UseEditorOptions>(() => ({
-    extensions: [StarterKit],
+    extensions,
     content: JSON.parse(content),
     // Tiptap's injected <style> tag would be blocked by the app's CSP. The
     // equivalent rules live in workspace.css.
