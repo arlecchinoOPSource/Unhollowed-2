@@ -2080,6 +2080,88 @@ export async function installIpcMock(page: Page) {
                 },
               );
             }
+            case "get_checkin":
+            case "list_checkins":
+            case "save_checkin":
+            case "delete_checkin": {
+              // Follows src-tauri/src/checkins.rs. Tests seed
+              // window.__seedCheckins as [{ date, mood, energy, focus, note }].
+              const w = window as unknown as {
+                __checkins?: Record<string, Record<string, unknown>>;
+                __seedCheckins?: Record<string, unknown>[];
+              };
+              if (!w.__checkins) {
+                w.__checkins = {};
+                for (const item of w.__seedCheckins ?? [])
+                  w.__checkins[String(item.date)] = {
+                    id: `checkin-${item.date}`,
+                    mood: null,
+                    energy: null,
+                    focus: null,
+                    note: null,
+                    createdAt: "2026-11-01T00:00:00Z",
+                    updatedAt: "2026-11-01T00:00:00Z",
+                    ...item,
+                  };
+              }
+              const store = w.__checkins;
+              const a = args as unknown as {
+                date?: string;
+                from?: string;
+                to?: string;
+                mood: number | null;
+                energy: number | null;
+                focus: number | null;
+                note: string | null;
+              };
+              if (command === "list_checkins")
+                return structuredClone(
+                  Object.values(store)
+                    .filter(
+                      (item) =>
+                        String(item.date) >= a.from! &&
+                        String(item.date) <= a.to!,
+                    )
+                    .sort((x, y) =>
+                      String(x.date).localeCompare(String(y.date)),
+                    ),
+                );
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(a.date ?? ""))
+                throw { code: "invalid_date" };
+              if (command === "get_checkin")
+                return structuredClone(store[a.date!] ?? null);
+              if (command === "delete_checkin") {
+                delete store[a.date!];
+                return null;
+              }
+              const today = "2026-11-17";
+              if (a.date! > today) throw { code: "future_date" };
+              for (const value of [a.mood, a.energy, a.focus])
+                if (value !== null && !(value >= 1 && value <= 5))
+                  throw { code: "invalid_rating" };
+              const note = a.note?.trim() || null;
+              if (
+                a.mood === null &&
+                a.energy === null &&
+                a.focus === null &&
+                !note
+              ) {
+                delete store[a.date!];
+                return null;
+              }
+              const before = store[a.date!];
+              store[a.date!] = {
+                id: before?.id ?? `checkin-${a.date}`,
+                date: a.date,
+                mood: a.mood,
+                energy: a.energy,
+                focus: a.focus,
+                note,
+                createdAt: before?.createdAt ?? now(),
+                updatedAt: now(),
+              };
+              return structuredClone(store[a.date!]);
+            }
             case "get_habit_month": {
               const state = habitState();
               const { year, month } = args as unknown as {
