@@ -1093,6 +1093,8 @@ test.describe("Calendar", () => {
       .getByRole("navigation", { name: "Workspace" })
       .getByRole("link", { name: "Calendar" })
       .click();
+    // The calendar opens on Week; issues are on the month grid.
+    await page.getByRole("button", { name: "Month", exact: true }).click();
     const grid = page.getByRole("table", { name: "November 2026" });
     await expect(grid).toBeVisible();
     const today = grid.getByRole("button", {

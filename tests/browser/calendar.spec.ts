@@ -16,7 +16,7 @@ function day(page: Page, date: RegExp) {
 test("manages calendars: create, hide, default, archive with a replacement, and restore", async ({
   page,
 }) => {
-  await page.goto("/calendar");
+  await page.goto("/calendar?view=month");
   await page.getByRole("link", { name: "Manage calendars" }).click();
   await expect(
     page.getByRole("heading", { name: "Calendars", exact: true }),
@@ -113,6 +113,7 @@ test("creates, edits, duplicates, moves, and deletes events in the editor", asyn
   await create.getByLabel("Calendar name").press("Enter");
   await expect(page.getByRole("status")).toHaveText("Created calendar Work.");
   await page.getByRole("link", { name: "Calendar" }).first().click();
+  await page.getByRole("button", { name: "Month", exact: true }).click();
 
   await day(page, /November 18, 2026/).click();
   const panel = page.getByRole("region", { name: /November 18, 2026/ });
@@ -212,7 +213,7 @@ test("creates, edits, duplicates, moves, and deletes events in the editor", asyn
 test("shows a multi-day all-day event on each of its days", async ({
   page,
 }) => {
-  await page.goto("/calendar");
+  await page.goto("/calendar?view=month");
   await day(page, /November 18, 2026/).click();
   await page.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "New event" });
@@ -254,7 +255,7 @@ test("shows events from another zone at the viewer's time with their own", async
       ],
     }),
   );
-  await page.goto("/calendar");
+  await page.goto("/calendar?view=month");
   await day(page, /November 18, 2026/).click();
   const event = page.getByRole("button", {
     name: /01:00–02:00\s*Tokyo sync\s*09:00 Asia\/Tokyo/,
@@ -269,7 +270,7 @@ test("shows events from another zone at the viewer's time with their own", async
 test("repeats an event and edits one occurrence, this and following, or all", async ({
   page,
 }) => {
-  await page.goto("/calendar");
+  await page.goto("/calendar?view=month");
   await day(page, /November 18, 2026/).click();
   await page.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "New event" });
@@ -332,4 +333,190 @@ test("repeats an event and edits one occurrence, this and following, or all", as
   await expect(
     await occurrence(/November 18, 2026/, /18:00–19:00\s*Class/),
   ).toBeVisible();
+});
+
+test.describe("timeline views", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-11-18T14:20:00+01:00"));
+    await page.addInitScript(() =>
+      Object.assign(window, {
+        __seedIssues: [{ title: "Send invoice", dueDate: "2026-11-19" }],
+        __seedEvents: [
+          {
+            title: "Standup",
+            startLocal: "2026-11-18T09:00",
+            endLocal: "2026-11-18T09:30",
+          },
+          {
+            title: "Design review",
+            startLocal: "2026-11-18T09:15",
+            endLocal: "2026-11-18T10:30",
+          },
+          {
+            title: "Saturday run",
+            startLocal: "2026-11-21T08:00",
+            endLocal: "2026-11-21T09:00",
+          },
+          {
+            title: "Offsite",
+            allDay: true,
+            startDate: "2026-11-19",
+            endDate: "2026-11-21",
+            timeZone: null,
+          },
+        ],
+      }),
+    );
+  });
+
+  test("opens on Week and shows the same items in Day and Workweek", async ({
+    page,
+  }) => {
+    await page.goto("/calendar");
+    const views = page.getByRole("group", { name: "Calendar view" });
+    await expect(
+      views.getByRole("button", { name: "Week", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByRole("heading", { name: "November 16 – 22, 2026" }),
+    ).toBeVisible();
+    const wednesday = page.getByRole("group", {
+      name: "Wednesday, November 18",
+    });
+    const review = wednesday.getByRole("button", { name: /Design review/ });
+    await expect(review).toBeVisible();
+    await expect(
+      page
+        .getByRole("group", { name: "Saturday, November 21" })
+        .getByRole("button", {
+          name: /Saturday run/,
+        }),
+    ).toBeVisible();
+    const allDay = page.getByRole("group", { name: "All day" });
+    await expect(allDay.getByRole("button", { name: /Offsite/ })).toBeVisible();
+    await expect(
+      allDay.getByRole("link", { name: "Deadline: ISS-1 Send invoice" }),
+    ).toBeVisible();
+    const top = await review.evaluate(
+      (element) => element.parentElement!.style.top,
+    );
+
+    // Workweek leaves the weekend out; Day shows one date.
+    await views.getByRole("button", { name: "Workweek" }).click();
+    await expect(page.getByRole("group", { name: /Saturday/ })).toHaveCount(0);
+    await expect(
+      page.getByRole("group", { name: "Friday, November 20" }),
+    ).toBeVisible();
+    await expect(review).toBeVisible();
+    await views.getByRole("button", { name: "Day" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Wednesday, November 18, 2026" }),
+    ).toBeVisible();
+    await expect(review).toBeVisible();
+    expect(
+      await review.evaluate((element) => element.parentElement!.style.top),
+    ).toBe(top);
+
+    // Previous, Next, and Today.
+    await page.getByRole("button", { name: "Next day" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Thursday, November 19, 2026" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Today" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Wednesday, November 18, 2026" }),
+    ).toBeVisible();
+    // An empty day still shows its grid.
+    await page.getByRole("button", { name: "Previous day" }).click();
+    await page.getByRole("button", { name: "Previous day" }).click();
+    await expect(
+      page.getByRole("group", { name: "Monday, November 16" }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("group", { name: "Monday, November 16" })
+        .getByRole("button"),
+    ).toHaveCount(0);
+  });
+
+  test("lays out overlaps side by side and works by keyboard", async ({
+    page,
+  }) => {
+    await page.goto("/calendar?view=day&date=2026-11-18");
+    const standup = page.getByRole("button", { name: /Standup/ });
+    const review = page.getByRole("button", { name: /Design review/ });
+    const a = (await standup.boundingBox())!;
+    const b = (await review.boundingBox())!;
+    // Side by side: no horizontal overlap, and vertically overlapping.
+    expect(a.x + a.width).toBeLessThanOrEqual(b.x + 1);
+    expect(a.y).toBeLessThan(b.y + b.height);
+    expect(b.y).toBeLessThan(a.y + a.height);
+    await expect(standup).toHaveAccessibleName(
+      /09:00–09:30\s*Standup.*Blue calendar\. Edit event\./,
+    );
+
+    // Keyboard: open, close, and return focus.
+    await standup.focus();
+    await page.keyboard.press("Enter");
+    const editor = page.getByRole("dialog", { name: "Edit event" });
+    await expect(editor.getByLabel("Title")).toHaveValue("Standup");
+    await page.keyboard.press("Escape");
+    await expect(editor).toBeHidden();
+    await expect(standup).toBeFocused();
+
+    // The now line is on today's column.
+    await expect(page.locator(".timeline-now")).toHaveCount(1);
+  });
+
+  test("creates an event at the clicked time, snapped to the grid", async ({
+    page,
+  }) => {
+    await page.goto("/calendar?view=day&date=2026-11-20");
+    await page.getByLabel("Grid").selectOption("15");
+    const day = page.getByRole("group", { name: "Friday, November 20" });
+    const hour = (await day.boundingBox())!.height / 24;
+    // Bring 15:00 into view, then click 15:20, which snaps down to 15:15.
+    await page
+      .locator(".timeline-scroll")
+      .evaluate((element, top) => (element.scrollTop = top), hour * 14.5);
+    const box = (await day.boundingBox())!;
+    await page.mouse.click(box.x + 20, box.y + hour * (15 + 20 / 60));
+    const editor = page.getByRole("dialog", { name: "New event" });
+    await expect(editor.getByLabel("Start date")).toHaveValue("2026-11-20");
+    await expect(editor.getByLabel("Start time")).toHaveValue("15:15");
+    await expect(editor.getByLabel("End time")).toHaveValue("16:15");
+    await editor.getByLabel("Title").fill("Call the bank");
+    await editor.getByLabel("Title").press("Enter");
+    await expect(
+      day.getByRole("button", { name: /15:15–16:15\s*Call the bank/ }),
+    ).toBeVisible();
+    // The grid setting is remembered.
+    await page.reload();
+    await expect(page.getByLabel("Grid")).toHaveValue("15");
+  });
+
+  test("places items by wall clock on a daylight-saving day", async ({
+    page,
+  }) => {
+    // Clocks in Paris jump from 02:00 to 03:00 on 29 March 2026.
+    await page.addInitScript(() =>
+      Object.assign(window, {
+        __seedEvents: [
+          {
+            title: "Early train",
+            startLocal: "2026-03-29T03:00",
+            endLocal: "2026-03-29T04:00",
+          },
+        ],
+      }),
+    );
+    await page.goto("/calendar?view=day&date=2026-03-29");
+    const train = page.getByRole("button", {
+      name: /03:00–04:00\s*Early train/,
+    });
+    await expect(train).toBeVisible();
+    expect(
+      await train.evaluate((element) => element.parentElement!.style.top),
+    ).toBe("12.5%");
+  });
 });

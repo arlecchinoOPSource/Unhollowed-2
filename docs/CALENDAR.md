@@ -149,3 +149,33 @@ Changes to single occurrences are rows in `event_exceptions`, keyed by that orig
 The editor shows **Apply changes to: This event / This and following events / All events** for occurrences, and the same three choices when deleting. A single occurrence cannot change the repeat, zone, or calendar, so those controls are hidden while **This event** is chosen.
 
 Errors are typed values, such as `invalid_time_zone`, `invalid_date`, `invalid_time`, `invalid_range`, and `range_too_long`, so the UI can say what to fix. Writes run in one transaction. Archived calendars keep their events but accept no new ones.
+
+## Views
+
+`/calendar` opens on **Week** for a fresh profile. **Day**, **Workweek**, and **Month** are one click away, and the view and date are kept in the URL (`?view=day&date=2026-11-18`, or `?view=month&month=2026-11`).
+
+### Day, Week, and Workweek
+
+`src/features/calendar/TimelineView.tsx` draws a vertical timeline for one day, seven days from the week start, or the configured working days.
+
+- **Placement.** Timed items are placed by their start and end on the viewer's wall clock, and clipped to each day they cover. An item continuing from the day before or onto the next shows `…` in place of the hidden time.
+  - On a daylight-saving day the grid still has 24 hour rows. The skipped hour stays empty, and both items of a repeated hour share its row.
+  - Items shorter than 20 minutes are drawn 20 minutes tall so they stay readable.
+- **Overlaps** share the width. Overlapping items form a cluster, and each takes the first column free at its start (`timeline.ts`, unit-tested).
+- **The all-day band** shows all-day and multi-day events and open issue deadlines. Each run takes the first free row for the days it covers. In Workweek, a run that crosses a weekend covers only the shown days.
+- **Working hours and days** are shaded, the current day is highlighted, and a line marks the current time, updated every 30 seconds.
+- **Grid increments** of 15, 30, or 60 minutes come from the **Grid** menu and are remembered on the device.
+- **Settings.** The views take a `CalendarSettings` value (`settings.ts`): week start, workweek days, working hours, and grid increment. The defaults are Monday, Monday to Friday, 09:00–17:00, and 30 minutes. Personal preferences (U2-P3-08) can supply it.
+- **Editing.**
+  - Events are buttons that open the shared event editor, and the editor returns focus to the event when it closes.
+  - Work blocks and deadlines link to their issues.
+  - Clicking empty time opens a new event there, snapped down to the grid increment. **New event** does the same from the keyboard: at the next increment today, or the start of working hours on another day.
+- **Keyboard and screen readers.**
+  - Each day is a named group listing its items in time order, so Tab moves through a day's items before the next day's.
+  - Item names include the time, title, calendar color, and whether it repeats.
+  - The hour grid can take focus, so it can be scrolled from the keyboard even when it is empty.
+- **Width.** At narrow window widths, the timeline scrolls sideways inside itself and the page does not.
+
+### Calendar libraries
+
+The bundled FullCalendar packages were evaluated and not used. FullCalendar injects its styles at run time, which the production CSP (`style-src 'self'`) blocks, and its time grid does not match the keyboard and focus behavior above. The month grid and the timeline are built on the shared theme tokens instead, with offline layout code that has unit tests.

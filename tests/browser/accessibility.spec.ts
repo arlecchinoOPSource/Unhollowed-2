@@ -9,6 +9,9 @@ const ROUTES = [
   "/today",
   "/today/upcoming",
   "/calendar",
+  "/calendar?view=day",
+  "/calendar?view=workweek",
+  "/calendar?view=month",
   "/calendar/calendars",
   "/documents",
   "/projects",
@@ -210,7 +213,7 @@ for (const scheme of ["light", "dark"] as const) {
     await scan(page, "shortcut help", found);
 
     // The event editor with its details open.
-    await page.goto("/calendar");
+    await page.goto("/calendar?view=month");
     await page.getByRole("button", { name: "New event" }).click();
     const editor = page.getByRole("dialog", { name: "New event" });
     await editor.getByText("More details").click();
@@ -237,6 +240,7 @@ for (const scheme of ["light", "dark"] as const) {
       "/issues/seed-1",
       "/projects/project-1",
       "/issues/milestones",
+      "/calendar",
       "/settings",
     ]) {
       await page.goto(route);

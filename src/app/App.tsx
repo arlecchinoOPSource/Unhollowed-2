@@ -4,7 +4,7 @@ import { Link, Route, Routes } from "react-router";
 import { Workspace } from "../components/layout/Workspace";
 import { Documents } from "../features/documents/Documents";
 import { Calendars } from "../features/calendar/Calendars";
-import { IssueCalendar } from "../features/calendar/IssueCalendar";
+import { CalendarPage } from "../features/calendar/CalendarPage";
 import { Home } from "../features/home/Home";
 import { TodayPage, UpcomingPage } from "../features/today/TaskViews";
 import { IssueDetail } from "../features/issues/IssueDetail";
@@ -30,7 +30,7 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="/today" element={<TodayPage />} />
         <Route path="/today/upcoming" element={<UpcomingPage />} />
-        <Route path="/calendar" element={<IssueCalendar />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/calendar/calendars" element={<Calendars />} />
         <Route
           path="/graph"
