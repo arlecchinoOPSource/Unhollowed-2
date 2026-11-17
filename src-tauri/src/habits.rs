@@ -62,6 +62,8 @@ pub enum HabitError {
     InvalidFormat,
     /// The private copy made before a restore could not be written.
     CopyFailed,
+    /// A statistics period that ends before it starts or is over 100 years.
+    InvalidRange,
     StorageFailed,
 }
 
@@ -604,5 +606,8 @@ pub mod import;
 mod import_tests;
 #[cfg(test)]
 mod schema_tests;
+pub mod stats;
+#[cfg(test)]
+mod stats_tests;
 #[cfg(test)]
 mod tests;

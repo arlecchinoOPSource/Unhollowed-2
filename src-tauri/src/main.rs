@@ -157,6 +157,7 @@ fn main() {
             habits::backup::preview_habit_restore,
             habits::backup::restore_habits,
             habits::backup::undo_habit_restore,
+            habits::stats::get_habit_statistics,
             labels::list_labels,
             labels::create_label,
             labels::update_label,
