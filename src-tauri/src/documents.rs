@@ -231,6 +231,25 @@ pub async fn update_document(
     update(&pool, &workspace_id, &id, &title, &content).await
 }
 
+// WKWebView does not present a print panel from window.print() in Tauri's
+// desktop host. The native print operation uses the same editor print CSS.
+#[tauri::command]
+pub fn print_document(webview: tauri::WebviewWindow) -> Result<bool, DocumentError> {
+    #[cfg(target_os = "macos")]
+    {
+        webview.print().map_err(|error| {
+            eprintln!("Could not open document print panel: {error}");
+            DocumentError::StorageFailed
+        })?;
+        Ok(true)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = webview;
+        Ok(false)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

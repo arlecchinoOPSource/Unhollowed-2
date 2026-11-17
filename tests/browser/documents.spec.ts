@@ -99,6 +99,8 @@ async function setup(page: Page, version?: number, graphSize = 0) {
                 documents.push(item);
                 return structuredClone(item);
               }
+              case "print_document":
+                return false;
               case "get_document_graph":
                 if (graphSize) {
                   const extra = Array.from(
@@ -301,6 +303,15 @@ test("prints the selected paper geometry and an explicit page break", async ({
   await page.getByRole("button", { name: "Insert page break" }).click();
   await editor.press("ControlOrMeta+End");
   await page.keyboard.type("On the following page.");
+  await page.evaluate(() => {
+    window.print = () => {
+      Reflect.set(window, "printRequested", true);
+    };
+  });
+  await page.getByRole("button", { name: "Print / Save as PDF" }).click();
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(window, "printRequested")))
+    .toBe(true);
   const pdf = await page.pdf({ preferCSSPageSize: true });
   const structure = pdf.toString("latin1");
   expect(structure).toMatch(/\/MediaBox\s*\[0 0 792 612\]/);

@@ -1,3 +1,4 @@
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useEditorState, type Editor } from "@tiptap/react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
@@ -30,7 +31,7 @@ export function DocumentLayout({
   const layout = useLayout(editor);
   const pageMode = useContext(PageMode);
   const [margin, setMargin] = useState(String(layout.margin));
-  const [printError, setPrintError] = useState(false);
+  const [printError, setPrintError] = useState("");
   const sheet = pageCss(layout);
   const applied = useRef(false);
 
@@ -50,6 +51,22 @@ export function DocumentLayout({
       applied.current = false;
     }
   }, [sheet]);
+
+  async function print() {
+    if (!applied.current) {
+      setPrintError(
+        "This webview could not apply the printable page settings.",
+      );
+      return;
+    }
+    setPrintError("");
+    try {
+      const native = isTauri() && (await invoke<boolean>("print_document"));
+      if (!native) window.print();
+    } catch {
+      setPrintError("Could not open the print dialog. Try again.");
+    }
+  }
 
   function change<K extends keyof Layout>(key: K, value: Layout[K]) {
     const updated = {
@@ -156,21 +173,11 @@ export function DocumentLayout({
         >
           Insert page break
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setPrintError(!applied.current);
-            if (applied.current) window.print();
-          }}
-        >
+        <button type="button" onClick={() => void print()}>
           Print / Save as PDF
         </button>
       </div>
-      {printError && (
-        <p role="alert">
-          This webview could not apply the printable page settings.
-        </p>
-      )}
+      {printError && <p role="alert">{printError}</p>}
       {pageMode && (
         <p>
           The writing view approximates the paper width. Use the system print
