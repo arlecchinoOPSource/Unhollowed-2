@@ -270,6 +270,16 @@ Habits and their daily completions follow the [habit contract](HABITS.md), which
 - Commands: `get_checkin`, `list_checkins`, `save_checkin`, `delete_checkin`.
 - **Screen.** `/mood` has a date picker with previous, next, and Today (never past today), three radio groups where **Not set** is a visible, default choice, an optional note, and the last 60 days of check-ins. Choosing another day with unsaved changes is refused until they are saved or discarded. A failed save keeps the draft and shows the error. Saving with nothing chosen says that nothing was saved, or that the day's check-in was removed. The history list shows ratings only: a note's text appears only for the selected day.
 
+## Check-in analytics
+
+`get_checkin_analytics(from, to, withHabits)` summarizes recorded check-ins for a period of at most about ten years. Nothing is stored.
+
+- **Independent averages.** Mood, energy, and focus are each averaged over the days that rated _that_ metric, and the number of those days (`samples`) is returned with every average. A day that rated only focus adds nothing to mood. A note-only day counts as a recorded day but adds no sample.
+- **Gaps stay gaps.** `average` is `null`, never `0`, when no day in a period rated the metric. `points` lists recorded days only. Charts draw a mark only for a rated day and join two marks only when they are on consecutive days.
+- **Periods.** `weeks` run Monday to Sunday and `months` are calendar months, clipped to the period. They are the same buckets the habit statistics use, so the optional habit side (`habits`: eligible, completed, percent) aligns by construction. Without `withHabits` it is `null`. The period is counted through today.
+- **No composite.** The three metrics are never combined into a score, and the comparison with habit completion is shown side by side with no claim that one affects the other.
+- **Screen.** `/mood` shows Trends under the check-in: Last 30, 90, or 365 days, a tile per metric ("3.7 of 5 (3 days)"), a 1 to 5 chart per metric with a data table, weekly and monthly tables, and an opt-in habit completion column.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.

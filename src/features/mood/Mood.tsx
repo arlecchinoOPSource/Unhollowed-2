@@ -10,6 +10,7 @@ import {
 import { isTauri } from "../../database/status";
 import { fullDate } from "../calendar/monthGrid";
 import { localDate } from "../today/dates";
+import { MoodTrends } from "./MoodTrends";
 import "./mood.css";
 
 type Rating = number | null;
@@ -297,6 +298,8 @@ export function Mood() {
           </button>
         </div>
       )}
+
+      {desktop && <MoodTrends reload={reload} />}
 
       {desktop && (
         <section aria-labelledby="mood-history">

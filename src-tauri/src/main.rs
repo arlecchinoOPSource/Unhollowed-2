@@ -163,6 +163,7 @@ fn main() {
             checkins::list_checkins,
             checkins::save_checkin,
             checkins::delete_checkin,
+            checkins::analytics::get_checkin_analytics,
             labels::list_labels,
             labels::create_label,
             labels::update_label,

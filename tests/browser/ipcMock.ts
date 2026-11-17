@@ -2162,6 +2162,36 @@ export async function installIpcMock(page: Page) {
               };
               return structuredClone(store[a.date!]);
             }
+            case "get_checkin_analytics": {
+              // Tests supply the engine's output as window.__checkinAnalytics;
+              // the arithmetic is covered by the Rust tests.
+              const w = window as unknown as {
+                __checkinAnalytics?: { withHabits: object; without: object };
+              };
+              const want = (args as unknown as { withHabits: boolean })
+                .withHabits;
+              const given = w.__checkinAnalytics;
+              return structuredClone(
+                given
+                  ? want
+                    ? given.withHabits
+                    : given.without
+                  : {
+                      from: (args as unknown as { from: string }).from,
+                      to: (args as unknown as { to: string }).to,
+                      through: "2026-11-17",
+                      daysInPeriod: 30,
+                      daysRecorded: 0,
+                      mood: { samples: 0, average: null },
+                      energy: { samples: 0, average: null },
+                      focus: { samples: 0, average: null },
+                      points: [],
+                      weeks: [],
+                      months: [],
+                      habits: null,
+                    },
+              );
+            }
             case "get_habit_month": {
               const state = habitState();
               const { year, month } = args as unknown as {

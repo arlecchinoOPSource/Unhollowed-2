@@ -60,6 +60,19 @@ impl From<DatabaseError> for CheckinError {
     }
 }
 
+impl From<crate::habits::HabitError> for CheckinError {
+    fn from(error: crate::habits::HabitError) -> Self {
+        use crate::habits::HabitError;
+        match error {
+            HabitError::DatabaseUnavailable => Self::DatabaseUnavailable,
+            HabitError::WorkspaceReadFailed => Self::WorkspaceReadFailed,
+            HabitError::InvalidDate => Self::InvalidDate,
+            HabitError::InvalidRange => Self::InvalidRange,
+            _ => Self::StorageFailed,
+        }
+    }
+}
+
 fn storage_failed(error: sqlx::Error) -> CheckinError {
     eprintln!("Check-in storage failed: {error}");
     CheckinError::StorageFailed
@@ -80,7 +93,7 @@ fn valid_rating(rating: Option<i64>) -> Result<Option<i64>, CheckinError> {
     }
 }
 
-fn local_today() -> String {
+pub(crate) fn local_today() -> String {
     jiff::Zoned::now().date().to_string()
 }
 
@@ -248,5 +261,8 @@ pub async fn delete_checkin(
     delete(&pool, &workspace, &date).await
 }
 
+pub mod analytics;
+#[cfg(test)]
+mod analytics_tests;
 #[cfg(test)]
 mod tests;

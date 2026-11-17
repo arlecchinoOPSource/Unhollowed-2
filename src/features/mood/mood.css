@@ -87,3 +87,78 @@
 .mood-recent button[aria-current="date"] {
   font-weight: 700;
 }
+
+.mood-trends h3 {
+  margin: 16px 0 4px;
+}
+
+.mood-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.mood-tiles > div {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.mood-tiles dt {
+  color: var(--muted);
+}
+
+.mood-tiles dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.mood-chart {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+}
+
+.mood-axes line {
+  stroke: var(--line);
+}
+
+.mood-axes text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.mood-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.mood-dot {
+  fill: var(--accent);
+  stroke: var(--background);
+  stroke-width: 1;
+}
+
+.mood-table {
+  width: 100%;
+  margin: 12px 0;
+  border-collapse: collapse;
+}
+
+.mood-table caption {
+  margin-bottom: 4px;
+  text-align: left;
+  font-weight: 600;
+}
+
+.mood-table :is(th, td) {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.mood-details {
+  max-width: 640px;
+}
