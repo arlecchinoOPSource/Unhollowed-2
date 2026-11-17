@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Hardened calendar times: views follow the device's time zone when it changes, events from another zone show their own local time, stored instants are re-resolved from their wall-clock intent when the bundled time-zone rules change, and daylight-saving gaps and folds, leap days, month and year boundaries, and overlap endpoints are tested. Adds migration 21.
 - Added event editing: a shared editor with quick fields and details for creating, editing, duplicating, moving between calendars, and deleting timed, all-day, and multi-day events, with location, validated web links, and description. Failed saves keep what was entered, and the calendar day panel lists the day's events.
 - Added calendar management: create, rename, recolor, and describe calendars, show or hide them, choose the default, and archive or restore them while keeping their events. Archiving the default asks for a replacement, and events can move between calendars without changing identity.
 - Added the scheduling data model: calendars with one default per workspace, timed and all-day events, issue work blocks, and issue deadlines projected without copies. Timed items keep their IANA zone and wall-clock intent alongside UTC instants, with documented half-open ranges and daylight-saving rules, and range reads use indexes. Adds migration 20.

@@ -986,9 +986,31 @@ export async function installIpcMock(page: Page) {
             }
             case "list_calendar_items": {
               seededEvents();
-              const { from, to } = (
-                args as unknown as { range: { from: string; to: string } }
+              const { from, to, timeZone } = (
+                args as unknown as {
+                  range: { from: string; to: string; timeZone: string };
+                }
               ).range;
+              // Seeded events with a UTC instant are shown in the viewer's
+              // zone, like the backend; others at their entered times.
+              const viewerLocal = (
+                instant: string | null,
+                local: string | null,
+              ) => {
+                if (!instant) return local;
+                const parts = new Intl.DateTimeFormat("en-CA", {
+                  timeZone,
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hourCycle: "h23",
+                }).formatToParts(new Date(instant));
+                const part = (type: string) =>
+                  parts.find((item) => item.type === type)!.value;
+                return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
+              };
               const shown = new Set(
                 calendars
                   .filter(({ hidden, archivedAt }) => !hidden && !archivedAt)
@@ -1000,8 +1022,10 @@ export async function installIpcMock(page: Page) {
                 if (!shown.has(event.calendarId)) continue;
                 const start = event.allDay
                   ? event.startDate!
-                  : event.startLocal!;
-                const end = event.allDay ? event.endDate! : event.endLocal!;
+                  : viewerLocal(event.startAt, event.startLocal)!;
+                const end = event.allDay
+                  ? event.endDate!
+                  : viewerLocal(event.endAt, event.endLocal)!;
                 if (!(start < `${to}` && end > `${from}`)) continue;
                 items.push({
                   kind: "event",
@@ -1017,10 +1041,10 @@ export async function installIpcMock(page: Page) {
                   allDay: event.allDay,
                   startDate: event.startDate,
                   endDate: event.endDate,
-                  start: event.startLocal,
-                  end: event.endLocal,
-                  startAt: null,
-                  endAt: null,
+                  start: event.allDay ? null : start,
+                  end: event.allDay ? null : end,
+                  startAt: event.startAt,
+                  endAt: event.endAt,
                   timeZone: event.timeZone,
                 });
               }

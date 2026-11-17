@@ -235,3 +235,33 @@ test("shows a multi-day all-day event on each of its days", async ({
     ).toHaveCount(count);
   }
 });
+
+test("shows events from another zone at the viewer's time with their own", async ({
+  page,
+}) => {
+  // 09:00–10:00 in Tokyo is 01:00–02:00 in Paris.
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedEvents: [
+        {
+          title: "Tokyo sync",
+          timeZone: "Asia/Tokyo",
+          startLocal: "2026-11-18T09:00",
+          endLocal: "2026-11-18T10:00",
+          startAt: "2026-11-18T00:00:00Z",
+          endAt: "2026-11-18T01:00:00Z",
+        },
+      ],
+    }),
+  );
+  await page.goto("/calendar");
+  await day(page, /November 18, 2026/).click();
+  const event = page.getByRole("button", {
+    name: /01:00–02:00\s*Tokyo sync\s*09:00 Asia\/Tokyo/,
+  });
+  await expect(event).toBeVisible();
+  await event.click();
+  const editor = page.getByRole("dialog", { name: "Edit event" });
+  await expect(editor.getByLabel("Start time")).toHaveValue("09:00");
+  await expect(editor.getByText("Times are in Asia/Tokyo.")).toBeVisible();
+});

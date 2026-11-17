@@ -7,7 +7,6 @@ import {
   type Calendar,
 } from "../../database/calendars";
 import {
-  deviceZone,
   getEvent,
   listCalendarItems,
   type CalendarEvent,
@@ -17,6 +16,7 @@ import { swatchStyle } from "../labels/LabelParts";
 import { addDays } from "../today/dates";
 import { EventEditor, type EventChange } from "./EventEditor";
 import { newDraft, type Draft } from "./eventDraft";
+import { timeIn, useDeviceZone } from "./useDeviceZone";
 
 const messages: Record<EventChange, (title: string) => string> = {
   created: (title) => `Created event ${title}.`,
@@ -46,7 +46,7 @@ export function DayEvents({
   day: string;
   onMessage: (message: string) => void;
 }) {
-  const [zone] = useState(deviceZone);
+  const zone = useDeviceZone();
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [items, setItems] = useState<{ day: string; list: CalendarItem[] }>();
   const [error, setError] = useState("");
@@ -144,6 +144,11 @@ export function DayEvents({
                   {timeRange(item, day)}
                 </span>
                 <span>{item.title}</span>
+                {item.timeZone && item.startAt && item.timeZone !== zone && (
+                  <span className="calendar-event-zone">
+                    {timeIn(item.startAt, item.timeZone)} {item.timeZone}
+                  </span>
+                )}
                 <span className="visually-hidden">
                   {`, ${colorName(item) ?? ""} calendar. Edit event.`}
                 </span>

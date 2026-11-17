@@ -206,6 +206,11 @@ export function EventEditor({
           )}
         </fieldset>
 
+        {!draft.allDay && draft.timeZone !== deviceZone() && (
+          <p className="event-zone-note">
+            Times are in {draft.timeZone}. Change it under More details.
+          </p>
+        )}
         <details className="event-details">
           <summary>More details</summary>
           <label className="event-field">

@@ -592,3 +592,294 @@ fn hidden_and_archived_calendars_keep_their_events_out_of_views() {
         );
     });
 }
+
+mod temporal {
+    //! U2-P3-05: zones, local dates, daylight saving, and boundaries.
+    use super::*;
+    use crate::test_support::TempDatabase;
+
+    async fn titles(pool: &SqlitePool, from: &str, to: &str, zone: &str) -> Vec<String> {
+        list_items(pool, DEFAULT_WORKSPACE, range(from, to, zone))
+            .await
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|item| item.title)
+            .collect()
+    }
+
+    #[test]
+    fn timed_events_show_in_each_viewer_zone_after_a_restart() {
+        tauri::async_runtime::block_on(async {
+            let database = TempDatabase::new("zones-restart");
+            let pool = database.open().await;
+            migrator(i64::MAX).await.run(&pool).await.unwrap();
+            create_event(
+                &pool,
+                DEFAULT_WORKSPACE,
+                timed("Sync", "Asia/Tokyo", "2026-11-18T09:00", "2026-11-18T10:00"),
+            )
+            .await
+            .unwrap();
+            pool.close().await;
+
+            let pool = database.open().await;
+            for (zone, from, start) in [
+                ("Asia/Tokyo", "2026-11-18", "2026-11-18T09:00"),
+                ("Europe/London", "2026-11-18", "2026-11-18T00:00"),
+                ("America/Los_Angeles", "2026-11-17", "2026-11-17T16:00"),
+                ("Asia/Kolkata", "2026-11-18", "2026-11-18T05:30"),
+            ] {
+                let to = time::add_days(time::date(from).unwrap(), 1)
+                    .unwrap()
+                    .to_string();
+                let items = list_items(&pool, DEFAULT_WORKSPACE, range(from, &to, zone))
+                    .await
+                    .unwrap()
+                    .items;
+                assert_eq!(items.len(), 1, "{zone}");
+                assert_eq!(items[0].start.as_deref(), Some(start), "{zone}");
+                assert_eq!(items[0].time_zone.as_deref(), Some("Asia/Tokyo"));
+            }
+            pool.close().await;
+        });
+    }
+
+    #[test]
+    fn leap_days_and_month_and_year_boundaries() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            create_event(
+                &pool,
+                DEFAULT_WORKSPACE,
+                all_day("Leap", "2028-02-29", "2028-03-01"),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                titles(&pool, "2028-02-29", "2028-03-01", "UTC").await,
+                ["Leap"]
+            );
+            assert!(titles(&pool, "2028-03-01", "2028-03-02", "UTC")
+                .await
+                .is_empty());
+            assert!(titles(&pool, "2028-02-28", "2028-02-29", "UTC")
+                .await
+                .is_empty());
+            // 29 February exists only in leap years.
+            assert_eq!(
+                create_event(
+                    &pool,
+                    DEFAULT_WORKSPACE,
+                    all_day("No", "2027-02-29", "2027-03-01")
+                )
+                .await,
+                Err(SchedulingError::InvalidDate)
+            );
+
+            // Across New Year in UTC, on both days. In Tokyo it is New Year's Day only.
+            create_event(
+                &pool,
+                DEFAULT_WORKSPACE,
+                timed("Midnight", "UTC", "2026-12-31T23:30", "2027-01-01T00:30"),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                titles(&pool, "2026-12-31", "2027-01-01", "UTC").await,
+                ["Midnight"]
+            );
+            assert_eq!(
+                titles(&pool, "2027-01-01", "2027-01-02", "UTC").await,
+                ["Midnight"]
+            );
+            assert!(titles(&pool, "2026-12-31", "2027-01-01", "Asia/Tokyo")
+                .await
+                .is_empty());
+            assert_eq!(
+                titles(&pool, "2027-01-01", "2027-01-02", "Asia/Tokyo").await,
+                ["Midnight"]
+            );
+
+            // An all-day event across a month end, read one month at a time.
+            create_event(
+                &pool,
+                DEFAULT_WORKSPACE,
+                all_day("Move", "2026-01-30", "2026-02-03"),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                titles(&pool, "2026-01-01", "2026-02-01", "UTC").await,
+                ["Move"]
+            );
+            assert_eq!(
+                titles(&pool, "2026-02-01", "2026-03-01", "UTC").await,
+                ["Move"]
+            );
+            assert!(titles(&pool, "2026-02-03", "2026-02-04", "UTC")
+                .await
+                .is_empty());
+        });
+    }
+
+    #[test]
+    fn overlap_endpoints_are_half_open() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            // Starts exactly at the window's end, and ends exactly at its start.
+            create_event(
+                &pool,
+                DEFAULT_WORKSPACE,
+                timed("After", "UTC", "2026-11-19T00:00", "2026-11-19T01:00"),
+            )
+            .await
+            .unwrap();
+            create_event(
+                &pool,
+                DEFAULT_WORKSPACE,
+                timed("Before", "UTC", "2026-11-17T23:00", "2026-11-18T00:00"),
+            )
+            .await
+            .unwrap();
+            create_event(
+                &pool,
+                DEFAULT_WORKSPACE,
+                timed("Inside", "UTC", "2026-11-18T00:00", "2026-11-18T00:01"),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                titles(&pool, "2026-11-18", "2026-11-19", "UTC").await,
+                ["Inside"]
+            );
+        });
+    }
+
+    #[test]
+    fn daylight_saving_in_both_hemispheres_and_half_hour_shifts() {
+        let check = |zone: &str, local: &str, expected_utc: &str, shown: &str| {
+            let tz = time::zone(zone).unwrap();
+            let instant = time::resolve(time::wall_clock(local).unwrap(), &tz).unwrap();
+            assert_eq!(time::instant(instant), expected_utc, "{zone} {local}");
+            assert_eq!(time::local(instant, &tz), shown, "{zone} {local}");
+        };
+        // Sydney springs forward at 02:00 on 4 October 2026: 02:30 becomes 03:30 (+11).
+        check(
+            "Australia/Sydney",
+            "2026-10-04T02:30",
+            "2026-10-03T16:30:00Z",
+            "2026-10-04T03:30",
+        );
+        // Sydney falls back on 5 April 2026: 02:30 happens twice; the earlier is +11.
+        check(
+            "Australia/Sydney",
+            "2026-04-05T02:30",
+            "2026-04-04T15:30:00Z",
+            "2026-04-05T02:30",
+        );
+        // Lord Howe moves by 30 minutes: 02:15 does not exist and becomes 02:45 (+11).
+        check(
+            "Australia/Lord_Howe",
+            "2026-10-04T02:15",
+            "2026-10-03T15:45:00Z",
+            "2026-10-04T02:45",
+        );
+        // A zone without daylight saving resolves every time unchanged.
+        check(
+            "Asia/Kolkata",
+            "2026-03-08T02:30",
+            "2026-03-07T21:00:00Z",
+            "2026-03-08T02:30",
+        );
+    }
+
+    #[test]
+    fn a_time_zone_rules_update_re_resolves_instants_from_intent() {
+        tauri::async_runtime::block_on(async {
+            let pool = migrated_pool().await;
+            let event = create_event(
+                &pool,
+                DEFAULT_WORKSPACE,
+                timed(
+                    "Fixed",
+                    "Europe/Paris",
+                    "2026-07-01T09:00",
+                    "2026-07-01T10:00",
+                ),
+            )
+            .await
+            .unwrap();
+            let issue = add_issue(&pool, DEFAULT_WORKSPACE, None).await;
+            create_work_block(
+                &pool,
+                DEFAULT_WORKSPACE,
+                WorkBlockInput {
+                    issue_id: issue,
+                    time_zone: "Europe/Paris".into(),
+                    start: "2026-07-01T14:00".into(),
+                    end: "2026-07-01T15:00".into(),
+                },
+            )
+            .await
+            .unwrap();
+            // Pretend the instants were resolved with older rules.
+            let stale = || async {
+                for table in ["events", "work_blocks"] {
+                    sqlx::query(&format!(
+                        "UPDATE {table} SET start_at = '2026-07-01T08:30:00Z', end_at = '2026-07-01T09:30:00Z'"
+                    ))
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                }
+            };
+            stale().await;
+            sqlx::query("INSERT OR REPLACE INTO scheduling_state (workspace_id, tzdb_version) VALUES (?, '1999a')")
+                .bind(DEFAULT_WORKSPACE)
+                .execute(&pool)
+                .await
+                .unwrap();
+
+            // The first read under the bundled rules restores them from intent.
+            let items = list_items(
+                &pool,
+                DEFAULT_WORKSPACE,
+                range("2026-07-01", "2026-07-02", "Europe/Paris"),
+            )
+            .await
+            .unwrap()
+            .items;
+            let starts: Vec<_> = items
+                .iter()
+                .map(|item| item.start.as_deref().unwrap())
+                .collect();
+            assert_eq!(starts, ["2026-07-01T09:00", "2026-07-01T14:00"]);
+            let stored = get_event(&pool, DEFAULT_WORKSPACE, &event.id)
+                .await
+                .unwrap();
+            assert_eq!(stored.start_at.as_deref(), Some("2026-07-01T07:00:00Z"));
+            assert_eq!(stored.updated_at, event.updated_at, "not a user edit");
+            let (version,): (String,) = sqlx::query_as("SELECT tzdb_version FROM scheduling_state")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(version, tzdb_version());
+
+            // It runs once per release: the same version does not rescan.
+            stale().await;
+            assert_eq!(
+                refresh_instants(&pool, DEFAULT_WORKSPACE, tzdb_version())
+                    .await
+                    .unwrap(),
+                0
+            );
+            assert_eq!(
+                refresh_instants(&pool, DEFAULT_WORKSPACE, "next")
+                    .await
+                    .unwrap(),
+                2
+            );
+        });
+    }
+}
