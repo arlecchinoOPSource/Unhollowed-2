@@ -5,6 +5,7 @@ import { isTauri } from "../../database/status";
 import { useLocalToday } from "../today/useLocalToday";
 import { CalendarSearch } from "./CalendarSearch";
 import { IssueCalendar } from "./IssueCalendar";
+import { OverdueIssues } from "./OverdueIssues";
 import { TimelineView } from "./TimelineView";
 import { readView } from "./ViewSwitch";
 import { monthOf } from "./monthGrid";
@@ -81,6 +82,8 @@ export function CalendarPage() {
   const view = readView(params, settings.view);
   // Changing an event elsewhere on the page reloads the view by remounting.
   const [revision, setRevision] = useState(0);
+  // Issues changed in the view or the overdue list reload the other.
+  const [issueRevision, setIssueRevision] = useState(0);
   return (
     <CalendarPreferences.Provider value={settings}>
       {isTauri() && (
@@ -90,8 +93,21 @@ export function CalendarPage() {
           onChanged={() => setRevision((value) => value + 1)}
         />
       )}
+      {isTauri() && (
+        <OverdueIssues
+          revision={issueRevision}
+          onChanged={() => {
+            setIssueRevision((value) => value + 1);
+            setRevision((value) => value + 1);
+          }}
+        />
+      )}
       {view === "month" || view === "agenda" ? (
-        <IssueCalendar key={revision} agenda={view === "agenda"} />
+        <IssueCalendar
+          key={revision}
+          agenda={view === "agenda"}
+          onIssueChanged={() => setIssueRevision((value) => value + 1)}
+        />
       ) : (
         <TimelineView
           key={revision}

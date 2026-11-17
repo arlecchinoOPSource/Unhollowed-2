@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   addDays,
   dayLabel,
+  isOverdue,
   localDate,
   msUntilNextLocalMidnight,
 } from "../../src/features/today/dates";
@@ -104,5 +105,20 @@ describe("day labels", () => {
     // Past dates name the day of the month, not just a weekday.
     expect(dayLabel("2026-11-10", "2026-11-16")).toMatch(/10/);
     expect(dayLabel("2027-01-05", "2026-11-16")).toMatch(/2027/);
+  });
+});
+
+describe("overdue issues", () => {
+  const open = { dueDate: "2026-11-16", closed: false };
+  test("are open and due before today", () => {
+    expect(isOverdue(open, "2026-11-17")).toBe(true);
+    expect(isOverdue(open, "2026-11-16")).toBe(false);
+    expect(isOverdue(open, "2026-11-15")).toBe(false);
+  });
+  test("never include closed or undated issues", () => {
+    expect(isOverdue({ ...open, closed: true }, "2026-11-17")).toBe(false);
+    expect(isOverdue({ dueDate: null, closed: false }, "2026-11-17")).toBe(
+      false,
+    );
   });
 });

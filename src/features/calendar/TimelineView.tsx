@@ -14,7 +14,7 @@ import { listCalendarItems, type CalendarItem } from "../../database/events";
 import { isTauri } from "../../database/status";
 import { issueKey } from "../../database/issues";
 import { swatchStyle } from "../labels/LabelParts";
-import { addDays, parseLocalDate } from "../today/dates";
+import { addDays, isOverdue, parseLocalDate } from "../today/dates";
 import { useLocalToday } from "../today/useLocalToday";
 import { newDraft } from "./eventDraft";
 import {
@@ -171,9 +171,10 @@ export function TimelineView({
   }
 
   const items = loaded?.key === key ? loaded.items : (loaded?.items ?? []);
-  // Closed issues' deadlines are done; the timeline shows what is ahead.
+  // Closed issues' deadlines are done; show them only when asked, as Month does.
+  const showClosed = params.get("closed") === "1";
   const visible = items.filter(
-    (item) => !(item.kind === "deadline" && item.closed),
+    (item) => !(item.kind === "deadline" && item.closed && !showClosed),
   );
   const bands = layoutAllDay(visible, days);
   const bandRows = Math.max(1, ...bands.map(({ row }) => row + 1));
@@ -409,6 +410,19 @@ export function TimelineView({
             ))}
           </select>
         </label>
+        <label className="timeline-grid-setting">
+          <input
+            type="checkbox"
+            checked={showClosed}
+            onChange={(event) => {
+              const next = new URLSearchParams(params);
+              if (event.target.checked) next.set("closed", "1");
+              else next.delete("closed");
+              setParams(next);
+            }}
+          />{" "}
+          Show closed issues
+        </label>
       </div>
       {(error || editing.error) && <p role="alert">{error || editing.error}</p>}
       <p role="status" className="issue-message">
@@ -474,6 +488,14 @@ export function TimelineView({
               key={item.id}
               className="timeline-band"
               data-kind={item.kind}
+              data-closed={item.kind === "deadline" && item.closed}
+              data-overdue={
+                item.kind === "deadline" &&
+                isOverdue(
+                  { dueDate: item.startDate, closed: item.closed },
+                  today,
+                )
+              }
               style={
                 {
                   gridColumn: `${first + 2} / ${last + 3}`,
@@ -486,7 +508,16 @@ export function TimelineView({
             >
               {item.kind === "deadline" ? (
                 <Link to={`/issues/${item.issueId}`}>
-                  <span className="visually-hidden">Deadline: </span>
+                  <span className="visually-hidden">
+                    {item.closed
+                      ? "Completed deadline: "
+                      : isOverdue(
+                            { dueDate: item.startDate, closed: false },
+                            today,
+                          )
+                        ? "Overdue deadline: "
+                        : "Deadline: "}
+                  </span>
                   <span className="timeline-band-text">
                     {issueKey({ number: item.issueNumber! })} {item.title}
                   </span>

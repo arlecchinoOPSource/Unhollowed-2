@@ -380,3 +380,18 @@
   gap: 0.25rem;
   margin-inline-end: 0.5rem;
 }
+
+.calendar-overdue a {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.calendar-overdue-tag {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.calendar-overdue-panel {
+  margin-block: 12px;
+}

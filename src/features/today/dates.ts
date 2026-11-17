@@ -57,3 +57,11 @@ export function dayLabel(date: string, today: string): string {
     ...(within || sameYear ? {} : { year: "numeric" }),
   }).format(value);
 }
+
+/** An open issue whose due date is before `today`. Closed issues never are. */
+export function isOverdue(
+  issue: { dueDate: string | null; closed: boolean },
+  today: string,
+): boolean {
+  return !issue.closed && issue.dueDate !== null && issue.dueDate < today;
+}
