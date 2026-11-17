@@ -65,6 +65,16 @@ fn fixture_f1_counts_and_rates_match_ember_rules() {
     assert!((stats.summary.percent.unwrap() - 300.0 / 106.0).abs() < 1e-9);
     assert_eq!(stats.through, "2028-03-01");
 
+    // Daily buckets: one per day, summing to the totals.
+    assert_eq!(stats.days.len(), 61);
+    assert_eq!(
+        stats.days.iter().map(|b| b.counts.completed).sum::<i64>(),
+        3
+    );
+    assert_eq!(stats.days[9].counts.completed, 1); // Jan 10
+    let long = run(&f1(), "2000-01-01", "2028-03-01", "2028-03-01");
+    assert!(long.days.is_empty());
+
     // Months are calendar months, so leap February has 29 days.
     let months: Vec<_> = stats
         .months

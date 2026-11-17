@@ -160,6 +160,16 @@ Every command resolves the active workspace in Rust and returns `{ code }` error
 
 Streaks are always whole numbers and `0` when there is none.
 
+## Habit trends (U2-P4-09)
+
+**Show trends** on the habits page opens a dashboard of the statistics engine's output; it recomputes nothing. A date range (two date fields and Last 7, 30, 90, or 365 days; default the last 30) feeds `get_habit_statistics`.
+
+- **Tiles**: completion rate, days completed of eligible, and the practice streak, labeled _any habit_. Each habit's own current and longest streaks are in the per-habit table.
+- **Charts** are inline SVG drawn with the app's theme tokens. No chart library was added: the project has none, and a line and two bar charts do not need one, which keeps the app small and offline. Daily completion is a line, shown for periods up to a year; weekly (Monday to Sunday) and monthly completion are bars. All use one hue, so color never carries meaning alone.
+- **No data is not zero.** A period with no eligible days is a dashed empty slot (bars) or a small tick (line), the line breaks there, and its table row reads _No eligible days_. A zero rate is a visible baseline bar and a dot at 0%.
+- **Text equivalents.** Each chart has a label, hover titles, and a _Data table_ with the same periods. The per-habit table repeats rates and streaks as text.
+- **States.** No habits, nothing eligible in the period, loading, and a failed load with **Retry** each have their own message.
+
 ## Parity fixtures
 
 Synthetic data only; never commit real history. U2-P4-02 to U2-P4-04 and U2-P4-06 turn these into tests.
