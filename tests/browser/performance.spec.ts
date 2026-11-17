@@ -107,7 +107,7 @@ for (const count of [500, 2000]) {
     );
     await record(
       "Calendar",
-      () => nav.getByRole("link", { name: "Calendar" }).click(),
+      () => page.goto("/calendar?view=month"),
       page.getByRole("link", { name: /Issue \d+ about launch plans/ }).first(),
     );
     await record(

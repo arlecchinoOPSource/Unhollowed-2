@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added Day, Week, and Workweek calendar views: a timeline with hour rows, an all-day band for events and deadlines, overlapping events side by side, shaded working hours, a current-time line, and 15-, 30-, or 60-minute grid lines. Week is the default, and events open the shared editor from the keyboard or by clicking a time.
 - Added recurring events: daily, weekly, monthly, and yearly repeats every 1 to 99 units, ending never, after a count, or on a date, expanded only for the dates shown. Single occurrences can be moved, edited, or canceled and keep their identity, and changes can apply to this event, this and following events, or all events. Adds migration 22.
 - Hardened calendar times: views follow the device's time zone when it changes, events from another zone show their own local time, stored instants are re-resolved from their wall-clock intent when the bundled time-zone rules change, and daylight-saving gaps and folds, leap days, month and year boundaries, and overlap endpoints are tested. Adds migration 21.
 - Added event editing: a shared editor with quick fields and details for creating, editing, duplicating, moving between calendars, and deleting timed, all-day, and multi-day events, with location, validated web links, and description. Failed saves keep what was entered, and the calendar day panel lists the day's events.

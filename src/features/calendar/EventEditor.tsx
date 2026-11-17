@@ -67,7 +67,8 @@ export function EventEditor({
   event: CalendarEvent | null;
   /** The occurrence being edited, for a recurring event. */
   occurrence?: { key: string; span: OccurrenceSpan };
-  draft: Draft;
+  /** The starting values for a new event. */
+  draft?: Draft;
   calendars: Calendar[];
   onClose: () => void;
   onChange: (change: EventChange, event: CalendarEvent, note?: string) => void;
@@ -79,7 +80,7 @@ export function EventEditor({
   const [draft, setDraft] = useState<Draft>(() =>
     event
       ? draftFromEvent(event, deviceZone(), occurrence?.span)
-      : initialDraft,
+      : initialDraft!,
   );
   const [scope, setScope] = useState<Scope>("this");
   const [saving, setSaving] = useState(false);

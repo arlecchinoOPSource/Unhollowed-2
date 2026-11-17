@@ -23,6 +23,8 @@ import { useIssueReferences } from "../issues/useIssueReferences";
 import { addDays } from "../today/dates";
 import { useLocalToday } from "../today/useLocalToday";
 import { DayEvents } from "./DayEvents";
+import { ViewSwitch } from "./ViewSwitch";
+import "./timeline.css";
 import {
   fullDate,
   gridDays,
@@ -264,6 +266,7 @@ export function IssueCalendar() {
             Manage calendars
           </Link>
         </div>
+        <ViewSwitch date={day} />
         <div className="calendar-filters">
           <label>
             Project
