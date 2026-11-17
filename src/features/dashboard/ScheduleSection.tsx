@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import {
   analyticsError,
   getScheduleAnalytics,
@@ -123,7 +124,10 @@ export function ScheduleSection({
   const t = data?.totals;
   return (
     <section aria-labelledby="schedule-title" className="dash-section">
-      <h2 id="schedule-title">Schedule</h2>
+      <div className="dash-head">
+        <h2 id="schedule-title">Schedule</h2>
+        <Link to="/calendar">Open calendar</Link>
+      </div>
       {error && (
         <div role="alert">
           <p>{error}</p>

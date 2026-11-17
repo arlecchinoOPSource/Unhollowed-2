@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
+import { GlanceSection } from "./GlanceSection";
+import { HabitsSection } from "./HabitsSection";
+import { MoodSection } from "./MoodSection";
 import { ProgressSection } from "./ProgressSection";
 import { ScheduleSection } from "./ScheduleSection";
 import "./dashboard.css";
@@ -64,8 +67,11 @@ export function Dashboard() {
               ))}
             </div>
           </div>
+          <GlanceSection project={project || null} days={days} />
           <ProgressSection project={project || null} days={days} />
           <ScheduleSection project={project || null} days={days} />
+          <HabitsSection project={project || null} days={days} />
+          <MoodSection project={project || null} days={days} />
         </>
       )}
     </section>
