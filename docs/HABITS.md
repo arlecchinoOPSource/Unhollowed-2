@@ -139,6 +139,27 @@ Every command resolves the active workspace in Rust and returns `{ code }` error
 - Restored habits get new IDs, so a backup also restores into a workspace that still holds the originals. Names, order, dates, sources, and completed days are exact.
 - Refused without writes: a different format, a newer format number, unknown fields, bad dates or names, two active habits with one name, a repeated habit, completions for unknown habits or ineligible days, more than 1000 habits, or more than 32 MiB.
 
+## Statistics (U2-P4-08)
+
+`get_habit_statistics(from, to, habitIds?)` computes every number from persisted history; nothing is stored. Dashboards and summaries use this one command, so they cannot disagree. Dates are local `YYYY-MM-DD`, `from` is on or before `to`, and a period is at most 100 years.
+
+**Counting.** Counts are in habit-days.
+
+- A habit is _eligible_ on each day from its start through its archive day, inclusive, within the period. Days after today are never eligible, so a period that ends in the future is counted through today (`through`).
+- A day is _completed_ when it has a completion and is eligible.
+- `percent` is `completed / eligible × 100`, unrounded. It is `null`, not `0`, when nothing was eligible: a habit that has not started in the period, an empty workspace, or a period wholly in the future. `0` means days were eligible and none were done.
+- `summary` adds the selected habits together. `habits` lists them in saved order, archived included, each with its own counts and streaks.
+- `weeks` run Monday to Sunday and `months` are calendar months (so leap February has 29 days). Both are clipped to the period, cover it with no gap, and add up to `summary`. Future parts stay listed with no eligible days.
+
+**Streaks** are counts of consecutive local calendar days with a completion. Today stays open until local midnight: a run that ended yesterday is still _current_, and a run that ended earlier has current `0`. `longest` is the longest run ever. A day without a completion, or one outside the habit's dates, ends a run. There are two measures, labeled apart:
+
+| Measure                         | Counts                                         | Scope                                                                                                                                |
+| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Individual (`habits[].streaks`) | Days this habit was completed                  | One habit, all its history, not limited to the period                                                                                |
+| Practice (`practice`)           | Days with at least one completion in any habit | Every habit in the workspace, archived included, not limited to the period or the selected habits. This is Ember's streak, unchanged |
+
+Streaks are always whole numbers and `0` when there is none.
+
 ## Parity fixtures
 
 Synthetic data only; never commit real history. U2-P4-02 to U2-P4-04 and U2-P4-06 turn these into tests.

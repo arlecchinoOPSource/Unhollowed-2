@@ -128,6 +128,56 @@ export const restoreHabits = (
 export const undoHabitRestore = (name: string): Promise<HabitRestoreReport> =>
   invoke("undo_habit_restore", { name });
 
+export interface HabitCounts {
+  /** Habit-days that could be completed in the period. */
+  eligible: number;
+  completed: number;
+  /** 0 to 100. Null, not 0, when nothing was eligible. */
+  percent: number | null;
+}
+
+export interface HabitStreaks {
+  /** Consecutive days ending today or yesterday; 0 when the run ended. */
+  current: number;
+  longest: number;
+}
+
+export interface HabitSummary extends HabitCounts {
+  habitId: string;
+  name: string;
+  archived: boolean;
+  /** This habit's own streaks over all of its history. */
+  streaks: HabitStreaks;
+}
+
+/** A Monday-to-Sunday week or a calendar month, clipped to the period. */
+export interface HabitBucket extends HabitCounts {
+  start: string;
+  end: string;
+}
+
+export interface HabitStatistics {
+  today: string;
+  from: string;
+  to: string;
+  /** The last day counted: the period's end, or today if earlier. */
+  through: string;
+  summary: HabitCounts;
+  habits: HabitSummary[];
+  weeks: HabitBucket[];
+  months: HabitBucket[];
+  /** Ember's practice streak across all habits, archived included. */
+  practice: HabitStreaks;
+}
+
+/** Statistics for `from` to `to`, inclusive. `habitIds` null means all. */
+export const getHabitStatistics = (
+  from: string,
+  to: string,
+  habitIds: string[] | null = null,
+): Promise<HabitStatistics> =>
+  invoke("get_habit_statistics", { from, to, habitIds });
+
 export const listHabits = (): Promise<Habit[]> => invoke("list_habits");
 
 export const createHabit = (
@@ -204,6 +254,8 @@ export function habitError(error: unknown): string {
       return "That file is larger than 32 MiB.";
     case "copy_failed":
       return "A private copy of your current habits could not be saved, so nothing was replaced.";
+    case "invalid_range":
+      return "Choose a start on or before the end, within 100 years.";
     case "invalid_format":
       return "Choose CSV or JSON.";
     default:
