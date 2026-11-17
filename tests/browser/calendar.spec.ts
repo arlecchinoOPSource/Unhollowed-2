@@ -579,4 +579,16 @@ test("restores calendar preferences and honors explicit deep links", async ({
   await expect(
     page.getByRole("button", { name: "Month", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "unhollowed-2-calendar",
+      JSON.stringify({
+        version: 1,
+        view: "month",
+        weekStart: "0",
+      }),
+    ),
+  );
+  await page.reload();
+  await expect(page.getByRole("columnheader").first()).toHaveText("Mon");
 });

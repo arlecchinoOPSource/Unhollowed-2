@@ -60,9 +60,10 @@ function read(): Preferences {
       hours.test(value.workEnd) &&
       value.workStart < value.workEnd;
     return {
-      weekStart: names[value.weekStart ?? -1]
-        ? value.weekStart!
-        : defaults.weekStart,
+      weekStart:
+        Number.isInteger(value.weekStart) && names[value.weekStart ?? -1]
+          ? value.weekStart!
+          : defaults.weekStart,
       workDays: workDays.length
         ? workDays.sort((a, b) => a - b)
         : defaults.workDays,
