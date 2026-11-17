@@ -98,6 +98,122 @@ export async function installIpcMock(page: Page) {
       }
       return w.__habits;
     };
+    // Habit backups follow src-tauri/src/habits/backup.rs. Saved files land in
+    // window.__saved, private pre-restore copies in window.__habitCopies, and
+    // window.__saveCancelled or __failCopy drive the failure paths.
+    type BackupFile = {
+      format?: string;
+      version?: number;
+      habits: {
+        id: string;
+        name: string;
+        startDate: string;
+        archivedOn: string | null;
+        source: "ember" | null;
+        sourceId: string | null;
+      }[];
+      completions: [string, string][];
+    };
+    const habitBackup = (): BackupFile => {
+      const state = habitState();
+      return {
+        format: "unhollowed-2/habits",
+        version: 1,
+        habits: [...state.habits]
+          .sort((a, b) => a.position - b.position)
+          .map((habit) => ({
+            id: habit.id,
+            name: habit.name,
+            startDate: habit.startDate,
+            archivedOn: habit.archivedOn,
+            source: habit.source,
+            sourceId: habit.sourceId,
+          })),
+        completions: [...state.done]
+          .map((key) => key.split("|") as [string, string])
+          .sort(([a, x], [b, y]) => x.localeCompare(y) || a.localeCompare(b)),
+      };
+    };
+    const habitCopies = () => {
+      const w = window as unknown as { __habitCopies?: Record<string, string> };
+      return (w.__habitCopies ??= {});
+    };
+    const habitRestore = (content: string, token: string | undefined) => {
+      const state = habitState();
+      const refuse = (fatal: string) => ({
+        fatal,
+        habits: 0,
+        archived: 0,
+        completions: 0,
+        currentHabits: 0,
+        currentCompletions: 0,
+        token: "",
+        applied: false,
+        recovery: null,
+      });
+      let backup: BackupFile;
+      try {
+        backup = JSON.parse(content);
+      } catch {
+        return refuse("This is not a JSON file, so it is not a habit backup.");
+      }
+      if (backup.format !== "unhollowed-2/habits")
+        return refuse("This is not a habit backup from this app.");
+      if ((backup.version ?? 0) > 1)
+        return refuse(
+          `This backup was made by a newer version of the app (format ${backup.version}). This version reads format 1 only.`,
+        );
+      const known = new Set(backup.habits.map((habit) => habit.id));
+      if (backup.completions.some(([id]) => !known.has(id)))
+        return refuse(
+          "A completion belongs to a habit that is not in the file.",
+        );
+      const current = `${content.length}:${state.habits
+        .map((habit) => `${habit.id}.${habit.revision}`)
+        .join(",")}`;
+      const report = {
+        fatal: null,
+        habits: backup.habits.length,
+        archived: backup.habits.filter((habit) => habit.archivedOn).length,
+        completions: backup.completions.length,
+        currentHabits: state.habits.length,
+        currentCompletions: state.done.size,
+        token: current,
+        applied: false,
+        recovery: null as string | null,
+      };
+      if (token === undefined) return report;
+      if (token !== current)
+        return refuse(
+          "Your habits or the file changed since the preview. Review the restore again.",
+        );
+      if ((window as unknown as { __failCopy?: boolean }).__failCopy)
+        throw { code: "copy_failed" };
+      const copies = habitCopies();
+      report.recovery = `habits-pre-restore-${Object.keys(copies).length + 1}.json`;
+      copies[report.recovery] = JSON.stringify(habitBackup());
+      const next = Math.max(
+        0,
+        ...state.habits.map((habit) => Number(habit.id.slice(6))),
+      );
+      const ids = new Map<string, string>();
+      state.done.clear();
+      state.habits = backup.habits.map((habit, position) => {
+        ids.set(habit.id, `habit-${next + position + 1}`);
+        return {
+          ...habit,
+          id: ids.get(habit.id)!,
+          position,
+          revision: 0,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+      });
+      for (const [id, date] of backup.completions)
+        state.done.add(`${ids.get(id)}|${date}`);
+      report.applied = true;
+      return report;
+    };
     // Calendars follow the backend: one active default, created on first
     // use, unique names, and archiving the default needs a replacement.
     const calendars: Calendar[] = [];
@@ -1894,6 +2010,56 @@ export async function installIpcMock(page: Page) {
                 token: current,
                 applied,
               };
+            }
+            case "export_habit_backup":
+            case "export_habit_history": {
+              const w = window as unknown as {
+                __saveCancelled?: boolean;
+                __saved?: { kind: string; content: string };
+              };
+              if (w.__saveCancelled) return null;
+              const backup = habitBackup();
+              const format = (args as unknown as { format?: string }).format;
+              if (
+                command === "export_habit_history" &&
+                format !== "csv" &&
+                format !== "json"
+              )
+                throw { code: "invalid_format" };
+              w.__saved = {
+                kind: command === "export_habit_backup" ? "backup" : format!,
+                content: JSON.stringify(backup),
+              };
+              return {
+                path: `/Documents/unhollowed-habits.${format ?? "json"}`,
+                habits: backup.habits.length,
+                completions: backup.completions.length,
+              };
+            }
+            case "pick_habit_restore":
+              return (
+                (
+                  window as unknown as {
+                    __pickedRestore?: { name: string; content: string } | null;
+                  }
+                ).__pickedRestore ?? null
+              );
+            case "preview_habit_restore":
+              return habitRestore(
+                (args as unknown as { content: string }).content,
+                undefined,
+              );
+            case "restore_habits":
+              return habitRestore(
+                (args as unknown as { content: string }).content,
+                (args as unknown as { token: string }).token,
+              );
+            case "undo_habit_restore": {
+              const copy =
+                habitCopies()[(args as unknown as { name: string }).name];
+              if (!copy) throw { code: "file_failed" };
+              const seen = habitRestore(copy, undefined);
+              return habitRestore(copy, seen.token);
             }
             case "get_habit_month": {
               const state = habitState();

@@ -82,6 +82,52 @@ export const importHabits = (
   token: string,
 ): Promise<HabitImportReport> => invoke("import_habits", { content, token });
 
+export interface SavedHabits {
+  path: string;
+  habits: number;
+  completions: number;
+}
+
+/** What a restore does, or did. A preview and a restore return the same. */
+export interface HabitRestoreReport {
+  /** The restore is refused, and why. Nothing changed. */
+  fatal: string | null;
+  habits: number;
+  archived: number;
+  completions: number;
+  /** What the restore replaces. */
+  currentHabits: number;
+  currentCompletions: number;
+  /** Pass back to `restoreHabits`; it changes when the file or habits do. */
+  token: string;
+  applied: boolean;
+  /** The private copy of the replaced habits, by name. Pass to undo. */
+  recovery: string | null;
+}
+
+/** The native save dialogs. `null` when the user cancels. */
+export const exportHabitBackup = (): Promise<SavedHabits | null> =>
+  invoke("export_habit_backup");
+
+export const exportHabitHistory = (
+  format: "csv" | "json",
+): Promise<SavedHabits | null> => invoke("export_habit_history", { format });
+
+export const pickHabitRestore = (): Promise<PickedBackup | null> =>
+  invoke("pick_habit_restore");
+
+export const previewHabitRestore = (
+  content: string,
+): Promise<HabitRestoreReport> => invoke("preview_habit_restore", { content });
+
+export const restoreHabits = (
+  content: string,
+  token: string,
+): Promise<HabitRestoreReport> => invoke("restore_habits", { content, token });
+
+export const undoHabitRestore = (name: string): Promise<HabitRestoreReport> =>
+  invoke("undo_habit_restore", { name });
+
 export const listHabits = (): Promise<Habit[]> => invoke("list_habits");
 
 export const createHabit = (
@@ -156,6 +202,10 @@ export function habitError(error: unknown): string {
       return "Could not read that file.";
     case "file_too_large":
       return "That file is larger than 32 MiB.";
+    case "copy_failed":
+      return "A private copy of your current habits could not be saved, so nothing was replaced.";
+    case "invalid_format":
+      return "Choose CSV or JSON.";
     default:
       return "Could not save to local habit storage. Try again.";
   }

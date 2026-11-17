@@ -25,6 +25,7 @@ import {
 import { shortcutAllowed } from "../issues/issueKeyboard";
 import { localDate, msUntilNextLocalMidnight } from "../today/dates";
 import { cellKey, HabitGrid } from "./HabitGrid";
+import { HabitBackup } from "./HabitBackup";
 import { HabitImport } from "./HabitImport";
 import { HabitManager } from "./HabitManager";
 import { FIRST_MONTH, LAST_MONTH, monthDates } from "./gridRules";
@@ -65,6 +66,7 @@ export function Habits() {
   const [addError, setAddError] = useState("");
   const [managing, setManaging] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -279,12 +281,25 @@ export function Habits() {
             <button
               type="button"
               className="action"
+              onClick={() => setBackingUp(true)}
+            >
+              Backup and restore
+            </button>
+            <button
+              type="button"
+              className="action"
               onClick={() => setManaging(true)}
             >
               Manage habits
             </button>
           </form>
           {addError && <p role="alert">{addError}</p>}
+          {backingUp && (
+            <HabitBackup
+              onClose={() => setBackingUp(false)}
+              onChanged={() => setReload((count) => count + 1)}
+            />
+          )}
           {importing && (
             <HabitImport
               onClose={() => setImporting(false)}

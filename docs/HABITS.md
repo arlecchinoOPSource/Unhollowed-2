@@ -128,6 +128,17 @@ Every command resolves the active workspace in Rust and returns `{ code }` error
 
 **Forward migration.** Unhollowed reads only Ember version 1. A later Ember format needs a new reader and fixture here before it is accepted.
 
+## Backup and restore (U2-P4-07)
+
+**Backup and restore** on the habits page keeps habit data as local files, chosen with the system dialogs.
+
+- **Backup** (`unhollowed-2/habits`, format 1) lists every habit in saved order with its start, archive day, and source, empty and archived habits included, plus every completed day. It is the only file that can be restored.
+- **History** exports (CSV and JSON) have one row per completed day: `date`, `habit_id`, `habit_name`. Habits with no completed day are absent, so they are not backups. CSV cells are always quoted with quotes doubled, and a name starting with `=`, `+`, `-`, `@`, tab, or return gets a leading apostrophe so a spreadsheet does not run it as a formula.
+- **Restore** replaces all habits in the active workspace and nothing else. The preview names what the file holds and what it replaces. Before anything is replaced, the current habits are written as a backup to a private `habit-copies` folder in the app's data directory (owner-only permissions, flushed to disk); if that fails, nothing changes. A restore, its checks, and its writes share one transaction, so a failure leaves the old habits. The preview's token covers the file and the workspace's habits, so a change since the preview is refused with _review the restore again_.
+- **Undo** restores that private copy, and makes its own copy first, so an undo can be redone. Undo takes only a copy's file name, never a path.
+- Restored habits get new IDs, so a backup also restores into a workspace that still holds the originals. Names, order, dates, sources, and completed days are exact.
+- Refused without writes: a different format, a newer format number, unknown fields, bad dates or names, two active habits with one name, a repeated habit, completions for unknown habits or ineligible days, more than 1000 habits, or more than 32 MiB.
+
 ## Parity fixtures
 
 Synthetic data only; never commit real history. U2-P4-02 to U2-P4-04 and U2-P4-06 turn these into tests.
