@@ -171,6 +171,7 @@ fn main() {
             checkins::delete_checkin,
             checkins::analytics::get_checkin_analytics,
             analytics::get_workspace_analytics,
+            analytics::progress::get_progress_analytics,
             labels::list_labels,
             labels::create_label,
             labels::update_label,

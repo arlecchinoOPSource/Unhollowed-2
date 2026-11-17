@@ -2251,6 +2251,43 @@ export async function installIpcMock(page: Page) {
                 linkSet.delete(`${habitId}|${eventId}`);
               return mine();
             }
+            case "get_progress_analytics": {
+              // Tests supply the engine's output as window.__progress; the
+              // arithmetic is covered by the Rust tests.
+              const a = args as unknown as {
+                from: string;
+                to: string;
+                projectId: string | null;
+              };
+              const given = (window as unknown as { __progress?: object })
+                .__progress;
+              return structuredClone({
+                from: a.from,
+                to: a.to,
+                today: "2026-11-17",
+                totals: {
+                  total: 0,
+                  open: 0,
+                  done: 0,
+                  canceled: 0,
+                  completionPercent: null,
+                  overdue: 0,
+                  upcoming: 0,
+                  undatedOpen: 0,
+                },
+                projects: [],
+                deadlines: [],
+                trend: {
+                  granularity: "day",
+                  buckets: [],
+                  doneTotal: 0,
+                  withTime: 0,
+                  withoutTime: 0,
+                },
+                ...given,
+                projectId: a.projectId,
+              });
+            }
             case "get_habit_month": {
               const state = habitState();
               const { year, month } = args as unknown as {

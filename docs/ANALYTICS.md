@@ -63,3 +63,15 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Stale answers.** Each read belongs to one run of its effect. When the period, filter, or sources change, the earlier request is superseded and its answer is ignored whenever it arrives, so a slow older response cannot replace a newer one.
 - **Failed reads.** A failed read clears the previous numbers and shows the error with a retry, instead of leaving old values on screen as if they were current.
 - **Restart.** Nothing is persisted by this layer. After a restart every number is recomputed from the stored records, and a test confirms the results are identical.
+
+## Progress (U2-P4-17)
+
+`get_progress_analytics(from, to, projectId?, timeZone)` backs **Dashboards > Projects and issues**. It uses the project overview's denominators, so a card and the project screen agree for the same filter. A test compares them field by field.
+
+- **Scope.** Issues that are not archived. Totals, per-project rows, and deadlines are _as of today_; only the trend uses the period.
+- **Totals.** `open` is not done or canceled. `completionPercent` is `done / (total − canceled) × 100`, `null` (shown "No issues yet") when that is zero. `overdue` is open and due before today. `upcoming` is open and due from today through the next 6 days, the same window as the issue list's "Due in the next 7 days". `undatedOpen` is open with no due date.
+- **Projects.** Every project that is not archived, by name (just the chosen one under a filter), each with its own totals. Milestone completion is the milestone's own state (`closed` of all its milestones) and is never replaced by issue progress. Objective progress is the done share of the objective's linked issues that are not canceled or archived.
+- **Deadlines.** Open issues and open milestones that are overdue or due in the next 14 days, by date, at most 20.
+- **Trend.** Issues that are `done` now, placed on the local day of their stored `completed_at`: by day for periods up to 92 days, by Monday-to-Sunday week beyond, clipped to the period. A reopened or canceled issue has no completion time and is not counted. A done issue with no stored time (completed before times were kept) cannot be placed, so `withoutTime` of `doneTotal` is reported and the screen says so. Nothing is reconstructed.
+- **Click-through.** Counts link to `/issues` with the same `project` filter and the matching `state`, `status`, or `due` preset, so the list shows the cards' own records.
+- **Refresh.** The section re-reads when `issues`, `projects`, or `milestones` change (see "Keeping views current").
