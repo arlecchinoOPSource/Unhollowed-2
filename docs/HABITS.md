@@ -124,6 +124,8 @@ Every command resolves the active workspace in Rust and returns `{ code }` error
 
 **Conflicts.** Import never merges or overwrites. The whole import is refused, naming the habits, if any incoming Ember ID is already in the workspace or an incoming active habit has the name of an active habit here. The preview runs the same steps in a transaction and rolls back, so it reports exactly what the import would do, and the import re-checks inside its own transaction.
 
+**Using it** (U2-P4-06). **Import from Ember** on the habits page opens the system file dialog (`.json`, 32 MiB maximum), reads the file, and shows a preview: each habit with its start, archive day, and completed days. Nothing is written until **Import** is confirmed. The preview's token covers the file and the workspace's habits, so a habit that was added, changed, or deleted since, or a different file, is refused with _review the import again_. Validation, collisions, and the import share one transaction, so a failure leaves no partial habits or completions. Completions are copied as they are, including days after today. The Ember desktop SQLite database is not read directly: export a backup from Ember first.
+
 **Forward migration.** Unhollowed reads only Ember version 1. A later Ember format needs a new reader and fixture here before it is accepted.
 
 ## Parity fixtures

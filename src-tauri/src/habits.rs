@@ -54,6 +54,10 @@ pub enum HabitError {
     NotArchived,
     /// The habit or its history changed after the deletion was reviewed.
     Changed,
+    /// The chosen backup could not be read.
+    FileFailed,
+    /// The chosen backup is over the size limit.
+    FileTooLarge,
     StorageFailed,
 }
 
@@ -588,6 +592,9 @@ pub async fn set_habit_completion(
     set_completion(&pool, &workspace, &id, &date, done, &local_today()).await
 }
 
+pub mod import;
+#[cfg(test)]
+mod import_tests;
 #[cfg(test)]
 mod schema_tests;
 #[cfg(test)]
