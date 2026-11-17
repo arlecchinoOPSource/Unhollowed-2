@@ -9,6 +9,7 @@ const ROUTES = [
   "/today",
   "/today/upcoming",
   "/calendar",
+  "/calendar/calendars",
   "/documents",
   "/projects",
   "/projects/project-1",

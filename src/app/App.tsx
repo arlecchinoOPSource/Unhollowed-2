@@ -3,6 +3,7 @@ import { ProjectGoalsPage } from "../features/goals/ProjectGoals";
 import { Link, Route, Routes } from "react-router";
 import { Workspace } from "../components/layout/Workspace";
 import { Documents } from "../features/documents/Documents";
+import { Calendars } from "../features/calendar/Calendars";
 import { IssueCalendar } from "../features/calendar/IssueCalendar";
 import { Home } from "../features/home/Home";
 import { TodayPage, UpcomingPage } from "../features/today/TaskViews";
@@ -30,6 +31,7 @@ export function App() {
         <Route path="/today" element={<TodayPage />} />
         <Route path="/today/upcoming" element={<UpcomingPage />} />
         <Route path="/calendar" element={<IssueCalendar />} />
+        <Route path="/calendar/calendars" element={<Calendars />} />
         <Route
           path="/graph"
           element={

@@ -259,6 +259,9 @@ export function IssueCalendar() {
         <div>
           <h1>Calendar</h1>
           <p>Issues on the days they are due.</p>
+          <Link className="calendar-manage" to="/calendar/calendars">
+            Manage calendars
+          </Link>
         </div>
         <div className="calendar-filters">
           <label>

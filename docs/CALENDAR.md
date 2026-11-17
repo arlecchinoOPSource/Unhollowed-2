@@ -65,6 +65,21 @@ Rules:
 | `get_calendar_event`                                  | One event                                                                                         |
 | `create_issue_work_block` / `delete_issue_work_block` | Adds or removes time for an issue                                                                 |
 
+### Managing calendars
+
+| Command                               | Effect                                                                                                                                               |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_calendar` / `update_calendar` | Sets name, color, and description. Names are unique within the workspace, ignoring case. Archived calendars can be edited                            |
+| `set_calendar_hidden`                 | Shows or hides a calendar's events in calendar views                                                                                                 |
+| `set_default_calendar`                | Makes an active calendar the default. The old default is cleared in the same transaction                                                             |
+| `archive_calendar`                    | Keeps every event, hides them from views, and stops new events. Archiving the default needs an active `replacement`, which becomes the default first |
+| `restore_calendar`                    | Brings the calendar and its events back                                                                                                              |
+| `move_calendar_event`                 | Moves an event to another active calendar. Only `calendar_id` changes, so the event keeps its ID                                                     |
+
+- Calendar settings, including visibility, are stored in the workspace database, so they survive restarts and stay on the device.
+- Colors are the label palette. Each color is named in the UI, so color is never the only cue.
+- **Calendars** (`/calendar/calendars`, linked from the calendar) manages all of this.
+
 Errors are typed values, such as `invalid_time_zone`, `invalid_date`, `invalid_time`, `invalid_range`, and `range_too_long`, so the UI can say what to fix. Writes run in one transaction. Archived calendars keep their events but accept no new ones.
 
-Later Phase 3 issues extend these commands: calendar management (U2-P3-02), event editing (U2-P3-03), and recurrence (U2-P3-04).
+Later Phase 3 issues extend these commands: event editing (U2-P3-03) and recurrence (U2-P3-04).
