@@ -42,6 +42,59 @@ export const saveCheckin = (
 export const deleteCheckin = (date: string): Promise<void> =>
   invoke("delete_checkin", { date });
 
+/** One metric over a period, from the days that rated it. */
+export interface CheckinMetric {
+  samples: number;
+  /** 1 to 5. Null, not 0, when no day rated it. */
+  average: number | null;
+}
+
+export interface CheckinPoint {
+  date: string;
+  mood: number | null;
+  energy: number | null;
+  focus: number | null;
+}
+
+export interface HabitSide {
+  eligible: number;
+  completed: number;
+  percent: number | null;
+}
+
+export interface CheckinPeriod {
+  start: string;
+  end: string;
+  mood: CheckinMetric;
+  energy: CheckinMetric;
+  focus: CheckinMetric;
+  /** Habit consistency over the same days, only when requested. */
+  habits: HabitSide | null;
+}
+
+export interface CheckinAnalytics {
+  from: string;
+  to: string;
+  through: string;
+  daysInPeriod: number;
+  daysRecorded: number;
+  mood: CheckinMetric;
+  energy: CheckinMetric;
+  focus: CheckinMetric;
+  /** Recorded days only; dates not listed are gaps. */
+  points: CheckinPoint[];
+  weeks: CheckinPeriod[];
+  months: CheckinPeriod[];
+  habits: HabitSide | null;
+}
+
+export const getCheckinAnalytics = (
+  from: string,
+  to: string,
+  withHabits: boolean,
+): Promise<CheckinAnalytics> =>
+  invoke("get_checkin_analytics", { from, to, withHabits });
+
 export function checkinError(error: unknown): string {
   const code =
     typeof error === "object" && error !== null && "code" in error
