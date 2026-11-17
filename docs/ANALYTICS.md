@@ -107,3 +107,12 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Invalidation.** Sections subscribe to the sources they read (see "Keeping views current"), so a completed habit, issue, or event refreshes the cards that depend on it without reloading the page.
 - **Reflow.** Cards use a grid that becomes one column on narrow screens, and wide tables scroll inside their own section so the page itself does not scroll sideways.
 - **Not included.** Layout editing, saved layouts, and any combined productivity score.
+
+## Dashboard controls (U2-P4-20)
+
+- **Period.** _Last 7 days_, _Last 30 days_ (the default), _This month_, or _Custom dates_. All are inclusive local days. Last 7 is today and the six days before it; last 30 is today and the 29 before. _This month_ is the whole calendar month (the analytics count through today only). Custom dates need a valid start on or before the end, at most 366 days; otherwise the page says why and keeps showing the last 30 days until the dates are valid. The period applies to every section, and the page states it in full, with its day count.
+- **Filters.** _Project_ narrows the issue, project, milestone, and schedule sources. _Habit_ narrows the Habits section to one habit and leaves the workspace-wide cards alone. Habits belong to no project, so choosing a project disables the habit filter. **Clear filters** removes both and returns the period to the default.
+- **Filters are not workspace facts.** They are navigation state and name records that can be deleted, so they start empty on every visit and are never saved. Counts keep their definitions; a filter only chooses which records a card reads.
+- **Remembered on this device.** The period (and custom dates) and which sections are shown, in `localStorage` under `unhollowed-2-dashboard` with a version. On read, every field is validated on its own: an unknown preset, an invalid or too-long custom range, an unknown or repeated section, or a different version is replaced by its default without an error.
+- **Sections.** _Sections_ lists the five sections with a checkbox each; unchecked sections are not rendered or read. _Show all sections_ restores them.
+- **Links.** Issue links keep the project filter, and calendar links open the month containing the period's last day.

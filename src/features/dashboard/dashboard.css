@@ -119,3 +119,14 @@
     align-items: stretch;
   }
 }
+
+.dash-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+}
+
+.dash-period {
+  color: var(--muted);
+}

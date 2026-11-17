@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Period } from "./controls";
 import { Link } from "react-router";
 import { useDataVersion } from "../../database/dataChanges";
 import {
@@ -8,7 +9,6 @@ import {
 } from "../../database/habits";
 import { fullDate } from "../calendar/monthGrid";
 import { Bars, Table } from "../habits/HabitDashboard";
-import { localDate } from "../today/dates";
 import "../habits/habits.css";
 
 const plural = (count: number, one: string) =>
@@ -21,12 +21,13 @@ const plural = (count: number, one: string) =>
  */
 export function HabitsSection({
   project,
-  days,
+  habit,
+  period,
 }: {
   project: string | null;
-  days: number;
+  habit: string | null;
+  period: Period;
 }) {
-  const today = localDate(new Date());
   const [data, setData] = useState<HabitStatistics | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -35,7 +36,7 @@ export function HabitsSection({
   useEffect(() => {
     if (project) return;
     let live = true;
-    getHabitStatistics(localDate(new Date(), 1 - days), today)
+    getHabitStatistics(period.from, period.to, habit ? [habit] : null)
       .then((result) => {
         if (!live) return;
         setData(result);
@@ -49,7 +50,7 @@ export function HabitsSection({
     return () => {
       live = false;
     };
-  }, [days, project, today, retry, changes]);
+  }, [period.from, period.to, project, habit, retry, changes]);
 
   return (
     <section aria-labelledby="dash-habits-title" className="dash-section">

@@ -199,7 +199,7 @@ test("an empty period, a truncated calendar, and a failed load are each explaine
   const good = await open(page);
   await expect(good.locator("dl")).toContainText("Open due dates2");
   await dispatch(page, "fail-command", "get_schedule_analytics");
-  await page.getByRole("button", { name: "Last 90 days" }).click();
+  await page.getByRole("button", { name: "Last 7 days" }).click();
   const alert = page
     .getByRole("alert")
     .filter({ hasText: "Could not read local data" });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Period } from "./controls";
 import { Link } from "react-router";
 import {
   analyticsError,
@@ -7,7 +8,6 @@ import {
 } from "../../database/analytics";
 import { useDataVersion } from "../../database/dataChanges";
 import { deviceZone } from "../../database/events";
-import { localDate } from "../today/dates";
 
 function span(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -35,12 +35,11 @@ function issuesLink(
  */
 export function GlanceSection({
   project,
-  days,
+  period,
 }: {
   project: string | null;
-  days: number;
+  period: Period;
 }) {
-  const today = localDate(new Date());
   const [data, setData] = useState<WorkspaceAnalytics | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -54,12 +53,7 @@ export function GlanceSection({
 
   useEffect(() => {
     let live = true;
-    getWorkspaceAnalytics(
-      localDate(new Date(), 1 - days),
-      today,
-      project,
-      deviceZone(),
-    )
+    getWorkspaceAnalytics(period.from, period.to, project, deviceZone())
       .then((result) => {
         if (!live) return;
         setData(result);
@@ -73,7 +67,7 @@ export function GlanceSection({
     return () => {
       live = false;
     };
-  }, [days, project, today, retry, changes]);
+  }, [period.from, period.to, project, retry, changes]);
 
   const issues = data?.issues.data;
   const habits = data?.habits;
@@ -135,7 +129,7 @@ export function GlanceSection({
           <div>
             <dt>Scheduled this period</dt>
             <dd>
-              <Link to="/calendar">
+              <Link to={`/calendar?view=month&date=${period.to}`}>
                 {calendar.events} {calendar.events === 1 ? "event" : "events"},{" "}
                 {span(calendar.scheduledMinutes + calendar.workBlockMinutes)}
               </Link>

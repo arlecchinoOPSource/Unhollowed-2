@@ -173,11 +173,11 @@ test("cards show the engine's values, each linked to its source", async ({
   expect(await href("2")).toBe("/issues?state=closed&status=done");
   expect(await href("1")).toBe("/issues?due=overdue");
   expect(await href("43%")).toBe("/habits");
-  expect(await href(/3 events/)).toBe("/calendar");
+  expect(await href(/3 events/)).toBe("/calendar?view=month&date=2026-11-17");
   // Sections link to their sources too.
   for (const [name, link, to] of [
     ["Habits", "Open habits", "/habits"],
-    ["Schedule", "Open calendar", "/calendar"],
+    ["Schedule", "Open calendar", "/calendar?view=month&date=2026-11-17"],
     ["Mood, energy, and focus", "Open check-ins", "/mood"],
   ] as const)
     await expect(
@@ -187,7 +187,7 @@ test("cards show the engine's values, each linked to its source", async ({
 
 test("one period drives every section", async ({ page }) => {
   await open(page);
-  await page.getByRole("button", { name: "Last 90 days" }).click();
+  await page.getByRole("button", { name: "Last 7 days" }).click();
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -205,7 +205,7 @@ test("one period drives every section", async ({ page }) => {
         ].map((command) => `${args[command]?.from}..${args[command]?.to}`);
       }),
     )
-    .toEqual(Array(5).fill("2026-08-20..2026-11-17"));
+    .toEqual(Array(5).fill("2026-11-11..2026-11-17"));
 });
 
 test("a project filter leaves out what has no project, and says so", async ({
@@ -219,6 +219,7 @@ test("a project filter leaves out what has no project, and says so", async ({
   );
   await page
     .locator(".dash-controls select")
+    .first()
     .selectOption({ label: "Studio launch" });
   const glance = section(page, "At a glance");
   await expect(glance.locator("dl")).toContainText(
@@ -256,7 +257,7 @@ test("mood appears only when the period has check-ins", async ({ page }) => {
 test("a failing section does not take the others down", async ({ page }) => {
   await open(page);
   await dispatch(page, "fail-command", "get_habit_statistics");
-  await page.getByRole("button", { name: "Last 90 days" }).click();
+  await page.getByRole("button", { name: "Last 7 days" }).click();
   const habits = section(page, "Habits");
   await expect(habits.getByRole("alert")).toContainText("Could not save");
   await expect(habits.locator("dl")).toHaveCount(0);

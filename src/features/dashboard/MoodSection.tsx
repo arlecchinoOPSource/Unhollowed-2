@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Period } from "./controls";
 import { Link } from "react-router";
 import {
   checkinError,
@@ -8,7 +9,6 @@ import {
 } from "../../database/checkins";
 import { useDataVersion } from "../../database/dataChanges";
 import { fullDate } from "../calendar/monthGrid";
-import { localDate } from "../today/dates";
 
 const metric = (m: CheckinMetric) =>
   m.average === null
@@ -23,12 +23,11 @@ const metric = (m: CheckinMetric) =>
  */
 export function MoodSection({
   project,
-  days,
+  period,
 }: {
   project: string | null;
-  days: number;
+  period: Period;
 }) {
-  const today = localDate(new Date());
   const [data, setData] = useState<CheckinAnalytics | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -37,7 +36,7 @@ export function MoodSection({
   useEffect(() => {
     if (project) return;
     let live = true;
-    getCheckinAnalytics(localDate(new Date(), 1 - days), today, false)
+    getCheckinAnalytics(period.from, period.to, false)
       .then((result) => {
         if (!live) return;
         setData(result);
@@ -51,7 +50,7 @@ export function MoodSection({
     return () => {
       live = false;
     };
-  }, [days, project, today, retry, changes]);
+  }, [period.from, period.to, project, retry, changes]);
 
   if (project) return null;
   if (!error && (!data || data.daysRecorded === 0)) return null;

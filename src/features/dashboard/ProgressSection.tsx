@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Period } from "./controls";
 import { Link } from "react-router";
 import {
   analyticsError,
@@ -10,7 +11,6 @@ import {
 import { useDataVersion } from "../../database/dataChanges";
 import { deviceZone } from "../../database/events";
 import { fullDate } from "../calendar/monthGrid";
-import { localDate } from "../today/dates";
 
 const W = 640;
 const H = 150;
@@ -120,12 +120,11 @@ function Counts({
  */
 export function ProgressSection({
   project,
-  days,
+  period,
 }: {
   project: string | null;
-  days: number;
+  period: Period;
 }) {
-  const today = localDate(new Date());
   const [data, setData] = useState<ProgressAnalytics | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -133,12 +132,7 @@ export function ProgressSection({
 
   useEffect(() => {
     let live = true;
-    getProgressAnalytics(
-      localDate(new Date(), 1 - days),
-      today,
-      project,
-      deviceZone(),
-    )
+    getProgressAnalytics(period.from, period.to, project, deviceZone())
       .then((result) => {
         if (!live) return;
         setData(result);
@@ -152,7 +146,7 @@ export function ProgressSection({
     return () => {
       live = false;
     };
-  }, [days, project, today, retry, changes]);
+  }, [period.from, period.to, project, retry, changes]);
 
   return (
     <section aria-labelledby="progress-title" className="dash-section">
