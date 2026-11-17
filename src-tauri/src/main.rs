@@ -172,6 +172,7 @@ fn main() {
             checkins::analytics::get_checkin_analytics,
             analytics::get_workspace_analytics,
             analytics::progress::get_progress_analytics,
+            analytics::schedule::get_schedule_analytics,
             labels::list_labels,
             labels::create_label,
             labels::update_label,

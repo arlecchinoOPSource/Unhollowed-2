@@ -582,5 +582,8 @@ pub async fn get_workspace_analytics(
 }
 
 pub mod progress;
+pub mod schedule;
+#[cfg(test)]
+mod schedule_tests;
 #[cfg(test)]
 mod tests;

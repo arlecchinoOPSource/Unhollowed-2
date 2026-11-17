@@ -75,3 +75,17 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Trend.** Issues that are `done` now, placed on the local day of their stored `completed_at`: by day for periods up to 92 days, by Monday-to-Sunday week beyond, clipped to the period. A reopened or canceled issue has no completion time and is not counted. A done issue with no stored time (completed before times were kept) cannot be placed, so `withoutTime` of `doneTotal` is reported and the screen says so. Nothing is reconstructed.
 - **Click-through.** Counts link to `/issues` with the same `project` filter and the matching `state`, `status`, or `due` preset, so the list shows the cards' own records.
 - **Refresh.** The section re-reads when `issues`, `projects`, or `milestones` change (see "Keeping views current").
+
+## Schedule (U2-P4-18)
+
+`get_schedule_analytics(from, to, projectId?, timeZone)` backs **Dashboards > Schedule**. It reads the calendar through its own `list_items`, so recurring events, changed and canceled occurrences, hidden and archived calendars, and archived issues behave exactly as on the calendar and a summary reconciles with the schedule it summarizes. A test compares the totals with the items the calendar returns.
+
+- **Scheduled, not spent.** Minutes are the time the calendar plans. They are never described as time worked, and no score is derived from them.
+- **Three kinds, never merged.** _Events_ (timed and all-day), _planned work sessions_ (work blocks on issues), and _due dates_ (open issues due that day) have separate counts everywhere. A closed issue's due date is not an open deadline. Work sessions on closed issues are still scheduled sessions.
+- **Local days.** Every timed item is cut at local midnight in `timeZone` and each piece is counted on its own day, so a 23:00 to 01:00 event contributes 60 minutes to each day, and a period holding only the second day counts only that hour. Durations are real elapsed time, so a spring-forward day loses the skipped hour (00:30 to 04:30 on 2026-03-29 in Paris is 180 minutes) and a fall-back day gains it (300 minutes on 2026-10-25).
+- **All-day events** cover each day of their dates (end exclusive) inside the period, count once as events, and add **0 minutes**.
+- **Overlap.** `eventMinutes` and `workBlockMinutes` sum item lengths, so overlapping items add up. `busyMinutes` is the union of all timed items: time covered once. `overlapMinutes = eventMinutes + workBlockMinutes − busyMinutes`, so nothing is hidden and nothing is counted twice in busy time.
+- **Projects.** A work session and a due date belong to their issue's project. An event belongs to the project it is linked to. An event with no link is `unassigned` ("No project"). An event linked to two or more projects is `shared` and counted once, so project lines add up to the totals. Under a project filter, everything tied to that project is kept, shared events included.
+- **Period and weeks.** At most 366 days. Weeks run Monday to Sunday, clipped to the period, and add up their days' minutes.
+- **Upcoming.** Today through the next 6 days, whatever the period, with the next 10 items in time order, each labeled by kind.
+- **Limits.** The calendar lists at most 2000 items per read. When it has more, `truncated` is true and the screen says the counts may be low.

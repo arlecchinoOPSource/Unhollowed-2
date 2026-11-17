@@ -2288,6 +2288,40 @@ export async function installIpcMock(page: Page) {
                 projectId: a.projectId,
               });
             }
+            case "get_schedule_analytics": {
+              // Tests supply the engine's output as window.__schedule; the
+              // arithmetic is covered by the Rust tests.
+              const a = args as unknown as {
+                from: string;
+                to: string;
+                projectId: string | null;
+              };
+              const load = {
+                events: 0,
+                allDayEvents: 0,
+                timedEvents: 0,
+                workBlocks: 0,
+                deadlines: 0,
+                eventMinutes: 0,
+                workBlockMinutes: 0,
+                busyMinutes: 0,
+                overlapMinutes: 0,
+              };
+              return structuredClone({
+                from: a.from,
+                to: a.to,
+                today: "2026-11-17",
+                timeZone: "Europe/Paris",
+                truncated: false,
+                totals: load,
+                days: [],
+                weeks: [],
+                projects: [],
+                upcoming: { events: 0, workBlocks: 0, deadlines: 0, next: [] },
+                ...(window as unknown as { __schedule?: object }).__schedule,
+                projectId: a.projectId,
+              });
+            }
             case "get_habit_month": {
               const state = habitState();
               const { year, month } = args as unknown as {
