@@ -1888,3 +1888,56 @@ test("opens a document from a workspace content search", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Document title")).toHaveValue("Field notes");
 });
+
+test("schedules, moves, and deletes work sessions apart from the deadline", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-16T10:00:00Z"));
+  await page.goto("/issues");
+  await createIssue(page, "Write report");
+  await page.getByRole("link", { name: /Write report/ }).click();
+  const due = page.locator('input[type="date"]').last();
+  await due.fill("2026-11-25");
+
+  const add = async (date: string, start: string, end: string) => {
+    await page.getByRole("button", { name: "Schedule work session" }).click();
+    const form = page.getByRole("form", { name: "New session" });
+    await form.getByLabel("Date").fill(date);
+    await form.getByLabel("Start").fill(start);
+    await form.getByLabel("End").fill(end);
+    await form.getByRole("button", { name: "Add session" }).click();
+  };
+  await add("2026-11-18", "09:00", "11:00");
+  // Overlapping sessions are allowed.
+  await add("2026-11-18", "10:00", "12:00");
+  const sessions = page.getByRole("region", { name: "Work sessions" });
+  await expect(sessions.getByRole("listitem")).toHaveCount(2);
+
+  // A failed move keeps the form open and the session as it was.
+  await sessions.getByRole("button", { name: /^Edit/ }).first().click();
+  const form = page.getByRole("form", { name: "Edit session" });
+  await form.getByLabel("End").fill("08:00");
+  await form.getByRole("button", { name: "Save session" }).click();
+  await expect(page.getByRole("alert")).toContainText("end later");
+  await expect(form).toBeVisible();
+  await form.getByLabel("Date").fill("2026-11-19");
+  await form.getByLabel("End").fill("10:00");
+  await form.getByRole("button", { name: "Save session" }).click();
+  await expect(page.getByText("Session moved.")).toBeVisible();
+  await expect(due).toHaveValue("2026-11-25");
+
+  // Sessions render apart from the deadline in the calendar.
+  await sessions.getByRole("link").first().click();
+  await expect(page.getByText("Work block:").first()).toBeVisible();
+  await expect(page.getByText("Deadline:")).toHaveCount(0);
+
+  // Completing the issue keeps its sessions.
+  await page.getByText("Work block:").first().click();
+  await page.getByRole("button", { name: "Mark complete" }).click();
+  await expect(sessions.getByRole("listitem")).toHaveCount(2);
+  await sessions
+    .getByRole("button", { name: /^Delete/ })
+    .first()
+    .click();
+  await expect(sessions.getByRole("listitem")).toHaveCount(1);
+});

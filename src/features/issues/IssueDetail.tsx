@@ -36,6 +36,7 @@ import { isTauri } from "../../database/status";
 import { LabelPicker } from "../labels/LabelParts";
 import { useLocalToday } from "../today/useLocalToday";
 import { IssueDocuments } from "../documents/LinkedDocuments";
+import { IssueSessions } from "./IssueSessions";
 import { StatusBadge } from "./IssueBadges";
 import { ArchiveButton, ArchivedBanner } from "./IssueArchive";
 import { IssueRepeat } from "./IssueRepeat";
@@ -427,6 +428,7 @@ function IssueEditor({
           issueId={id}
           origin={{ from: `/issues/${id}`, fromLabel: issueKey(issue) }}
         />
+        <IssueSessions issueId={id} />
       </div>
       <section
         className="issue-properties"

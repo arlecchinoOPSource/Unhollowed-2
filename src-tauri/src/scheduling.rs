@@ -184,6 +184,15 @@ pub struct WorkBlockInput {
     pub end: String,
 }
 
+/// A new time for an existing work block.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkBlockTiming {
+    pub time_zone: String,
+    pub start: String,
+    pub end: String,
+}
+
 /// A validated time span.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Timing {
@@ -531,6 +540,68 @@ pub async fn create_work_block(
     .await?;
     tx.commit().await?;
     Ok(block)
+}
+
+/// Moves or resizes a work block. Its issue never changes, and neither do
+/// the issue's status or due date.
+pub async fn update_work_block(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+    input: WorkBlockTiming,
+) -> Result<WorkBlock, SchedulingError> {
+    let Timing::Timed {
+        zone,
+        start_local,
+        end_local,
+        start_at,
+        end_at,
+    } = timed_timing(Some(&input.time_zone), Some(&input.start), Some(&input.end))?
+    else {
+        unreachable!("timed_timing returns timed spans");
+    };
+    sqlx::query_as(&format!(
+        "UPDATE work_blocks SET time_zone = ?, start_local = ?, end_local = ?, start_at = ?, end_at = ?,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE id = ? AND workspace_id = ? RETURNING {WORK_BLOCK_FIELDS}"
+    ))
+    .bind(zone)
+    .bind(start_local)
+    .bind(end_local)
+    .bind(time::instant(start_at))
+    .bind(time::instant(end_at))
+    .bind(id)
+    .bind(workspace)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(SchedulingError::NotFound)
+}
+
+/// Every work block of an issue, earliest first. Closed and archived issues
+/// keep theirs, so the history stays readable.
+pub async fn list_work_blocks(
+    pool: &SqlitePool,
+    workspace: &str,
+    issue_id: &str,
+) -> Result<Vec<WorkBlock>, SchedulingError> {
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM issues WHERE id = ? AND workspace_id = ?)",
+    )
+    .bind(issue_id)
+    .bind(workspace)
+    .fetch_one(pool)
+    .await?;
+    if !exists {
+        return Err(SchedulingError::IssueNotFound);
+    }
+    Ok(sqlx::query_as(&format!(
+        "SELECT {WORK_BLOCK_FIELDS} FROM work_blocks
+         WHERE issue_id = ? AND workspace_id = ? ORDER BY start_at, id"
+    ))
+    .bind(issue_id)
+    .bind(workspace)
+    .fetch_all(pool)
+    .await?)
 }
 
 pub async fn delete_work_block(
@@ -1053,6 +1124,25 @@ pub async fn create_issue_work_block(
 ) -> Result<WorkBlock, SchedulingError> {
     let (pool, workspace) = scope(&instances).await?;
     create_work_block(&pool, &workspace, input).await
+}
+
+#[tauri::command]
+pub async fn update_issue_work_block(
+    instances: State<'_, DbInstances>,
+    id: String,
+    input: WorkBlockTiming,
+) -> Result<WorkBlock, SchedulingError> {
+    let (pool, workspace) = scope(&instances).await?;
+    update_work_block(&pool, &workspace, &id, input).await
+}
+
+#[tauri::command]
+pub async fn list_issue_work_blocks(
+    instances: State<'_, DbInstances>,
+    issue_id: String,
+) -> Result<Vec<WorkBlock>, SchedulingError> {
+    let (pool, workspace) = scope(&instances).await?;
+    list_work_blocks(&pool, &workspace, &issue_id).await
 }
 
 #[tauri::command]

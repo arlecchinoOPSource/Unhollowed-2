@@ -13,7 +13,7 @@ There are three kinds of calendar item. Each has its own storage, so none is a c
 | **Work block**     | A row in `work_blocks`, tied to one issue              | Timed            |
 
 - **Deadlines** stay where they are. Rescheduling a deadline changes `issues.due_date` through the existing issue commands, and reading the calendar never creates or changes calendar items. Archived issues are left out. Closed issues are included with `closed: true`, so views can choose whether to show them.
-- **Work blocks** schedule time to work on an issue without copying it. Deleting the issue deletes its blocks. Their editing UI arrives with U2-P3-12.
+- **Work blocks** schedule time to work on an issue without copying it. Deleting the issue deletes its blocks. Sessions are managed from the issue page, and the timeline shows them apart from deadlines (see Work sessions).
 - **Calendars** group events. Each workspace has exactly one default calendar, enforced by a partial unique index. Rust creates it, named Personal, the first time anything needs it. Events in hidden or archived calendars are stored but left out of calendar reads.
 
 ## Ownership
@@ -85,6 +85,8 @@ Recurring timed events (U2-P3-04) repeat their wall-clock time in their own zone
 | `create_calendar_event`                               | Creates a timed or all-day event, in the default calendar unless `calendarId` names an active one |
 | `get_calendar_event`                                  | One event                                                                                         |
 | `create_issue_work_block` / `delete_issue_work_block` | Adds or removes time for an issue                                                                 |
+| `update_issue_work_block`                             | Moves or resizes a session. Only its times and zone change                                        |
+| `list_issue_work_blocks`                              | An issue's sessions, earliest first, including those of closed and archived issues                |
 
 ### Managing calendars
 
@@ -207,6 +209,19 @@ Deadlines come from `issues.due_date` in every view, and no view stores a copy.
 - **Closed issues.** The `closed=1` URL parameter and the **Show closed issues** checkbox include completed and canceled deadlines in Month and in the timeline views. Closed deadlines are drawn struck through.
 - **Rescheduling** from Month or the overdue list calls `set_issue_due_date` and changes nothing else. Events and work blocks are never touched. The other views reload afterward, and Issues, Today and Upcoming, and project overview read the same record.
 - Timeline deadlines are not filtered by project.
+
+### Work sessions
+
+A work session reserves time to work on one issue. It is a `work_blocks` row of its own, never a deadline or event.
+
+- **Managing.** The issue page lists the issue's sessions with **Schedule work session**, **Edit**, and **Delete**. A session is one day, in the device zone, from a start to a later end. An issue can have any number of sessions, each edited on its own. Sessions may overlap each other and events.
+- **Independence.** Creating, moving, or deleting a session never changes the issue's status, due date, or `updated_at`. Moving a session never changes its issue, and a failed move changes nothing.
+- **Showing.** Day, Week, and Workweek draw sessions as timed items that link to the issue, labeled "Work block". Deadlines stay in the all-day band.
+- **Completed issues** keep their sessions. They stay listed on the issue page, and views mark them closed.
+- **Archived issues** keep their sessions, which are hidden from calendar views and search and return when the issue is restored.
+- **Permanent deletion** removes the issue's sessions with it. The confirmation lists how many work sessions go. Deletion needs an archived issue, so no visible session disappears without that warning.
+- **Standalone focus blocks** (sessions without an issue) are not supported. Each session needs an issue, and `work_blocks.issue_id` is required. An event serves the standalone case.
+- Not included: time tracking, analytics, and completing an issue from a session.
 
 ### Calendar libraries
 
