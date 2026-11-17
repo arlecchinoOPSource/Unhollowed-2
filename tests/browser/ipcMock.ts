@@ -2061,6 +2061,25 @@ export async function installIpcMock(page: Page) {
               const seen = habitRestore(copy, undefined);
               return habitRestore(copy, seen.token);
             }
+            case "get_habit_statistics": {
+              // Tests supply the engine's output as window.__habitStats; the
+              // arithmetic itself is covered by the Rust tests.
+              const w = window as unknown as { __habitStats?: object };
+              return structuredClone(
+                w.__habitStats ?? {
+                  today: "2026-11-17",
+                  from: (args as unknown as { from: string }).from,
+                  to: (args as unknown as { to: string }).to,
+                  through: "2026-11-17",
+                  summary: { eligible: 0, completed: 0, percent: null },
+                  habits: [],
+                  days: [],
+                  weeks: [],
+                  months: [],
+                  practice: { current: 0, longest: 0 },
+                },
+              );
+            }
             case "get_habit_month": {
               const state = habitState();
               const { year, month } = args as unknown as {

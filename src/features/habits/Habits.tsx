@@ -26,6 +26,7 @@ import { shortcutAllowed } from "../issues/issueKeyboard";
 import { localDate, msUntilNextLocalMidnight } from "../today/dates";
 import { cellKey, HabitGrid } from "./HabitGrid";
 import { HabitBackup } from "./HabitBackup";
+import { HabitDashboard } from "./HabitDashboard";
 import { HabitImport } from "./HabitImport";
 import { HabitManager } from "./HabitManager";
 import { FIRST_MONTH, LAST_MONTH, monthDates } from "./gridRules";
@@ -66,6 +67,7 @@ export function Habits() {
   const [addError, setAddError] = useState("");
   const [managing, setManaging] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [trends, setTrends] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -274,6 +276,15 @@ export function Habits() {
             <button
               type="button"
               className="action"
+              aria-expanded={trends}
+              aria-controls="habit-trends"
+              onClick={() => setTrends((open) => !open)}
+            >
+              {trends ? "Hide trends" : "Show trends"}
+            </button>
+            <button
+              type="button"
+              className="action"
               onClick={() => setImporting(true)}
             >
               Import from Ember
@@ -313,6 +324,11 @@ export function Habits() {
             />
           )}
         </>
+      )}
+      {desktop && trends && (
+        <div id="habit-trends">
+          <HabitDashboard reload={reload} />
+        </div>
       )}
       <p role="status" className="habit-status">
         {status}

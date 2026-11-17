@@ -164,6 +164,8 @@ export interface HabitStatistics {
   through: string;
   summary: HabitCounts;
   habits: HabitSummary[];
+  /** One per day for periods up to a year; empty for longer ones. */
+  days: HabitBucket[];
   weeks: HabitBucket[];
   months: HabitBucket[];
   /** Ember's practice streak across all habits, archived included. */

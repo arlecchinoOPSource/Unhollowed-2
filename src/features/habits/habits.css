@@ -275,3 +275,112 @@
   border-color: var(--danger, #b3261e);
   color: var(--danger, #b3261e);
 }
+
+.habit-dashboard h3 {
+  margin: 20px 0 6px;
+}
+
+.habit-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.habit-range label {
+  display: grid;
+  gap: 4px;
+}
+
+.habit-range input {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.habit-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.habit-tiles > div {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.habit-tiles dt {
+  color: var(--muted);
+}
+
+.habit-tiles dd {
+  margin: 4px 0 0;
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.habit-chart {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  color: var(--text);
+}
+
+.habit-axes line {
+  stroke: var(--line);
+}
+
+.habit-axes text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.habit-bar,
+.habit-dot {
+  fill: var(--accent);
+}
+
+.habit-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.habit-missing {
+  fill: none;
+  stroke: var(--muted);
+  stroke-dasharray: 3 2;
+}
+
+.habit-missing-tick {
+  stroke: var(--muted);
+  stroke-width: 2;
+}
+
+.habit-table table,
+.habit-each {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.habit-table :is(th, td),
+.habit-each :is(th, td) {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.habit-table details,
+.habit-table {
+  max-width: 640px;
+}
+
+.habit-legend {
+  color: var(--muted);
+}

@@ -92,6 +92,8 @@ pub struct HabitStatistics {
     pub summary: Counts,
     /// The selected habits, in saved order.
     pub habits: Vec<HabitSummary>,
+    /// One bucket per day, for periods up to a year; empty for longer ones.
+    pub days: Vec<Bucket>,
     pub weeks: Vec<Bucket>,
     pub months: Vec<Bucket>,
     /// Ember's practice streak: days with at least one completion in any habit
@@ -221,6 +223,11 @@ pub fn compute(
         through: to.min(today).to_string(),
         summary: Counts::new(eligible, completed),
         habits,
+        days: if day_count(from, to) <= 366 {
+            buckets(&chosen, from, to, today, |start| start)
+        } else {
+            Vec::new()
+        },
         weeks: buckets(&chosen, from, to, today, |start| {
             let to_sunday = 7 - i64::from(start.weekday().to_monday_one_offset());
             start.checked_add(to_sunday.days()).unwrap_or(Date::MAX)
