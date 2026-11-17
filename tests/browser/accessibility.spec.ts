@@ -209,6 +209,15 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByText("Keyboard shortcuts").click();
     await scan(page, "shortcut help", found);
 
+    // The event editor with its details open.
+    await page.goto("/calendar");
+    await page.getByRole("button", { name: "New event" }).click();
+    const editor = page.getByRole("dialog", { name: "New event" });
+    await editor.getByText("More details").click();
+    await expect(editor.getByLabel("Time zone")).toBeVisible();
+    await scan(page, "event editor", found);
+    await page.keyboard.press("Escape");
+
     expect(found, found.join("\n")).toEqual([]);
   });
 

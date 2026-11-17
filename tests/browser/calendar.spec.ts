@@ -1,7 +1,17 @@
-import { expect, test } from "@playwright/test";
-import { installIpcMock } from "./ipcMock";
+import { expect, test, type Page } from "@playwright/test";
+import { dispatch, installIpcMock } from "./ipcMock";
 
-test.beforeEach(({ page }) => installIpcMock(page));
+// Dates and times are local, so pin the zone and clock.
+test.use({ timezoneId: "Europe/Paris", locale: "en-US" });
+
+test.beforeEach(async ({ page }) => {
+  await installIpcMock(page);
+  await page.clock.setFixedTime(new Date("2026-11-16T10:00:00+01:00"));
+});
+
+function day(page: Page, date: RegExp) {
+  return page.getByRole("button", { name: date });
+}
 
 test("manages calendars: create, hide, default, archive with a replacement, and restore", async ({
   page,
@@ -91,4 +101,137 @@ test("manages calendars: create, hide, default, archive with a replacement, and 
   await edit.getByRole("button", { name: "Save calendar" }).click();
   await expect(page.getByRole("status")).toHaveText("Saved calendar Office.");
   await expect(page.getByRole("button", { name: "Edit Office" })).toBeFocused();
+});
+
+test("creates, edits, duplicates, moves, and deletes events in the editor", async ({
+  page,
+}) => {
+  // Set up a second calendar first, through the app.
+  await page.goto("/calendar/calendars");
+  const create = page.getByRole("form", { name: "Create a calendar" });
+  await create.getByLabel("Calendar name").fill("Work");
+  await create.getByLabel("Calendar name").press("Enter");
+  await expect(page.getByRole("status")).toHaveText("Created calendar Work.");
+  await page.getByRole("link", { name: "Calendar" }).first().click();
+
+  await day(page, /November 18, 2026/).click();
+  const panel = page.getByRole("region", { name: /November 18, 2026/ });
+  await expect(panel.getByText("No events this day.")).toBeVisible();
+
+  // Quick create by keyboard: the title has focus, Enter saves.
+  const newEvent = panel.getByRole("button", { name: "New event" });
+  await newEvent.click();
+  const editor = page.getByRole("dialog", { name: "New event" });
+  await expect(editor.getByLabel("Title")).toBeFocused();
+  await editor.getByLabel("Start time").fill("09:30");
+  await editor.getByLabel("End time").fill("10:15");
+  await editor.getByLabel("Title").fill("Standup");
+  await editor.getByLabel("Title").press("Enter");
+  await expect(page.getByRole("status").first()).toHaveText(
+    "Created event Standup.",
+  );
+  await expect(editor).toBeHidden();
+  await expect(newEvent).toBeFocused();
+  const standup = panel.getByRole("button", { name: /09:30–10:15\s*Standup/ });
+  await expect(standup).toBeVisible();
+
+  // Invalid input keeps the dialog and every entered value.
+  await standup.click();
+  const edit = page.getByRole("dialog", { name: "Edit event" });
+  await edit.getByText("More details").click();
+  await edit.getByLabel("Location (optional)").fill("Room 4");
+  await edit.getByLabel("Link (optional)").fill("javascript:alert(1)");
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(edit.getByRole("alert")).toHaveText(
+    "Enter a web address starting with http:// or https://.",
+  );
+  await expect(edit.getByLabel("Location (optional)")).toHaveValue("Room 4");
+  await edit.getByLabel("End time").fill("09:00");
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(edit.getByRole("alert")).toHaveText("End after the start.");
+
+  // A failed write keeps the values too.
+  await edit.getByLabel("End time").fill("10:15");
+  await edit.getByLabel("Link (optional)").fill("https://example.com/notes");
+  await dispatch(page, "fail-command", "update_calendar_event");
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(edit.getByRole("alert")).toHaveText(
+    "Could not save the change. Try again.",
+  );
+  await expect(edit.getByLabel("Link (optional)")).toHaveValue(
+    "https://example.com/notes",
+  );
+  await dispatch(page, "restore-command", "update_calendar_event");
+
+  // Move it to Work while saving.
+  await edit.getByLabel("Calendar").selectOption({ label: "Work (Teal)" });
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(page.getByRole("status").first()).toHaveText(
+    "Saved event Standup.",
+  );
+  await expect(
+    panel.getByRole("button", { name: /Teal calendar/ }),
+  ).toBeVisible();
+
+  // Duplicate, then edit the copy.
+  await standup.click();
+  await edit.getByRole("button", { name: "Duplicate" }).click();
+  await expect(edit.getByRole("status")).toHaveText(
+    "Duplicated. You are now editing the copy.",
+  );
+  await edit.getByLabel("Title").fill("Standup notes");
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(
+    panel.getByRole("button", { name: /Standup notes/ }),
+  ).toBeVisible();
+  await expect(panel.getByRole("listitem")).toHaveCount(2);
+
+  // Delete needs confirmation, and Keep cancels.
+  await panel.getByRole("button", { name: /Standup notes/ }).click();
+  await edit.getByRole("button", { name: "Delete…" }).click();
+  const confirm = edit.getByRole("group", { name: "Confirm deletion" });
+  await expect(
+    confirm.getByRole("button", { name: "Delete event" }),
+  ).toBeFocused();
+  await confirm.getByRole("button", { name: "Keep event" }).click();
+  await edit.getByRole("button", { name: "Delete…" }).click();
+  await confirm.getByRole("button", { name: "Delete event" }).click();
+  await expect(page.getByRole("status").first()).toHaveText(
+    "Deleted event Standup notes.",
+  );
+  await expect(panel.getByRole("listitem")).toHaveCount(1);
+
+  // Escape closes without saving.
+  await standup.click();
+  await edit.getByLabel("Title").fill("Never saved");
+  await page.keyboard.press("Escape");
+  await expect(edit).toBeHidden();
+  await expect(standup).toBeVisible();
+});
+
+test("shows a multi-day all-day event on each of its days", async ({
+  page,
+}) => {
+  await page.goto("/calendar");
+  await day(page, /November 18, 2026/).click();
+  await page.getByRole("button", { name: "New event" }).click();
+  const editor = page.getByRole("dialog", { name: "New event" });
+  await editor.getByLabel("Title").fill("Conference");
+  await editor.getByLabel("All day").check();
+  await expect(editor.getByLabel("Start time")).toHaveCount(0);
+  await editor.getByLabel("Last day").fill("2026-11-19");
+  await editor.getByRole("button", { name: "Save event" }).click();
+  await expect(page.getByRole("status").first()).toHaveText(
+    "Created event Conference.",
+  );
+  for (const [date, count] of [
+    [/November 18, 2026/, 1],
+    [/November 19, 2026/, 1],
+    [/November 20, 2026/, 0],
+  ] as const) {
+    await day(page, date).click();
+    await expect(
+      page.getByRole("button", { name: /All day\s*Conference/ }),
+    ).toHaveCount(count);
+  }
 });
