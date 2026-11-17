@@ -1,3 +1,4 @@
+import { displayClock, useCalendarPreferences } from "./preferences";
 import { CalendarPlus, Repeat } from "lucide-react";
 import { useEffect, useState } from "react";
 import { calendarColors, schedulingError } from "../../database/calendars";
@@ -9,12 +10,18 @@ import { useEventEditing } from "./useEventEditing";
 import { timeIn, useDeviceZone } from "./useDeviceZone";
 
 /** `09:00–10:30`, or the dates for items that cross midnight. */
-function timeRange(item: CalendarItem, day: string) {
+function timeRange(item: CalendarItem, day: string, twelveHour: boolean) {
   if (item.allDay) return "All day";
   const [startDay, start] = (item.start ?? "").split("T");
   const [endDay, end] = (item.end ?? "").split("T");
-  const from = startDay === day ? start : `${startDay} ${start}`;
-  const to = endDay === day ? end : `${endDay} ${end}`;
+  const from =
+    startDay === day
+      ? displayClock(start, twelveHour)
+      : `${startDay} ${displayClock(start, twelveHour)}`;
+  const to =
+    endDay === day
+      ? displayClock(end, twelveHour)
+      : `${endDay} ${displayClock(end, twelveHour)}`;
   return `${from}–${to}`;
 }
 
@@ -25,17 +32,25 @@ function timeRange(item: CalendarItem, day: string) {
 export function DayEvents({
   day,
   onMessage,
+  revision = 0,
+  onChanged,
 }: {
   day: string;
+  revision?: number;
+  onChanged?: () => void;
   onMessage: (message: string) => void;
 }) {
+  const { twelveHour } = useCalendarPreferences();
   const zone = useDeviceZone();
   const [items, setItems] = useState<{ day: string; list: CalendarItem[] }>();
   const [loadError, setLoadError] = useState("");
   const [request, setRequest] = useState(0);
   const editing = useEventEditing({
     onMessage,
-    onChanged: () => setRequest((value) => value + 1),
+    onChanged: () => {
+      setRequest((value) => value + 1);
+      onChanged?.();
+    },
   });
 
   useEffect(() => {
@@ -55,7 +70,7 @@ export function DayEvents({
     return () => {
       current = false;
     };
-  }, [day, zone, request]);
+  }, [day, zone, request, revision]);
 
   const list = items?.day === day ? items.list : null;
   const error = loadError || editing.error;
@@ -90,7 +105,7 @@ export function DayEvents({
                   )}
                 />
                 <span className="calendar-event-time">
-                  {timeRange(item, day)}
+                  {timeRange(item, day, twelveHour)}
                 </span>
                 <span>{item.title}</span>
                 {item.recurring && (

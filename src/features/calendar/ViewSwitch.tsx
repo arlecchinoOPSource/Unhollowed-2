@@ -1,22 +1,27 @@
 import { useSearchParams } from "react-router";
+import { useCalendarPreferences } from "./preferences";
 import { monthOf } from "./monthGrid";
 import type { TimelineView } from "./timeline";
 
-export type CalendarView = TimelineView | "month";
+export type CalendarView = TimelineView | "month" | "agenda";
 
 const views: [CalendarView, string][] = [
   ["day", "Day"],
   ["week", "Week"],
   ["workweek", "Workweek"],
   ["month", "Month"],
+  ["agenda", "Agenda"],
 ];
 
 /** The calendar view in the URL. Week is the default for a fresh profile. */
-export function readView(params: URLSearchParams): CalendarView {
+export function readView(
+  params: URLSearchParams,
+  defaultView: CalendarView = "week",
+): CalendarView {
   const view = params.get("view");
   return views.some(([value]) => value === view)
     ? (view as CalendarView)
-    : "week";
+    : defaultView;
 }
 
 /**
@@ -25,7 +30,7 @@ export function readView(params: URLSearchParams): CalendarView {
  */
 export function ViewSwitch({ date }: { date: string }) {
   const [params, setParams] = useSearchParams();
-  const current = readView(params);
+  const current = readView(params, useCalendarPreferences().view);
   return (
     <div className="calendar-views" role="group" aria-label="Calendar view">
       {views.map(([view, label]) => (
@@ -36,9 +41,9 @@ export function ViewSwitch({ date }: { date: string }) {
           onClick={() => {
             const next = new URLSearchParams(params);
             next.set("view", view);
-            if (view === "month") {
+            if (view === "month" || view === "agenda") {
               next.set("month", monthOf(date));
-              next.delete("date");
+              next.set("date", date);
             } else {
               next.set("date", date);
               next.delete("month");

@@ -33,10 +33,10 @@ export function daysInMonth(month: string): number {
  * The 42 dates (six weeks) shown for `month`, starting on the week start on
  * or before the first of the month. Weeks start on Monday.
  */
-export function gridDays(month: string): string[] {
+export function gridDays(month: string, weekStart = 1): string[] {
   const first = `${month}-01`;
   // getDay: 0 is Sunday. Days back to the previous Monday.
-  const back = (parseLocalDate(first).getDay() + 6) % 7;
+  const back = (parseLocalDate(first).getDay() - weekStart + 7) % 7;
   const start = addDays(first, -back);
   return Array.from({ length: 42 }, (_, index) => addDays(start, index));
 }
