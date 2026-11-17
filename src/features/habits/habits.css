@@ -272,8 +272,8 @@
 }
 
 .habit-manager .danger {
-  border-color: var(--danger, #b3261e);
-  color: var(--danger, #b3261e);
+  border-width: 2px;
+  font-weight: 600;
 }
 
 .habit-dashboard h3 {

@@ -111,10 +111,7 @@ export function HabitsSection({
           </dl>
           <h3>Weekly completion (Monday to Sunday)</h3>
           <Bars buckets={data.weeks} name="Weekly habit completion" />
-          <details className="habit-table">
-            <summary>Data table: weekly habit completion</summary>
-            <Table caption="Weekly habit completion" buckets={data.weeks} />
-          </details>
+          <Table caption="Weekly habit completion" buckets={data.weeks} />
         </>
       )}
     </section>

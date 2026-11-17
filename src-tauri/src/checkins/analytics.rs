@@ -10,7 +10,7 @@
 
 use super::{list, valid_date, Checkin, CheckinError};
 use crate::database::{active_workspace, pool};
-use crate::habits::stats::{statistics, Counts};
+use crate::habits::stats::{boundaries, statistics, Counts};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::BTreeMap;
@@ -106,7 +106,14 @@ pub async fn analytics(
     let (first, last, now) = (valid_date(from)?, valid_date(to)?, valid_date(today)?);
     let checkins = list(pool, workspace, from, to).await?;
     // The habit engine defines the week and month boundaries for both sides.
-    let habit_side = statistics(pool, workspace, from, to, None, today).await?;
+    // Its habit data is only read when the comparison is asked for.
+    let (weeks, months, habit_summary) = if with_habits {
+        let side = statistics(pool, workspace, from, to, None, today).await?;
+        (side.weeks, side.months, Some(side.summary))
+    } else {
+        let (weeks, months) = boundaries(first, last, now);
+        (weeks, months, None)
+    };
     let days: Vec<&Checkin> = checkins.iter().collect();
     let through = last.min(now);
     let days_in_period = if first > through {
@@ -149,9 +156,9 @@ pub async fn analytics(
                 focus: c.focus,
             })
             .collect(),
-        weeks: periods(&habit_side.weeks),
-        months: periods(&habit_side.months),
-        habits: with_habits.then_some(habit_side.summary),
+        weeks: periods(&weeks),
+        months: periods(&months),
+        habits: habit_summary,
     })
 }
 
