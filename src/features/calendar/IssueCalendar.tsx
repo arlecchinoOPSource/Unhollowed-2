@@ -1,3 +1,9 @@
+import { DatePicker, useCalendarPreferences, validDate } from "./preferences";
+import { listCalendarItems, type CalendarItem } from "../../database/events";
+import { schedulingError } from "../../database/calendars";
+import { RangeEntry, occursOn } from "./CalendarRange";
+import { useDeviceZone } from "./useDeviceZone";
+import { useEventEditing } from "./useEventEditing";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   useEffect,
@@ -32,7 +38,6 @@ import {
   monthTitle,
   readMonth,
   shiftDateByMonths,
-  shiftMonth,
   weekdayNames,
 } from "./monthGrid";
 import "../issues/issues.css";
@@ -57,18 +62,21 @@ interface Loaded {
  * time zone. Days can be chosen with the mouse or the arrow keys; the chosen
  * day lists every issue due then and can reschedule them or add a new one.
  */
-export function IssueCalendar() {
+export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
   const desktop = isTauri();
   const location = useLocation();
   const today = useLocalToday();
+  const zone = useDeviceZone();
   const [params, setParams] = useSearchParams();
-  const month = readMonth(params.get("month"), monthOf(today));
+  const settings = useCalendarPreferences();
+  const requested = params.get("date");
+  const month = readMonth(
+    params.get("month"),
+    monthOf(validDate(requested) ? requested : today),
+  );
   const project = params.get("project") ?? "";
   const showClosed = params.get("closed") === "1";
   const { projects } = useIssueReferences(desktop);
-  const [selected, setSelected] = useState(() =>
-    month === monthOf(today) ? today : `${month}-01`,
-  );
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState("");
   const [request, setRequest] = useState(0);
@@ -78,13 +86,67 @@ export function IssueCalendar() {
   const dayButtons = useRef(new Map<string, HTMLButtonElement>());
   const focusDay = useRef<string | null>(null);
   const latestMove = useRef(new Map<string, number>());
-  const days = gridDays(month);
+  const days = gridDays(month, settings.weekStart);
   const first = days[0];
   const last = days[days.length - 1];
+  const [eventRevision, refreshEvents] = useState(0);
+  const eventKey = JSON.stringify([first, last, zone, eventRevision]);
+  const [range, setRange] = useState<{
+    key: string;
+    items: CalendarItem[];
+    truncated?: boolean;
+    error?: string;
+  }>();
+  const editing = useEventEditing({
+    onMessage: setMessage,
+    onChanged: () => refreshEvents((n) => n + 1),
+  });
+  useEffect(() => {
+    if (!desktop) return;
+    let current = true;
+    const [start, end, timeZone] = JSON.parse(eventKey) as [
+      string,
+      string,
+      string,
+    ];
+    listCalendarItems(start, addDays(end, 1), timeZone).then(
+      ({ items, truncated }) => {
+        if (current)
+          setRange({
+            key: eventKey,
+            items: items.filter((item) => item.kind !== "deadline"),
+            truncated,
+          });
+      },
+      (error) => {
+        if (current)
+          setRange({ key: eventKey, items: [], error: schedulingError(error) });
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [desktop, eventKey]);
+  const activeRange = range?.key === eventKey ? range : undefined;
+  function eventsOn(date: string) {
+    return (activeRange?.items ?? [])
+      .filter((item) => occursOn(item, date))
+      .sort(
+        (a, b) =>
+          Number(b.allDay) - Number(a.allDay) ||
+          (a.start ?? "").localeCompare(b.start ?? "") ||
+          a.title.localeCompare(b.title),
+      );
+  }
   const key = JSON.stringify({ first, last, project, showClosed, request });
 
   // The chosen day always belongs to the shown month.
-  const day = monthOf(selected) === month ? selected : `${month}-01`;
+  const day =
+    validDate(requested) && monthOf(requested) === month
+      ? requested
+      : monthOf(today) === month
+        ? today
+        : `${month}-01`;
 
   useEffect(() => {
     if (!desktop) return;
@@ -140,7 +202,7 @@ export function IssueCalendar() {
   useEffect(() => {
     if (focusDay.current === null) return;
     const button = dayButtons.current.get(focusDay.current);
-    if (!button) return;
+    if (!button || focusDay.current !== day) return;
     button.focus();
     focusDay.current = null;
   });
@@ -153,9 +215,14 @@ export function IssueCalendar() {
   }
 
   function choose(date: string, focus = false) {
-    setSelected(date);
-    if (monthOf(date) !== month) setParam("month", monthOf(date));
-    if (focus) focusDay.current = date;
+    const next = new URLSearchParams(params);
+    next.set("date", date);
+    next.set("month", monthOf(date));
+    if (focus) {
+      focusDay.current = date;
+      if (monthOf(date) === month) dayButtons.current.get(date)?.focus();
+    }
+    setParams(next, { replace: true });
   }
 
   function moveFocus(event: KeyboardEvent<HTMLButtonElement>, date: string) {
@@ -226,7 +293,7 @@ export function IssueCalendar() {
     const id = event.dataTransfer.getData(DRAG_TYPE);
     const issue = loaded?.issues.find((item) => item.id === id);
     if (issue) {
-      setSelected(date);
+      choose(date);
       reschedule(issue, date);
     }
   }
@@ -248,8 +315,13 @@ export function IssueCalendar() {
   }
   const from = `${location.pathname}${location.search}`;
   const loading = loaded !== null && loaded.key !== key;
-  const shortNames = weekdayNames("short");
-  const longNames = weekdayNames("long");
+  function orderedNames(style: "short" | "long") {
+    const names = weekdayNames(style);
+    const offset = (settings.weekStart + 6) % 7;
+    return [...names.slice(offset), ...names.slice(0, offset)];
+  }
+  const shortNames = orderedNames("short");
+  const longNames = orderedNames("long");
   const selectedIssues = byDay.get(day) ?? [];
   const createProject =
     project && project !== "inbox" && projects.some(({ id }) => id === project)
@@ -303,7 +375,7 @@ export function IssueCalendar() {
         <button
           type="button"
           aria-label="Previous month"
-          onClick={() => setParam("month", shiftMonth(month, -1))}
+          onClick={() => choose(shiftDateByMonths(day, -1))}
         >
           <ChevronLeft size={18} aria-hidden="true" />
         </button>
@@ -313,7 +385,7 @@ export function IssueCalendar() {
         <button
           type="button"
           aria-label="Next month"
-          onClick={() => setParam("month", shiftMonth(month, 1))}
+          onClick={() => choose(shiftDateByMonths(day, 1))}
         >
           <ChevronRight size={18} aria-hidden="true" />
         </button>
@@ -324,6 +396,7 @@ export function IssueCalendar() {
         >
           Today
         </button>
+        <DatePicker date={day} month />
       </div>
       {error && <p role="alert">{error}</p>}
       <p role="status" className="issue-message">
@@ -349,118 +422,203 @@ export function IssueCalendar() {
           project to see the rest.
         </p>
       )}
+      {(activeRange?.error || editing.error) && (
+        <p role="alert">{activeRange?.error || editing.error}</p>
+      )}
+      {activeRange?.truncated && (
+        <p role="status">
+          Some scheduled items are hidden. Choose a shorter view.
+        </p>
+      )}
+      {!activeRange && <p role="status">Loading scheduled items…</p>}
       <div className="calendar-layout">
-        <table
-          className="calendar-grid"
-          aria-labelledby="calendar-month"
-          aria-busy={loaded === null || loading}
-        >
-          <thead>
-            <tr>
-              {shortNames.map((name, index) => (
-                <th key={name} scope="col" abbr={longNames[index]}>
-                  {name}
-                </th>
+        {agenda ? (
+          <div aria-label="Agenda">
+            {days
+              .filter(
+                (date) =>
+                  monthOf(date) === month &&
+                  (byDay.has(date) || eventsOn(date).length),
+              )
+              .map((date) => (
+                <section key={date}>
+                  <h3>
+                    <button type="button" onClick={() => choose(date)}>
+                      {fullDate(date)}
+                    </button>
+                  </h3>
+                  <ul>
+                    {eventsOn(date).map((item) => (
+                      <li key={item.id}>
+                        <RangeEntry
+                          item={item}
+                          day={date}
+                          from={from}
+                          open={editing.openItem}
+                        />
+                      </li>
+                    ))}
+                    {(byDay.get(date) ?? []).map((issue) => (
+                      <li key={issue.id}>
+                        <Link to={`/issues/${issue.id}`} state={{ from }}>
+                          Due · {issue.title}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: 6 }, (_, week) => (
-              <tr key={week}>
-                {days.slice(week * 7, week * 7 + 7).map((date) => {
-                  const items = byDay.get(date) ?? [];
-                  const outside = monthOf(date) !== month;
-                  const classes = [
-                    "calendar-day",
-                    outside && "calendar-outside",
-                    date === today && "calendar-is-today",
-                    date === day && "calendar-selected",
-                    dropDay === date && "calendar-drop",
-                  ].filter(Boolean);
-                  return (
-                    <td
-                      key={date}
-                      className={classes.join(" ")}
-                      onDragOver={(event) => {
-                        if (!event.dataTransfer.types.includes(DRAG_TYPE))
-                          return;
-                        event.preventDefault();
-                        if (dropDay !== date) setDropDay(date);
-                      }}
-                      onDragLeave={(event) => {
-                        if (
-                          !event.currentTarget.contains(
-                            event.relatedTarget as Node,
-                          )
-                        )
-                          setDropDay(null);
-                      }}
-                      onDrop={(event) => drop(event, date)}
-                    >
-                      <button
-                        type="button"
-                        className="calendar-date"
-                        ref={(element) => {
-                          if (element) dayButtons.current.set(date, element);
-                          else dayButtons.current.delete(date);
-                        }}
-                        tabIndex={date === day ? 0 : -1}
-                        aria-pressed={date === day}
-                        aria-current={date === today ? "date" : undefined}
-                        aria-label={`${fullDate(date)}, ${
-                          items.length === 1
-                            ? "1 issue"
-                            : `${items.length} issues`
-                        }`}
-                        onClick={() => choose(date)}
-                        onKeyDown={(event) => moveFocus(event, date)}
-                      >
-                        {Number(date.slice(8))}
-                      </button>
-                      {items.length > 0 && (
-                        <ul>
-                          {items.slice(0, CHIPS_PER_DAY).map((issue) => (
-                            <li
-                              key={issue.id}
-                              className={`calendar-chip${issue.closed ? " calendar-closed" : ""}`}
-                              draggable
-                              onDragStart={(event) => {
-                                event.dataTransfer.setData(DRAG_TYPE, issue.id);
-                                event.dataTransfer.setData(
-                                  "text/plain",
-                                  issueKey(issue),
-                                );
-                                event.dataTransfer.effectAllowed = "move";
-                              }}
-                            >
-                              <Link
-                                to={`/issues/${issue.id}`}
-                                state={{ from }}
-                                draggable={false}
-                                tabIndex={-1}
-                              >
-                                {issue.title}
-                              </Link>
-                            </li>
-                          ))}
-                          {items.length > CHIPS_PER_DAY && (
-                            <li className="calendar-more">
-                              +{items.length - CHIPS_PER_DAY} more
-                            </li>
-                          )}
-                        </ul>
-                      )}
-                    </td>
-                  );
-                })}
+            {activeRange &&
+              loaded &&
+              !days.some(
+                (date) =>
+                  monthOf(date) === month &&
+                  (byDay.has(date) || eventsOn(date).length),
+              ) && <p>No scheduled items this month.</p>}
+          </div>
+        ) : (
+          <table
+            className="calendar-grid"
+            aria-labelledby="calendar-month"
+            aria-busy={loaded === null || loading}
+          >
+            <thead>
+              <tr>
+                {shortNames.map((name, index) => (
+                  <th key={name} scope="col" abbr={longNames[index]}>
+                    {name}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {Array.from({ length: 6 }, (_, week) => (
+                <tr key={week}>
+                  {days.slice(week * 7, week * 7 + 7).map((date) => {
+                    const items = byDay.get(date) ?? [];
+                    const scheduled = eventsOn(date);
+                    const outside = monthOf(date) !== month;
+                    const classes = [
+                      "calendar-day",
+                      outside && "calendar-outside",
+                      date === today && "calendar-is-today",
+                      date === day && "calendar-selected",
+                      dropDay === date && "calendar-drop",
+                    ].filter(Boolean);
+                    return (
+                      <td
+                        key={date}
+                        className={classes.join(" ")}
+                        onDragOver={(event) => {
+                          if (!event.dataTransfer.types.includes(DRAG_TYPE))
+                            return;
+                          event.preventDefault();
+                          if (dropDay !== date) setDropDay(date);
+                        }}
+                        onDragLeave={(event) => {
+                          if (
+                            !event.currentTarget.contains(
+                              event.relatedTarget as Node,
+                            )
+                          )
+                            setDropDay(null);
+                        }}
+                        onDrop={(event) => drop(event, date)}
+                      >
+                        <button
+                          type="button"
+                          className="calendar-date"
+                          ref={(element) => {
+                            if (element) dayButtons.current.set(date, element);
+                            else dayButtons.current.delete(date);
+                          }}
+                          tabIndex={date === day ? 0 : -1}
+                          aria-pressed={date === day}
+                          aria-current={date === today ? "date" : undefined}
+                          aria-label={`${fullDate(date)}, ${
+                            items.length === 1
+                              ? "1 issue"
+                              : `${items.length} issues`
+                          }`}
+                          onClick={() => choose(date)}
+                          onKeyDown={(event) => moveFocus(event, date)}
+                        >
+                          {Number(date.slice(8))}
+                        </button>
+                        {items.length + scheduled.length > 0 && (
+                          <ul>
+                            {items.slice(0, CHIPS_PER_DAY).map((issue) => (
+                              <li
+                                key={issue.id}
+                                className={`calendar-chip${issue.closed ? " calendar-closed" : ""}`}
+                                draggable
+                                onDragStart={(event) => {
+                                  event.dataTransfer.setData(
+                                    DRAG_TYPE,
+                                    issue.id,
+                                  );
+                                  event.dataTransfer.setData(
+                                    "text/plain",
+                                    issueKey(issue),
+                                  );
+                                  event.dataTransfer.effectAllowed = "move";
+                                }}
+                              >
+                                <Link
+                                  to={`/issues/${issue.id}`}
+                                  state={{ from }}
+                                  draggable={false}
+                                  tabIndex={-1}
+                                >
+                                  {issue.title}
+                                </Link>
+                              </li>
+                            ))}
+                            {scheduled
+                              .slice(
+                                0,
+                                Math.max(0, CHIPS_PER_DAY - items.length),
+                              )
+                              .map((item) => (
+                                <li key={item.id} className="calendar-chip">
+                                  <RangeEntry
+                                    item={item}
+                                    day={date}
+                                    from={from}
+                                    open={editing.openItem}
+                                  />
+                                </li>
+                              ))}
+                            {items.length + scheduled.length >
+                              CHIPS_PER_DAY && (
+                              <li className="calendar-more">
+                                +
+                                {items.length +
+                                  scheduled.length -
+                                  CHIPS_PER_DAY}{" "}
+                                more
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
 
         <section className="calendar-day-panel" aria-labelledby="calendar-day">
           <h2 id="calendar-day">{fullDate(day)}</h2>
-          <DayEvents day={day} onMessage={setMessage} />
+          <DayEvents
+            day={day}
+            onMessage={setMessage}
+            revision={eventRevision}
+            onChanged={() => refreshEvents((n) => n + 1)}
+          />
+          {editing.editor}
           <h3>Issues due</h3>
           {loaded === null && !loadError && <p>Loading issues…</p>}
           {loaded && selectedIssues.length === 0 && (

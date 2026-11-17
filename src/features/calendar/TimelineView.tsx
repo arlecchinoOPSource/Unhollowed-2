@@ -1,3 +1,4 @@
+import { increments, type CalendarSettings } from "./settings";
 import { CalendarPlus, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 import {
   useEffect,
@@ -15,7 +16,12 @@ import { swatchStyle } from "../labels/LabelParts";
 import { addDays, parseLocalDate } from "../today/dates";
 import { useLocalToday } from "../today/useLocalToday";
 import { newDraft } from "./eventDraft";
-import { increments, useCalendarSettings } from "./settings";
+import {
+  DatePicker,
+  displayClock,
+  useCalendarPreferences,
+  validDate,
+} from "./preferences";
 import {
   clock,
   layoutAllDay,
@@ -32,8 +38,6 @@ import { useDeviceZone } from "./useDeviceZone";
 import { useEventEditing } from "./useEventEditing";
 import { ViewSwitch } from "./ViewSwitch";
 import "./timeline.css";
-
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function colorName(item: CalendarItem) {
   return calendarColors[item.color as keyof typeof calendarColors]?.name;
@@ -68,15 +72,21 @@ function dayName(day: string, style: "short" | "long") {
  * deadlines link to their issues. Clicking an empty time creates an event
  * there; the New event button does the same from the keyboard.
  */
-export function TimelineView({ view }: { view: View }) {
+export function TimelineView({
+  view,
+  setIncrement,
+}: {
+  view: View;
+  setIncrement: (value: CalendarSettings["increment"]) => void;
+}) {
   const desktop = isTauri();
   const today = useLocalToday();
   const zone = useDeviceZone();
   const now = useNowMinutes();
-  const [settings, setIncrement] = useCalendarSettings();
+  const settings = useCalendarPreferences();
   const [params, setParams] = useSearchParams();
   const requested = params.get("date");
-  const date = requested && DATE.test(requested) ? requested : today;
+  const date = validDate(requested) ? requested : today;
   const days = viewDays(view, date, settings);
   const [loaded, setLoaded] = useState<{
     key: string;
@@ -222,13 +232,14 @@ export function TimelineView({ view }: { view: View }) {
         <button type="button" className="calendar-new-event" onClick={newEvent}>
           <CalendarPlus size={15} aria-hidden="true" /> New event
         </button>
+        <DatePicker date={date} />
         <label className="timeline-grid-setting">
-          Grid
+          Grid{" "}
           <select
             value={settings.increment}
             onChange={(event) =>
               setIncrement(
-                Number(event.target.value) as (typeof increments)[number],
+                Number(event.target.value) as CalendarSettings["increment"],
               )
             }
           >
@@ -332,7 +343,9 @@ export function TimelineView({ view }: { view: View }) {
           <div className="timeline-grid">
             <ol className="timeline-hours" aria-hidden="true">
               {Array.from({ length: 24 }, (_, hour) => (
-                <li key={hour}>{clock(hour * 60)}</li>
+                <li key={hour}>
+                  {displayClock(clock(hour * 60), settings.twelveHour)}
+                </li>
               ))}
             </ol>
             {days.map((day) => {
@@ -385,9 +398,10 @@ function TimelineBlock({
   block: Block;
   onOpen: () => void;
 }) {
+  const { twelveHour } = useCalendarPreferences();
   const { item, top, bottom, column, columns } = block;
-  const start = item.start!.slice(11);
-  const end = item.end!.slice(11);
+  const start = displayClock(item.start!.slice(11, 16), twelveHour);
+  const end = displayClock(item.end!.slice(11, 16), twelveHour);
   const style = {
     top: `${(top / MINUTES_PER_DAY) * 100}%`,
     height: `${((bottom - top) / MINUTES_PER_DAY) * 100}%`,

@@ -287,7 +287,9 @@ test("repeats an event and edits one occurrence, this and following, or all", as
   const occurrence = (date: RegExp, name: RegExp) =>
     day(page, date)
       .click()
-      .then(() => page.getByRole("button", { name }));
+      .then(() =>
+        page.locator(".calendar-day-panel").getByRole("button", { name }),
+      );
 
   // One occurrence: renamed, and the rest of the series keeps its title.
   await (
@@ -472,7 +474,9 @@ test.describe("timeline views", () => {
     page,
   }) => {
     await page.goto("/calendar?view=day&date=2026-11-20");
-    await page.getByLabel("Grid").selectOption("15");
+    await page
+      .getByRole("combobox", { name: "Grid", exact: true })
+      .selectOption("15");
     const day = page.getByRole("group", { name: "Friday, November 20" });
     const hour = (await day.boundingBox())!.height / 24;
     // Bring 15:00 into view, then click 15:20, which snaps down to 15:15.
@@ -492,7 +496,9 @@ test.describe("timeline views", () => {
     ).toBeVisible();
     // The grid setting is remembered.
     await page.reload();
-    await expect(page.getByLabel("Grid")).toHaveValue("15");
+    await expect(
+      page.getByRole("combobox", { name: "Grid", exact: true }),
+    ).toHaveValue("15");
   });
 
   test("places items by wall clock on a daylight-saving day", async ({
@@ -519,4 +525,70 @@ test.describe("timeline views", () => {
       await train.evaluate((element) => element.parentElement!.style.top),
     ).toBe("12.5%");
   });
+});
+
+test("opens a multi-day event from Month and Agenda", async ({ page }) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedEvents: [
+        {
+          title: "Research retreat",
+          startLocal: "2026-11-16T15:00",
+          endLocal: "2026-11-17T10:00",
+        },
+      ],
+    }),
+  );
+  await page.goto("/calendar?view=month&date=2026-11-16");
+  const grid = page.getByRole("table");
+  await expect(
+    grid.getByRole("button", { name: /Research retreat/ }),
+  ).toHaveCount(2);
+  await grid
+    .getByRole("button", { name: /Continues.*Research retreat/ })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Edit event" }).getByLabel("Title"),
+  ).toHaveValue("Research retreat");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Agenda", exact: true }).click();
+  await expect(
+    page
+      .getByLabel("Agenda", { exact: true })
+      .getByRole("button", { name: /Research retreat/ }),
+  ).toHaveCount(2);
+});
+
+test("restores calendar preferences and honors explicit deep links", async ({
+  page,
+}) => {
+  await page.goto("/calendar");
+  await page.getByText("Calendar preferences", { exact: true }).click();
+  await page.getByLabel("Default view").selectOption("month");
+  await page.getByLabel("First day of week").selectOption("0");
+  await page.getByLabel("Time format").selectOption("12");
+  await page.getByRole("button", { name: "Save calendar preferences" }).click();
+  await page.reload();
+  await expect(page.getByRole("columnheader").first()).toHaveText("Sun");
+  await page.goto("/calendar?view=day&date=2026-12-01");
+  await expect(page.getByLabel("Go to date")).toHaveValue("2026-12-01");
+  await expect(page.locator(".timeline-hours")).toContainText("1:00 PM");
+  await page.getByLabel("Go to date").fill("2026-12-07");
+  await expect(page).toHaveURL(/date=2026-12-07/);
+  await page.goto("/calendar");
+  await expect(
+    page.getByRole("button", { name: "Month", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "unhollowed-2-calendar",
+      JSON.stringify({
+        version: 1,
+        view: "month",
+        weekStart: "0",
+      }),
+    ),
+  );
+  await page.reload();
+  await expect(page.getByRole("columnheader").first()).toHaveText("Mon");
 });
