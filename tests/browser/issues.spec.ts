@@ -1613,7 +1613,7 @@ test("searches the workspace from the header with keyboard navigation", async ({
   await page.keyboard.press("ControlOrMeta+K");
   const dialog = page.getByRole("dialog", { name: "Search the workspace" });
   const input = dialog.getByRole("combobox", {
-    name: "Search projects, issues, and milestones",
+    name: "Search projects, issues, documents, and milestones",
   });
   await expect(input).toBeFocused();
   await expect(dialog.getByRole("status")).toContainText("Type to search");
@@ -1649,7 +1649,7 @@ test("searches the workspace from the header with keyboard navigation", async ({
   await page.keyboard.press("ControlOrMeta+K");
   await input.fill("zebra");
   await expect(dialog.getByRole("status")).toHaveText(
-    "No projects, issues, or milestones match “zebra”.",
+    "No workspace results match “zebra”.",
   );
   await dispatch(page, "hold-command", "search_workspace");
   await input.fill("water");
@@ -1879,4 +1879,22 @@ test("exports filtered issues as CSV and imports a project file after a preview"
   await nav.getByRole("link", { name: "Issues" }).click();
   await expect(page.getByRole("link", { name: "Copied one" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Copied two" })).toBeVisible();
+});
+
+test("opens a document from a workspace content search", async ({ page }) => {
+  await seedIssues(page, [{ title: "Exercise" }]);
+  await page.addInitScript(() =>
+    Reflect.set(window, "__seedDocuments", ["Field notes"]),
+  );
+  await page.goto("/issues");
+  await expect(page.getByRole("link", { name: "Exercise" })).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+K");
+  const dialog = page.getByRole("dialog", { name: "Search the workspace" });
+  await dialog.getByRole("combobox").fill("body");
+  const option = dialog
+    .getByRole("group", { name: /Documents/ })
+    .getByRole("option");
+  await expect(option).toContainText("Field notes");
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Document title")).toHaveValue("Field notes");
 });

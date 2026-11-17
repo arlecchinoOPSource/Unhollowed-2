@@ -99,6 +99,30 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0015_document_revisions.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 16,
+            description: "Add private document image assets",
+            sql: include_str!("../migrations/0016_document_assets.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 17,
+            description: "Organize documents with folders and library metadata",
+            sql: include_str!("../migrations/0017_document_library.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 18,
+            description: "Index workspace document references",
+            sql: include_str!("../migrations/0018_document_references.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 19,
+            description: "Index workspace document text for local search",
+            sql: include_str!("../migrations/0019_document_search.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

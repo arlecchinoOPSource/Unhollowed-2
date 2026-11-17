@@ -35,7 +35,15 @@ workspaces
 
 `documents` follows the conventions above: a UUID `id`, a required `workspace_id` with `ON DELETE RESTRICT`, a non-empty `title`, and `content`, which holds Tiptap (ProseMirror) JSON as text. SQLite checks that `content` is valid JSON, and Rust additionally requires a root node of type `doc` and limits titles to 200 characters and content to 5 MB. The stored text is returned exactly as saved so formatting round-trips. `created_at` and `updated_at` are UTC ISO 8601 strings set by SQLite.
 
-Documents are read and written only through the `list_documents`, `get_document`, `create_document`, and `update_document` commands in `src-tauri/src/documents.rs`. The webview never sends a workspace ID. Rust resolves the active workspace, and every query filters by it, so an ID from another workspace returns `not_found` exactly like an ID that does not exist.
+Rust resolves the active workspace for document commands. Document reads and mutations match IDs together with their workspace. The WebView does not choose the workspace for a command.
+
+- **Revisions.** Migration 15 adds workspace-scoped checkpoints. Routine edits checkpoint the previous version at most once every five minutes. Restoring a revision also checkpoints the displaced document in the same transaction. SQLite retains the latest 20 revisions per document.
+- **Images.** Migration 16 stores PNG, JPEG, GIF, and WebP assets as SQLite BLOBs, with an 8 MiB limit per image. Imports and duplicates allocate new image IDs in the same transaction as the document. Older images remain available for revision history.
+- **Library.** Migration 17 adds folders, archive timestamps, favorites, and last-opened metadata. Folder parents and document folder assignments belong to the same workspace. Archiving preserves project links and direct navigation.
+- **References.** Migration 18 indexes stable document IDs from internal-link marks. Edges are unique, workspace-scoped, and updated with the document content. Restores update the index. Titles are resolved from the linked records.
+- **Search.** Migration 19 indexes active document titles, body text, and image descriptions with FTS5. Existing documents are indexed on migration, and triggers track edits, archive, restore, and deletion.
+
+See [Document editor](DOCUMENT_EDITOR.md) for recovery behavior and file compatibility.
 
 ## Projects
 

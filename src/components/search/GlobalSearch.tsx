@@ -1,4 +1,4 @@
-import { Flag, FolderKanban, ListTodo, Search } from "lucide-react";
+import { FileText, Flag, FolderKanban, ListTodo, Search } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
 import { issueKey, issueStatuses } from "../../database/issues";
@@ -18,7 +18,7 @@ interface Option {
 }
 
 /**
- * The header's search: a dialog that searches projects, issues, and
+ * The header's search: a dialog that searches projects, issues, documents, and
  * milestones in the active workspace. Arrow keys move through grouped
  * results, Enter opens one, and Escape closes. Results from an older query
  * are ignored, so fast typing never shows stale matches.
@@ -146,6 +146,17 @@ export function GlobalSearch() {
           })),
         },
         {
+          title: "Documents",
+          icon: FileText,
+          total: data.documentTotal,
+          options: data.documents.map((document) => ({
+            id: `document-${document.id}`,
+            label: document.title,
+            detail: document.preview || "Document",
+            to: `/documents?doc=${encodeURIComponent(document.id)}`,
+          })),
+        },
+        {
           title: "Milestones",
           icon: Flag,
           total: data.milestoneTotal,
@@ -245,12 +256,12 @@ export function GlobalSearch() {
                 ref={input}
                 type="search"
                 role="combobox"
-                aria-label="Search projects, issues, and milestones"
+                aria-label="Search projects, issues, documents, and milestones"
                 aria-expanded={options.length > 0}
                 aria-controls="global-search-results"
                 aria-activedescendant={current ? current.id : undefined}
                 aria-autocomplete="list"
-                placeholder="Search projects, issues, and milestones"
+                placeholder="Search projects, issues, documents, and milestones"
                 value={text}
                 maxLength={200}
                 onChange={(event) => search(event.target.value)}
@@ -265,7 +276,7 @@ export function GlobalSearch() {
                   : loading
                     ? "Searching…"
                     : options.length === 0
-                      ? `No projects, issues, or milestones match “${text.trim()}”.`
+                      ? `No workspace results match “${text.trim()}”.`
                       : `${options.length} results shown.`}
             </p>
             <div id="global-search-results" role="listbox" aria-label="Results">

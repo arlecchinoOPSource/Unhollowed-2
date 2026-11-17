@@ -1,4 +1,4 @@
-//! Workspace-wide search across projects, issues, and milestones.
+//! Workspace-wide search across projects, issues, milestones, and documents.
 //!
 //! Matching is a literal, Unicode case-insensitive substring, like issue
 //! search. Issues use their stored `search_text` (title and description).
@@ -36,6 +36,14 @@ pub struct MilestoneHit {
     pub closed: bool,
 }
 
+#[derive(Debug, FromRow, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentHit {
+    pub id: String,
+    pub title: String,
+    pub preview: String,
+}
+
 #[derive(Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResults {
@@ -45,6 +53,8 @@ pub struct SearchResults {
     pub issue_total: i64,
     pub milestones: Vec<MilestoneHit>,
     pub milestone_total: usize,
+    pub documents: Vec<DocumentHit>,
+    pub document_total: i64,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -94,6 +104,38 @@ fn rank(name: &str, other: Option<&str>, text: &str) -> Option<u8> {
     } else {
         None
     }
+}
+
+async fn document_hits(
+    pool: &SqlitePool,
+    workspace: &str,
+    text: &str,
+) -> Result<(Vec<DocumentHit>, i64), SearchError> {
+    let terms = text
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(|token| format!("\"{token}\"*"))
+        .collect::<Vec<_>>()
+        .join(" AND ");
+    if terms.is_empty() {
+        return Ok((Vec::new(), 0));
+    }
+    let total: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM document_index
+         WHERE document_index MATCH ('workspace_key:' || hex(?1) || ' AND {title body}:(' || ?2 || ')')",
+    )
+    .bind(workspace).bind(&terms)
+    .fetch_one(pool).await.map_err(storage_failed)?;
+    let documents = sqlx::query_as(
+        "SELECT document_id AS id, title,
+                snippet(document_index, 3, '', '', '…', 12) AS preview
+         FROM document_index
+         WHERE document_index MATCH ('workspace_key:' || hex(?1) || ' AND {title body}:(' || ?2 || ')')
+         ORDER BY bm25(document_index, 0, 0, 8, 1), title, id LIMIT ?3",
+    )
+    .bind(workspace).bind(terms).bind(GROUP_LIMIT as i64)
+    .fetch_all(pool).await.map_err(storage_failed)?;
+    Ok((documents, total))
 }
 
 /// Searches the workspace. Empty or overly long text returns no results.
@@ -201,6 +243,7 @@ pub async fn search(
     milestones.sort_by(|a, b| (a.0, a.1, &a.2, &a.3.id).cmp(&(b.0, b.1, &b.2, &b.3.id)));
     let milestone_total = milestones.len();
 
+    let (documents, document_total) = document_hits(pool, workspace, &text).await?;
     Ok(SearchResults {
         projects: projects
             .into_iter()
@@ -216,6 +259,8 @@ pub async fn search(
             .map(|(_, _, _, hit)| hit)
             .collect(),
         milestone_total,
+        documents,
+        document_total,
     })
 }
 
@@ -231,3 +276,85 @@ pub async fn search_workspace(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod document_tests {
+    use super::document_hits;
+    use crate::documents::{create, update};
+    use crate::test_support::{
+        add_workspace, memory_pool, migrator, DEFAULT_WORKSPACE, OTHER_WORKSPACE,
+    };
+
+    #[test]
+    fn indexes_legacy_content_and_tracks_edits_archives_and_workspace_ownership() {
+        tauri::async_runtime::block_on(async {
+            let db = memory_pool().await;
+            migrator(18).await.run(&db).await.unwrap();
+            add_workspace(&db, OTHER_WORKSPACE, "Other").await;
+            let old = create(&db, DEFAULT_WORKSPACE, Some("Journal"))
+                .await
+                .unwrap();
+            let secret = create(&db, OTHER_WORKSPACE, Some("Telescope records"))
+                .await
+                .unwrap();
+            let body = r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Observing through the télescope."}]}]}"#;
+            update(&db, DEFAULT_WORKSPACE, &old.id, "Journal", body)
+                .await
+                .unwrap();
+            migrator(19).await.run(&db).await.unwrap();
+            let (hits, total) = document_hits(&db, DEFAULT_WORKSPACE, "telesc")
+                .await
+                .unwrap();
+            assert_eq!(total, 1);
+            assert_eq!(hits[0].id, old.id);
+            assert!(hits[0].preview.contains("télescope"));
+            let (hits, total) = document_hits(&db, OTHER_WORKSPACE, "telescope")
+                .await
+                .unwrap();
+            assert_eq!(total, 1);
+            assert_eq!(hits[0].id, secret.id);
+            sqlx::query("UPDATE documents SET archived_at = 'archived' WHERE id = ?")
+                .bind(&old.id)
+                .execute(&db)
+                .await
+                .unwrap();
+            assert_eq!(
+                document_hits(&db, DEFAULT_WORKSPACE, "telescope")
+                    .await
+                    .unwrap()
+                    .1,
+                0
+            );
+            sqlx::query("UPDATE documents SET archived_at = NULL WHERE id = ?")
+                .bind(&old.id)
+                .execute(&db)
+                .await
+                .unwrap();
+            assert_eq!(
+                document_hits(&db, DEFAULT_WORKSPACE, "telescope")
+                    .await
+                    .unwrap()
+                    .1,
+                1
+            );
+            update(&db, DEFAULT_WORKSPACE, &old.id, "Observatory", &old.content)
+                .await
+                .unwrap();
+            assert_eq!(
+                document_hits(&db, DEFAULT_WORKSPACE, "telescope")
+                    .await
+                    .unwrap()
+                    .1,
+                0
+            );
+            assert_eq!(
+                document_hits(&db, DEFAULT_WORKSPACE, "observatory")
+                    .await
+                    .unwrap()
+                    .0[0]
+                    .id,
+                old.id
+            );
+        });
+    }
+}

@@ -23,6 +23,8 @@ export interface SearchResults {
   issueTotal: number;
   milestones: MilestoneHit[];
   milestoneTotal: number;
+  documents: { id: string; title: string; preview: string }[];
+  documentTotal: number;
 }
 
 export function searchWorkspace(text: string): Promise<SearchResults> {

@@ -1,3 +1,17 @@
+import { useNavigate } from "react-router";
+import {
+  DocumentReferences,
+  ReferencePicker,
+  documentHref,
+} from "./editor/DocumentReferences";
+import {
+  DocumentLayout,
+  DocumentPageMode,
+  PageSurface,
+} from "./editor/DocumentLayout";
+import { DocumentImage } from "./editor/DocumentImage";
+import { DocumentExport } from "./editor/DocumentExport";
+import { DocumentInsert } from "./editor/DocumentInsert";
 import { EditorContent } from "@tiptap/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRichTextEditor } from "../../components/editor/RichText";
@@ -96,6 +110,8 @@ function EditorBody({
   onRestored: (document: WorkspaceDocument) => void;
 }) {
   const id = document.id;
+  const navigate = useNavigate();
+  const [updatedAt, setUpdatedAt] = useState(document.updatedAt);
   const [recovered, setRecovered] = useState(() => {
     const draft = readDraft(id);
     if (
@@ -108,6 +124,8 @@ function EditorBody({
   });
   const [title, setTitle] = useState(document.title);
   const [restoring, setRestoring] = useState(false);
+  const [assetError, setAssetError] = useState("");
+  const [pageMode, setPageMode] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const focusControl = useRef<HTMLButtonElement>(null);
 
@@ -116,6 +134,10 @@ function EditorBody({
     function escape(event: KeyboardEvent) {
       if (
         event.key !== "Escape" ||
+        (event.target instanceof HTMLElement &&
+          event.target.closest(
+            ".document-navigation[data-search-open='true']",
+          )) ||
         window.document.querySelector("dialog[open]")
       )
         return;
@@ -147,7 +169,17 @@ function EditorBody({
       latest.current = { ...latest.current, content };
       schedule();
     },
-    documentExtensions,
+    documentExtensions.map((extension) =>
+      extension.name === DocumentImage.name
+        ? DocumentImage.configure({
+            documentId: id,
+            onImageError: () =>
+              setAssetError(
+                "Could not paste this image. Try inserting a local image under 8 MiB.",
+              ),
+          })
+        : extension,
+    ),
   );
 
   function save() {
@@ -158,6 +190,7 @@ function EditorBody({
     setSaveState("saving");
     void saveDocumentDraft(id, snapshot).then(
       (saved) => {
+        setUpdatedAt(saved.updatedAt);
         notify.current(saved);
         if (latest.current === snapshot) {
           dirty.current = false;
@@ -225,83 +258,111 @@ function EditorBody({
   }
 
   return (
-    <div className="document-editor" data-writing-focus={focusMode}>
-      <div className="word-controls">
-        <button
-          type="button"
-          ref={focusControl}
-          aria-pressed={focusMode}
-          onClick={() => setFocusMode(!focusMode)}
-        >
-          {focusMode ? "Exit focus mode" : "Focus mode"}
-        </button>
-      </div>
-      <label className="visually-hidden" htmlFor="document-title">
-        Document title
-      </label>
-      <input
-        id="document-title"
-        className="document-title"
-        value={title}
-        maxLength={200}
-        disabled={Boolean(recovered) || restoring}
-        onChange={(event) => {
-          setTitle(event.target.value);
-          latest.current = { ...latest.current, title: event.target.value };
-          schedule();
-        }}
-      />
-      {recovered && (
+    <DocumentPageMode value={pageMode}>
+      <div className="document-editor" data-writing-focus={focusMode}>
+        <h1 className="document-print-title">{title || "Untitled"}</h1>
         <div className="word-controls">
-          <p>
-            Unsaved edits are available from an earlier session. Resume them or
-            keep the saved version.
-          </p>
-          <button type="button" onClick={resume}>
-            Resume unsaved edits
-          </button>
           <button
             type="button"
-            onClick={() => {
-              discardDraft(id, recovered);
-              setRecovered(undefined);
-              setSaveState("saved");
-            }}
+            ref={focusControl}
+            aria-pressed={focusMode}
+            onClick={() => setFocusMode(!focusMode)}
           >
-            Keep saved version
+            {focusMode ? "Exit focus mode" : "Focus mode"}
           </button>
         </div>
-      )}
-      {editor && !recovered && !restoring && (
-        <>
-          <DocumentToolbar editor={editor} />
-          <DocumentNavigation editor={editor} />
-        </>
-      )}
-      <EditorContent editor={editor} className="editor" />
-      <p role="status" className="save-status">
-        {restoring
-          ? "Restoring version…"
-          : recovered
-            ? "Unsaved edit recovery available."
-            : saveMessages[saveState]}
-      </p>
-      {journalFailed && (
-        <p role="alert">
-          Recovery storage is unavailable. Leave the editor open until the save
-          finishes.
+        <label className="visually-hidden" htmlFor="document-title">
+          Document title
+        </label>
+        <input
+          id="document-title"
+          className="document-title"
+          value={title}
+          maxLength={200}
+          disabled={Boolean(recovered) || restoring}
+          onChange={(event) => {
+            setTitle(event.target.value);
+            latest.current = { ...latest.current, title: event.target.value };
+            schedule();
+          }}
+        />
+        {recovered && (
+          <div className="word-controls">
+            <p>
+              Unsaved edits are available from an earlier session. Resume them
+              or keep the saved version.
+            </p>
+            <button type="button" onClick={resume}>
+              Resume unsaved edits
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                discardDraft(id, recovered);
+                setRecovered(undefined);
+                setSaveState("saved");
+              }}
+            >
+              Keep saved version
+            </button>
+          </div>
+        )}
+        {editor && !recovered && !restoring && (
+          <>
+            <DocumentToolbar editor={editor} />
+            <DocumentInsert editor={editor} documentId={id} />
+            <DocumentExport editor={editor} id={id} title={title} />
+            <DocumentLayout editor={editor} setPageMode={setPageMode} />
+            <DocumentNavigation editor={editor} />
+          </>
+        )}
+        {assetError && <p role="alert">{assetError}</p>}
+        {editor && (
+          <PageSurface editor={editor}>
+            <EditorContent
+              editor={editor}
+              className="editor"
+              onClick={(event) => {
+                const anchor =
+                  event.target instanceof Element &&
+                  event.target.closest<HTMLAnchorElement>(
+                    "a[data-document-target]",
+                  );
+                if (!anchor || !anchor.dataset.documentTarget) return;
+                event.preventDefault();
+                navigate(documentHref(anchor.dataset.documentTarget));
+              }}
+            />
+            {!recovered && !restoring && (
+              <ReferencePicker editor={editor} id={id} />
+            )}
+          </PageSurface>
+        )}
+        {!focusMode && <DocumentReferences id={id} updatedAt={updatedAt} />}
+        <p role="status" className="save-status">
+          {restoring
+            ? "Restoring version…"
+            : recovered
+              ? "Unsaved edit recovery available."
+              : saveMessages[saveState]}
         </p>
-      )}
-      {saveState === "error" && !recovered && (
-        <button className="action" type="button" onClick={save}>
-          Retry save
-        </button>
-      )}
-      <RevisionHistory
-        id={id}
-        disabled={saveState !== "saved" || Boolean(recovered) || restoring}
-        restore={restore}
-      />
-    </div>
+        {journalFailed && (
+          <p role="alert">
+            Recovery storage is unavailable. Leave the editor open until the
+            save finishes.
+          </p>
+        )}
+        {saveState === "error" && !recovered && (
+          <button className="action" type="button" onClick={save}>
+            Retry save
+          </button>
+        )}
+        <RevisionHistory
+          id={id}
+          disabled={saveState !== "saved" || Boolean(recovered) || restoring}
+          restore={restore}
+        />
+      </div>
+    </DocumentPageMode>
   );
 }

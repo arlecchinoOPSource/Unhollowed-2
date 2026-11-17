@@ -1,5 +1,5 @@
 import { useEditorState, type Editor } from "@tiptap/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { findText, type Match } from "./textSearch";
 
 export function DocumentNavigation({ editor }: { editor: Editor }) {
@@ -7,6 +7,7 @@ export function DocumentNavigation({ editor }: { editor: Editor }) {
   const [query, setQuery] = useState("");
   const [replacement, setReplacement] = useState("");
   const [feedback, setFeedback] = useState("");
+  const findForm = useId();
   const field = useRef<HTMLInputElement>(null);
   const searchButton = useRef<HTMLButtonElement>(null);
   const document = useEditorState({
@@ -32,6 +33,25 @@ export function DocumentNavigation({ editor }: { editor: Editor }) {
   useEffect(() => {
     if (showSearch) field.current?.focus();
   }, [showSearch]);
+  useEffect(() => {
+    function find(event: KeyboardEvent) {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        event.shiftKey ||
+        event.isComposing ||
+        event.key.toLowerCase() !== "f" ||
+        window.document.querySelector("dialog[open]")
+      )
+        return;
+      event.preventDefault();
+      setShowSearch(true);
+      field.current?.focus();
+    }
+    const container = editor.view.dom.closest<HTMLElement>(".document-editor");
+    container?.addEventListener("keydown", find);
+    return () => container?.removeEventListener("keydown", find);
+  }, [editor]);
 
   function next() {
     const current = editor.state.selection;
@@ -66,16 +86,20 @@ export function DocumentNavigation({ editor }: { editor: Editor }) {
 
   function closeSearch() {
     setShowSearch(false);
-    searchButton.current?.focus();
+    if (editor.view.dom.closest('[data-writing-focus="true"]'))
+      editor.commands.focus();
+    else searchButton.current?.focus();
   }
 
   return (
-    <div className="document-navigation">
+    <div className="document-navigation" data-search-open={showSearch}>
       <div className="word-controls">
         <button
           ref={searchButton}
           type="button"
           aria-expanded={showSearch}
+          aria-controls={showSearch ? findForm : undefined}
+          aria-keyshortcuts="Meta+F Control+F"
           onClick={() => setShowSearch(!showSearch)}
         >
           Find &amp; replace
@@ -87,6 +111,7 @@ export function DocumentNavigation({ editor }: { editor: Editor }) {
       </div>
       {showSearch && (
         <form
+          id={findForm}
           className="word-controls"
           onSubmit={(event) => {
             event.preventDefault();
