@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import {
   archiveHabit,
   deleteHabit,
   getHabitDeletionImpact,
   habitError,
+  linkHabitRoutine,
   listHabitHistory,
+  listHabitRoutines,
   listHabits,
+  listRoutineChoices,
   renameHabit,
   reorderHabits,
   restoreHabit,
+  routineLabel,
+  type Routine,
+  unlinkHabitRoutine,
   type Habit,
   type HabitDeletionImpact,
 } from "../../database/habits";
@@ -41,6 +48,11 @@ export function HabitManager({
   const [review, setReview] = useState<(Review & { habit: Habit }) | null>(
     null,
   );
+  const [routines, setRoutines] = useState<
+    Record<string, Routine[] | "failed">
+  >({});
+  const [choices, setChoices] = useState<Routine[]>([]);
+  const [picked, setPicked] = useState<Record<string, string>>({});
   const [history, setHistory] = useState<Record<string, string[] | "failed">>(
     {},
   );
@@ -187,6 +199,35 @@ export function HabitManager({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function showRoutines(habit: Habit, open: boolean) {
+    if (!open) return;
+    try {
+      const [mine, all] = await Promise.all([
+        listHabitRoutines(habit.id),
+        listRoutineChoices(),
+      ]);
+      setRoutines((current) => ({ ...current, [habit.id]: mine }));
+      setChoices(all);
+    } catch {
+      setRoutines((current) => ({ ...current, [habit.id]: "failed" }));
+    }
+  }
+
+  function changeRoutine(
+    habit: Habit,
+    action: () => Promise<Routine[]>,
+    message: string,
+  ) {
+    void change(
+      async () => {
+        const mine = await action();
+        setRoutines((current) => ({ ...current, [habit.id]: mine }));
+      },
+      message,
+      [row(habit, "[data-routine-select]"), row(habit, "[data-rename]")],
+    );
   }
 
   async function showHistory(habit: Habit, open: boolean) {
@@ -341,6 +382,43 @@ export function HabitManager({
                       >
                         Archive
                       </button>
+                      <details
+                        className="habit-routines"
+                        onToggle={(event) =>
+                          void showRoutines(habit, event.currentTarget.open)
+                        }
+                      >
+                        <summary>Routines of {habit.name}</summary>
+                        <RoutineEditor
+                          habit={habit}
+                          mine={routines[habit.id]}
+                          choices={choices}
+                          picked={picked[habit.id] ?? ""}
+                          busy={busy}
+                          onPick={(id) =>
+                            setPicked((current) => ({
+                              ...current,
+                              [habit.id]: id,
+                            }))
+                          }
+                          onLink={() =>
+                            changeRoutine(
+                              habit,
+                              () =>
+                                linkHabitRoutine(habit.id, picked[habit.id]),
+                              `Linked ${habit.name} to a routine.`,
+                            )
+                          }
+                          onUnlink={(routine) =>
+                            changeRoutine(
+                              habit,
+                              () =>
+                                unlinkHabitRoutine(habit.id, routine.eventId),
+                              `Unlinked ${routine.title} from ${habit.name}.`,
+                            )
+                          }
+                        />
+                      </details>
                     </>
                   )}
                 </li>
@@ -420,5 +498,86 @@ export function HabitManager({
         </>
       )}
     </dialog>
+  );
+}
+
+/** The routines of one habit: linked events, and a picker for more. */
+function RoutineEditor({
+  habit,
+  mine,
+  choices,
+  picked,
+  busy,
+  onPick,
+  onLink,
+  onUnlink,
+}: {
+  habit: Habit;
+  mine: Routine[] | "failed" | undefined;
+  choices: Routine[];
+  picked: string;
+  busy: boolean;
+  onPick: (eventId: string) => void;
+  onLink: () => void;
+  onUnlink: (routine: Routine) => void;
+}) {
+  if (mine === undefined) return <p>Loading…</p>;
+  if (mine === "failed") return <p role="alert">Could not load routines.</p>;
+  const free = choices.filter(
+    (choice) => !mine.some((linked) => linked.eventId === choice.eventId),
+  );
+  return (
+    <>
+      {mine.length === 0 ? (
+        <p>No repeating event linked.</p>
+      ) : (
+        <ul aria-label={`Routines of ${habit.name}`}>
+          {mine.map((routine) => (
+            <li key={routine.eventId}>
+              {routine.title} <small>({routineLabel(routine)})</small>{" "}
+              <Link to={`/calendar?date=${routine.startDate}`}>
+                Open {routine.title} in the calendar
+              </Link>{" "}
+              <button
+                type="button"
+                disabled={busy}
+                aria-label={`Unlink ${routine.title} from ${habit.name}`}
+                onClick={() => onUnlink(routine)}
+              >
+                Unlink
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {free.length === 0 ? (
+        <p>
+          {choices.length === 0
+            ? "No repeating events yet. Create one in the calendar."
+            : "Every repeating event is already linked."}
+        </p>
+      ) : (
+        <p>
+          <label>
+            Link {habit.name} to a repeating event{" "}
+            <select
+              data-routine-select
+              value={picked}
+              onChange={(event) => onPick(event.target.value)}
+            >
+              <option value="">Choose an event</option>
+              {free.map((choice) => (
+                <option key={choice.eventId} value={choice.eventId}>
+                  {choice.title} ({routineLabel(choice)})
+                </option>
+              ))}
+            </select>
+          </label>{" "}
+          <button type="button" disabled={busy || !picked} onClick={onLink}>
+            Link routine
+          </button>
+        </p>
+      )}
+    </>
   );
 }

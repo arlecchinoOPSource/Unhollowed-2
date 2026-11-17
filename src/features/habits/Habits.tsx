@@ -71,6 +71,8 @@ export function Habits() {
     if (linked) setMonth(monthOf(linked.date));
   }
   const [data, setData] = useState<HabitMonth | null>(null);
+  // The month `data` was loaded for, so a grid never shows another month's habits.
+  const [dataMonth, setDataMonth] = useState("");
   const [total, setTotal] = useState<number | null>(null);
   const [loadError, setLoadError] = useState("");
   const [reload, setReload] = useState(0);
@@ -98,6 +100,7 @@ export function Habits() {
       .then(([result, habits]) => {
         if (!live) return;
         setData(result);
+        setDataMonth(month);
         setTotal(habits.length);
         setDone(
           new Set(result.completions.map((c) => cellKey(c.habitId, c.date))),
@@ -409,7 +412,7 @@ export function Habits() {
       {data && total !== 0 && data.habits.length === 0 && (
         <p>No habit was active in {title}. Your history is in other months.</p>
       )}
-      {data && data.habits.length > 0 && (
+      {data && dataMonth === month && data.habits.length > 0 && (
         <div ref={gridRef}>
           <HabitGrid
             key={`${month}|${linkKey}`}

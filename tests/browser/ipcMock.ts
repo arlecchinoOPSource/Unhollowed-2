@@ -2192,6 +2192,61 @@ export async function installIpcMock(page: Page) {
                     },
               );
             }
+            case "list_habit_routines":
+            case "list_routine_choices":
+            case "link_habit_routine":
+            case "unlink_habit_routine":
+            case "list_routine_habits": {
+              // Follows src-tauri/src/habits/routines.rs. Events come from
+              // window.__seedEvents; links live in window.__routineLinks.
+              seededEvents();
+              const state = habitState();
+              const w = window as unknown as { __routineLinks?: Set<string> };
+              const linkSet = (w.__routineLinks ??= new Set<string>());
+              const routine = (event: CalendarEvent) => ({
+                eventId: event.id,
+                title: event.title,
+                repeatFreq: event.repeatFreq,
+                repeatInterval: event.repeatInterval,
+                startDate: event.startDate ?? event.startLocal?.slice(0, 10),
+              });
+              const recurring = () =>
+                events.filter((event) => event.repeatFreq !== null);
+              const habitId = (args as unknown as { habitId?: string }).habitId;
+              const eventId = (args as unknown as { eventId?: string }).eventId;
+              const mine = () =>
+                recurring()
+                  .filter((event) => linkSet.has(`${habitId}|${event.id}`))
+                  .map(routine);
+              if (command === "list_routine_choices")
+                return recurring().map(routine);
+              if (command === "list_routine_habits") {
+                const ids = (args as unknown as { eventIds: string[] })
+                  .eventIds;
+                return state.habits
+                  .filter((habit) => !habit.archivedOn)
+                  .flatMap((habit) =>
+                    ids
+                      .filter((id) => linkSet.has(`${habit.id}|${id}`))
+                      .map((id) => ({
+                        eventId: id,
+                        habitId: habit.id,
+                        name: habit.name,
+                      })),
+                  );
+              }
+              if (!state.habits.some((habit) => habit.id === habitId))
+                throw { code: "not_found" };
+              if (command === "link_habit_routine") {
+                const event = events.find((item) => item.id === eventId);
+                if (!event) throw { code: "not_found" };
+                if (event.repeatFreq === null) throw { code: "not_recurring" };
+                linkSet.add(`${habitId}|${eventId}`);
+              }
+              if (command === "unlink_habit_routine")
+                linkSet.delete(`${habitId}|${eventId}`);
+              return mine();
+            }
             case "get_habit_month": {
               const state = habitState();
               const { year, month } = args as unknown as {

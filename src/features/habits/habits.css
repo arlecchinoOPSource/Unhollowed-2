@@ -479,3 +479,7 @@
 .habit-day-detail {
   min-height: 2.5em;
 }
+
+.habit-routines {
+  flex-basis: 100%;
+}
