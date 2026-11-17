@@ -5,6 +5,7 @@
 //! without rows of their own, and work blocks set time aside for an issue.
 //! Every read and write is scoped to the active workspace.
 
+pub(crate) mod calendars;
 pub(crate) mod time;
 
 use crate::database::{active_workspace, pool, DatabaseError};
@@ -35,7 +36,15 @@ pub enum SchedulingError {
     /// The issue does not exist in the active workspace.
     IssueNotFound,
     InvalidTitle,
+    InvalidName,
     InvalidDescription,
+    InvalidColor,
+    /// Another calendar in the workspace already has this name.
+    DuplicateName,
+    /// Archived calendars cannot become the default.
+    CalendarArchived,
+    /// Archiving the default needs an active replacement default.
+    ReplacementRequired,
     InvalidTimeZone,
     InvalidDate,
     InvalidTime,
@@ -779,7 +788,9 @@ pub(crate) fn sort_items(items: &mut [CalendarItem]) {
     items.sort_by_key(key);
 }
 
-async fn scope(instances: &DbInstances) -> Result<(SqlitePool, String), SchedulingError> {
+pub(crate) async fn scope(
+    instances: &DbInstances,
+) -> Result<(SqlitePool, String), SchedulingError> {
     let pool = pool(instances).await?;
     let workspace = active_workspace(&pool).await?;
     Ok((pool, workspace.id))

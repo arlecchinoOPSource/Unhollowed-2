@@ -230,3 +230,49 @@
     grid-template-columns: 1fr;
   }
 }
+
+.calendar-manage {
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.calendar-default {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.calendar-visible {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-replace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  flex-basis: 100%;
+  padding-top: 8px;
+}
+
+.calendar-replace label {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.calendar-replace select {
+  font: inherit;
+  font-weight: 400;
+  padding: 6px 8px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.calendar-replace p,
+.calendar-replace .action {
+  margin: 0;
+}

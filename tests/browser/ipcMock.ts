@@ -9,6 +9,7 @@ import type {
 import type { ProjectGoals } from "../../src/database/goals";
 import type { RelationKind } from "../../src/database/relationships";
 import type { Label, LabelInput } from "../../src/database/labels";
+import type { Calendar, CalendarInput } from "../../src/database/calendars";
 import type { SavedView, ViewConfig } from "../../src/database/savedViews";
 import type { Milestone, MilestoneInput } from "../../src/database/milestones";
 import type { Project } from "../../src/database/projects";
@@ -52,6 +53,32 @@ export async function installIpcMock(page: Page) {
     // first IPC call.
     const issues: Issue[] = [];
     const labels: Label[] = [];
+    // Calendars follow the backend: one active default, created on first
+    // use, unique names, and archiving the default needs a replacement.
+    const calendars: Calendar[] = [];
+    const calendarDefault = () => {
+      let found = calendars.find(({ isDefault }) => isDefault);
+      if (!found) {
+        found = {
+          id: "calendar-personal",
+          name: "Personal",
+          description: null,
+          color: "blue",
+          isDefault: true,
+          hidden: false,
+          archivedAt: null,
+          createdAt: "2026-11-16T00:00:00Z",
+          updatedAt: "2026-11-16T00:00:00Z",
+        };
+        calendars.push(found);
+      }
+      return found;
+    };
+    const findCalendar = (id?: string) => {
+      const found = calendars.find((item) => item.id === id);
+      if (!found) throw { code: "calendar_not_found" };
+      return found;
+    };
     // Saved views, optionally seeded through window.__seedViews.
     const views: SavedView[] = [];
     // Documents seeded through window.__seedDocuments, and their links.
@@ -818,6 +845,75 @@ export async function installIpcMock(page: Page) {
               if (index < 0) throw { code: "not_found" };
               views.splice(index, 1);
               return null;
+            }
+            case "list_calendars":
+              calendarDefault();
+              return structuredClone(calendars);
+            case "create_calendar":
+            case "update_calendar": {
+              calendarDefault();
+              const input = (args as unknown as { input: CalendarInput }).input;
+              const name = input.name.trim();
+              if (!name) throw { code: "invalid_name" };
+              if (
+                calendars.some(
+                  (item) =>
+                    item.id !== args.id &&
+                    item.name.toLowerCase() === name.toLowerCase(),
+                )
+              )
+                throw { code: "duplicate_name" };
+              if (command === "update_calendar") {
+                const calendar = findCalendar(args.id);
+                Object.assign(calendar, { ...input, name, updatedAt: now() });
+                return structuredClone(calendar);
+              }
+              const calendar: Calendar = {
+                id: `calendar-${calendars.length + 1}`,
+                ...input,
+                name,
+                isDefault: false,
+                hidden: false,
+                archivedAt: null,
+                createdAt: now(),
+                updatedAt: now(),
+              };
+              calendars.push(calendar);
+              return structuredClone(calendar);
+            }
+            case "set_calendar_hidden": {
+              const calendar = findCalendar(args.id);
+              calendar.hidden = (args as unknown as { hidden: boolean }).hidden;
+              return structuredClone(calendar);
+            }
+            case "set_default_calendar": {
+              const calendar = findCalendar(args.id);
+              if (calendar.archivedAt) throw { code: "calendar_archived" };
+              for (const item of calendars) item.isDefault = item === calendar;
+              return structuredClone(calendar);
+            }
+            case "archive_calendar": {
+              const calendar = findCalendar(args.id);
+              const replacement = (
+                args as unknown as { replacement: string | null }
+              ).replacement;
+              if (calendar.isDefault) {
+                const next = calendars.find(
+                  (item) =>
+                    item.id === replacement &&
+                    item !== calendar &&
+                    !item.archivedAt,
+                );
+                if (!next) throw { code: "replacement_required" };
+                for (const item of calendars) item.isDefault = item === next;
+              }
+              calendar.archivedAt ??= now();
+              return structuredClone(calendar);
+            }
+            case "restore_calendar": {
+              const calendar = findCalendar(args.id);
+              calendar.archivedAt = null;
+              return structuredClone(calendar);
             }
             case "list_labels":
               return structuredClone(
