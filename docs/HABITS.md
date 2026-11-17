@@ -101,6 +101,16 @@ Every command resolves the active workspace in Rust and returns `{ code }` error
 | `list_habit_history`        | Every completion date of one habit                                                    |
 | `set_habit_completion`      | Habit, date, and wanted state. Refuses future, pre-start, and post-archive days       |
 
+## Monthly grid
+
+`/habits` shows one month: dates as rows, habits as columns in saved order, one checkbox per cell (`src/features/habits`).
+
+- **Navigation.** Previous and next month, a month and year picker (1900 to 9999), and **Today**. Shortcuts follow the Issues and Calendar convention: Alt/Option+Shift+T for today, Alt/Option+Shift+, and . for the previous and next month.
+- **Today** is the device's date as Rust reports it. Its row is marked with an outline and the word Today, and scrolled into view. The page reloads the month after local midnight.
+- **Unavailable cells** (future, before the start, after the archive day) are dashed and hatched, show a dash, and say why in their name. They stay focusable but cannot be changed.
+- **Saving.** A click shows the new state at once and saves it. Each cell has at most one save in flight; a further click while it runs is sent when it returns, so the stored state always ends as the last click. The status line announces each save. A failed save restores the cell, keeps focus on it, and shows the error with Retry.
+- **Adding a habit** by name starts it today. Renaming, start dates, ordering, archiving, and deletion get their screens in U2-P4-05.
+
 ## Import sources (U2-P4-06)
 
 | Source                                              | Recognized by                                                 | Handling                                                                                                                                 |

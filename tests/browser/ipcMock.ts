@@ -18,6 +18,7 @@ import type {
 import type { SavedView, ViewConfig } from "../../src/database/savedViews";
 import type { Milestone, MilestoneInput } from "../../src/database/milestones";
 import type { Project } from "../../src/database/projects";
+import type { Habit } from "../../src/database/habits";
 
 /**
  * Replaces Tauri IPC in the page with an in-memory backend that follows the
@@ -58,6 +59,45 @@ export async function installIpcMock(page: Page) {
     // first IPC call.
     const issues: Issue[] = [];
     const labels: Label[] = [];
+    // Habits follow src-tauri/src/habits.rs. Tests seed them, their
+    // completions, and the backend's today through window.__seedHabits.
+    const habitState = () => {
+      const w = window as unknown as {
+        __habits?: {
+          today: string;
+          habits: Habit[];
+          done: Set<string>;
+        };
+        __seedHabits?: {
+          today?: string;
+          habits?: Partial<Habit>[];
+          completions?: [habitId: string, date: string][];
+        };
+      };
+      if (!w.__habits) {
+        const seed = w.__seedHabits ?? {};
+        w.__habits = {
+          today: seed.today ?? "2026-11-17",
+          habits: (seed.habits ?? []).map((habit, position) => ({
+            id: `habit-${position + 1}`,
+            name: `Habit ${position + 1}`,
+            position,
+            startDate: "2026-11-01",
+            archivedOn: null,
+            source: null,
+            sourceId: null,
+            revision: 0,
+            createdAt: "2026-11-01T00:00:00Z",
+            updatedAt: "2026-11-01T00:00:00Z",
+            ...habit,
+          })),
+          done: new Set(
+            (seed.completions ?? []).map(([id, date]) => `${id}|${date}`),
+          ),
+        };
+      }
+      return w.__habits;
+    };
     // Calendars follow the backend: one active default, created on first
     // use, unique names, and archiving the default needs a replacement.
     const calendars: Calendar[] = [];
@@ -1576,6 +1616,82 @@ export async function installIpcMock(page: Page) {
               event.repeatCount = null;
               event.repeatUntil = shiftDays(key.slice(0, 10), -1);
               return structuredClone(event);
+            }
+            case "list_habits":
+              return structuredClone(habitState().habits);
+            case "create_habit": {
+              const state = habitState();
+              const name = String(
+                (args as unknown as { name: string }).name,
+              ).trim();
+              if (!name || name.length > 60) throw { code: "invalid_name" };
+              if (
+                state.habits.some(
+                  (habit) =>
+                    !habit.archivedOn &&
+                    habit.name.toLowerCase() === name.toLowerCase(),
+                )
+              )
+                throw { code: "duplicate_name" };
+              const habit: Habit = {
+                id: `habit-${state.habits.length + 1}`,
+                name,
+                position: state.habits.length,
+                startDate: state.today,
+                archivedOn: null,
+                source: null,
+                sourceId: null,
+                revision: 0,
+                createdAt: now(),
+                updatedAt: now(),
+              };
+              state.habits.push(habit);
+              return structuredClone(habit);
+            }
+            case "get_habit_month": {
+              const state = habitState();
+              const { year, month } = args as unknown as {
+                year: number;
+                month: number;
+              };
+              const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+              const first = `${prefix}-01`;
+              const last = `${prefix}-${new Date(Date.UTC(year, month, 0)).getUTCDate()}`;
+              return structuredClone({
+                today: state.today,
+                habits: state.habits
+                  .filter(
+                    (habit) =>
+                      habit.startDate <= last &&
+                      (!habit.archivedOn || habit.archivedOn >= first),
+                  )
+                  .sort((a, b) => a.position - b.position),
+                completions: [...state.done]
+                  .map((key) => key.split("|"))
+                  .filter(([, date]) => date.startsWith(prefix))
+                  .sort(
+                    ([a, x], [b, y]) =>
+                      x.localeCompare(y) || a.localeCompare(b),
+                  )
+                  .map(([habitId, date]) => ({ habitId, date })),
+              });
+            }
+            case "set_habit_completion": {
+              const state = habitState();
+              const { date, done } = args as unknown as {
+                date: string;
+                done: boolean;
+              };
+              const habit = state.habits.find((item) => item.id === args.id);
+              if (!habit) throw { code: "not_found" };
+              if (date > state.today) throw { code: "future_date" };
+              if (date < habit.startDate) throw { code: "before_start" };
+              if (habit.archivedOn && date > habit.archivedOn)
+                throw { code: "inactive" };
+              const key = `${habit.id}|${date}`;
+              if (done) state.done.add(key);
+              else state.done.delete(key);
+              return done;
             }
             case "list_labels":
               return structuredClone(
