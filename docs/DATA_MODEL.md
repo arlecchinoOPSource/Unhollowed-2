@@ -258,6 +258,17 @@ Not included in version 1: documents and document links, saved views, repeat ser
 
 Habits and their daily completions follow the [habit contract](HABITS.md), which also records how Ember data maps into a workspace and where Unhollowed differs from Ember.
 
+## Daily check-ins
+
+`daily_checkins` holds one optional, private record per workspace and local day (`YYYY-MM-DD`, compared as text), identified by `(workspace_id, date)` and a stable `id`.
+
+- `mood`, `energy`, and `focus` are each a whole number from 1 to 5, or `NULL` when the user left them unset. Rust never fills in, averages, or defaults a rating. The note is optional, trimmed, and at most 2000 characters.
+- **Saving replaces the whole record for the day**, in one upsert, so a cleared rating becomes unset. The record keeps its `id` and `created_at`; `updated_at` moves.
+- **An empty submission** (no rating and a blank note) stores nothing: it deletes the day's record, and is a no-op when there is none. A table check also refuses an all-empty row.
+- Past days can be edited at any time. A day after today cannot be saved, and dates before 1900 are refused.
+- A record's day, ID, and workspace cannot change. Another workspace's record is neither visible nor changeable. `list_checkins` returns at most about ten years, oldest first, with absent days absent.
+- Commands: `get_checkin`, `list_checkins`, `save_checkin`, `delete_checkin`.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
@@ -295,3 +306,4 @@ Habits and their daily completions follow the [habit contract](HABITS.md), which
 | 0024      | `event_reminders`, `reminder_settings`, and `reminder_deliveries`                                         |
 | 0025      | `events.ics_uid`, the iCalendar UID an event was imported with                                            |
 | 0026      | `habits` and `habit_completions`, with same-workspace triggers ([habit contract](HABITS.md))              |
+| 0027      | `daily_checkins`: optional 1 to 5 mood, energy, and focus and a note, one per workspace and day           |
