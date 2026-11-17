@@ -43,7 +43,7 @@ fn main() {
             documents::assets::store_document_image,
             documents::assets::get_document_image,
             documents::get_document,
-            documents::print_document,
+            documents::printing::print_document,
             documents::create_document,
             documents::update_document,
             documents::revisions::list_document_revisions,

@@ -61,7 +61,15 @@ export function DocumentLayout({
     }
     setPrintError("");
     try {
-      const native = isTauri() && (await invoke<boolean>("print_document"));
+      const native =
+        isTauri() &&
+        (await invoke<boolean>("print_document", {
+          settings: {
+            paper: layout.paper,
+            landscape: layout.landscape,
+            margin: layout.margin,
+          },
+        }));
       if (!native) window.print();
     } catch {
       setPrintError("Could not open the print dialog. Try again.");

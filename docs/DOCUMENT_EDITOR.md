@@ -23,7 +23,12 @@ Export Markdown, text, or basic HTML from the editor. HTML embeds managed
 images locally and includes supported editor styles and print settings.
 Workspace links appear as their visible labels in portable documents.
 Markdown and plain text omit page layout, images, and custom typography.
-Use Print to save a PDF with the platform print dialog.
+Use Print to save a PDF with the platform print dialog. On macOS the
+native dialog receives the selected paper size, orientation, and margins.
+The current WKWebView print path can omit explicit page breaks and CSS
+page headers, footers, and numbers. Check the print preview when those
+details matter. Chromium's PDF check covers explicit breaks and paper
+geometry.
 
 ### Microsoft Word
 
