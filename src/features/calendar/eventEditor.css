@@ -132,3 +132,42 @@
 .event-zone-note {
   color: var(--muted);
 }
+
+.event-scope,
+.event-repeat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.event-scope legend,
+.event-repeat legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.event-scope label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.event-repeat label {
+  display: grid;
+  gap: 4px;
+}
+
+.event-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.event-inline input {
+  width: 5em;
+}

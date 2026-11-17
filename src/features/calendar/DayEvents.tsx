@@ -1,4 +1,4 @@
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, Repeat } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   calendarColors,
@@ -15,7 +15,7 @@ import {
 import { swatchStyle } from "../labels/LabelParts";
 import { addDays } from "../today/dates";
 import { EventEditor, type EventChange } from "./EventEditor";
-import { newDraft, type Draft } from "./eventDraft";
+import { newDraft, type Draft, type OccurrenceSpan } from "./eventDraft";
 import { timeIn, useDeviceZone } from "./useDeviceZone";
 
 const messages: Record<EventChange, (title: string) => string> = {
@@ -53,6 +53,7 @@ export function DayEvents({
   const [request, setRequest] = useState(0);
   const [editing, setEditing] = useState<{
     event: CalendarEvent | null;
+    occurrence?: { key: string; span: OccurrenceSpan };
     draft: Draft;
   } | null>(null);
   const opener = useRef<HTMLElement | null>(null);
@@ -94,15 +95,27 @@ export function DayEvents({
   const defaultCalendar =
     calendars.find(({ isDefault }) => isDefault)?.id ?? "";
 
-  function open(event: CalendarEvent | null) {
+  function open(
+    event: CalendarEvent | null,
+    occurrence?: { key: string; span: OccurrenceSpan },
+  ) {
     opener.current = document.activeElement as HTMLElement | null;
-    setEditing({ event, draft: newDraft(day, zone, defaultCalendar) });
+    setEditing({
+      event,
+      occurrence,
+      draft: newDraft(day, zone, defaultCalendar),
+    });
   }
 
   async function edit(item: CalendarItem) {
     setError("");
     try {
-      open(await getEvent(item.id));
+      const event = await getEvent(item.eventId ?? item.id);
+      // An occurrence opens with its own times, in the event's zone.
+      const span = item.allDay
+        ? { start: item.startDate!, end: item.endDate! }
+        : { start: item.localStart!, end: item.localEnd! };
+      open(event, item.occurrence ? { key: item.occurrence, span } : undefined);
     } catch (cause) {
       setError(schedulingError(cause));
       setRequest((value) => value + 1);
@@ -144,6 +157,12 @@ export function DayEvents({
                   {timeRange(item, day)}
                 </span>
                 <span>{item.title}</span>
+                {item.recurring && (
+                  <span className="calendar-event-repeat">
+                    <Repeat size={13} aria-hidden="true" />
+                    <span className="visually-hidden">Repeats</span>
+                  </span>
+                )}
                 {item.timeZone && item.startAt && item.timeZone !== zone && (
                   <span className="calendar-event-zone">
                     {timeIn(item.startAt, item.timeZone)} {item.timeZone}
@@ -160,6 +179,7 @@ export function DayEvents({
       {editing && (
         <EventEditor
           event={editing.event}
+          occurrence={editing.occurrence}
           draft={editing.draft}
           calendars={calendars}
           onClose={() => {
@@ -169,8 +189,12 @@ export function DayEvents({
               if (opener.current?.isConnected) opener.current.focus();
             });
           }}
-          onChange={(change, event) => {
-            onMessage(messages[change](event.title));
+          onChange={(change, event, note) => {
+            onMessage(
+              note
+                ? `${messages[change](event.title)} ${note}`
+                : messages[change](event.title),
+            );
             setRequest((value) => value + 1);
           }}
         />

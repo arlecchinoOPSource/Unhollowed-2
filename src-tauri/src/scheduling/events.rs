@@ -23,6 +23,7 @@ pub async fn update(
 ) -> Result<Event, SchedulingError> {
     clean_text(&mut input)?;
     let timing = event_timing(&input)?;
+    let rule = super::recurrence::validate(&input.repeat, &timing)?;
     let mut tx = pool.begin().await?;
     let current = get_event_on(&mut tx, workspace, id).await?;
     let calendar = match input.calendar_id.take() {
@@ -35,7 +36,8 @@ pub async fn update(
     let sql = format!(
         "UPDATE events SET calendar_id = ?, title = ?, description = ?, location = ?, url = ?,
              all_day = ?, start_date = ?, end_date = ?, time_zone = ?, start_local = ?,
-             end_local = ?, start_at = ?, end_at = ?, updated_at = {NOW}
+             end_local = ?, start_at = ?, end_at = ?, repeat_freq = ?, repeat_interval = ?,
+             repeat_count = ?, repeat_until = ?, updated_at = {NOW}
          WHERE id = ? AND workspace_id = ?"
     );
     let query = sqlx::query(&sql)
@@ -44,17 +46,25 @@ pub async fn update(
         .bind(&input.description)
         .bind(&input.location)
         .bind(&input.url);
+    let (freq, interval, count, until) = super::recurrence::rule_columns(&rule);
     bind_timing(query, &timing)
+        .bind(freq)
+        .bind(interval)
+        .bind(count)
+        .bind(until)
         .bind(id)
         .bind(workspace)
         .execute(&mut *tx)
         .await?;
     let event = get_event_on(&mut tx, workspace, id).await?;
+    // Changes to occurrences the edited series no longer has are removed.
+    super::recurrence::prune(&mut tx, &event).await?;
     tx.commit().await?;
     Ok(event)
 }
 
 /// Copies an event, with a new ID, into the same calendar at the same time.
+/// A recurring event is copied with its rule and occurrence changes.
 pub async fn duplicate(
     pool: &SqlitePool,
     workspace: &str,
@@ -66,14 +76,28 @@ pub async fn duplicate(
     let copy = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO events (id, workspace_id, calendar_id, title, description, location, url,
-             all_day, start_date, end_date, time_zone, start_local, end_local, start_at, end_at)
+             all_day, start_date, end_date, time_zone, start_local, end_local, start_at, end_at,
+             repeat_freq, repeat_interval, repeat_count, repeat_until)
          SELECT ?, workspace_id, calendar_id, title, description, location, url,
-             all_day, start_date, end_date, time_zone, start_local, end_local, start_at, end_at
+             all_day, start_date, end_date, time_zone, start_local, end_local, start_at, end_at,
+             repeat_freq, repeat_interval, repeat_count, repeat_until
          FROM events WHERE id = ? AND workspace_id = ?",
     )
     .bind(&copy)
     .bind(id)
     .bind(workspace)
+    .execute(&mut *tx)
+    .await?;
+    // A copied series keeps its occurrences' changes.
+    sqlx::query(
+        "INSERT INTO event_exceptions (event_id, occurrence, canceled, title, description, location, url,
+             start_date, end_date, start_local, end_local, start_at, end_at)
+         SELECT ?, occurrence, canceled, title, description, location, url,
+             start_date, end_date, start_local, end_local, start_at, end_at
+         FROM event_exceptions WHERE event_id = ?",
+    )
+    .bind(&copy)
+    .bind(id)
     .execute(&mut *tx)
     .await?;
     let event = get_event_on(&mut tx, workspace, &copy).await?;

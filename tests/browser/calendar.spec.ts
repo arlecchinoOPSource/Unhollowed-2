@@ -265,3 +265,71 @@ test("shows events from another zone at the viewer's time with their own", async
   await expect(editor.getByLabel("Start time")).toHaveValue("09:00");
   await expect(editor.getByText("Times are in Asia/Tokyo.")).toBeVisible();
 });
+
+test("repeats an event and edits one occurrence, this and following, or all", async ({
+  page,
+}) => {
+  await page.goto("/calendar");
+  await day(page, /November 18, 2026/).click();
+  await page.getByRole("button", { name: "New event" }).click();
+  const editor = page.getByRole("dialog", { name: "New event" });
+  await editor.getByLabel("Title").fill("Class");
+  await editor.getByLabel("Start time").fill("18:00");
+  await editor.getByLabel("End time").fill("19:00");
+  await editor.getByLabel("Repeats").selectOption("weekly");
+  await editor.getByLabel("Ends").selectOption("count");
+  await editor.getByRole("spinbutton", { name: "Number of times" }).fill("4");
+  await editor.getByRole("button", { name: "Save event" }).click();
+  await expect(page.getByRole("status").first()).toHaveText(
+    "Created event Class.",
+  );
+  const occurrence = (date: RegExp, name: RegExp) =>
+    day(page, date)
+      .click()
+      .then(() => page.getByRole("button", { name }));
+
+  // One occurrence: renamed, and the rest of the series keeps its title.
+  await (
+    await occurrence(/November 25, 2026/, /18:00–19:00\s*Class\s*Repeats/)
+  ).click();
+  const edit = page.getByRole("dialog", { name: "Edit event" });
+  await expect(edit.getByRole("radio", { name: "This event" })).toBeChecked();
+  // A single occurrence cannot change the repeat.
+  await expect(edit.getByLabel("Repeats")).toHaveCount(0);
+  await edit.getByLabel("Title").fill("Class in room 2");
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(
+    await occurrence(/November 25, 2026/, /Class in room 2/),
+  ).toBeVisible();
+  await expect(
+    await occurrence(/December 2, 2026/, /^18:00–19:00\s*Class\s*Repeats/),
+  ).toBeVisible();
+
+  // Cancel one occurrence only.
+  await (await occurrence(/December 2, 2026/, /Class/)).click();
+  await edit.getByRole("button", { name: "Delete…" }).click();
+  const confirm = edit.getByRole("group", { name: "Confirm deletion" });
+  await expect(
+    confirm.getByRole("button", { name: "Delete this event" }),
+  ).toBeFocused();
+  await confirm.getByRole("button", { name: "Delete this event" }).click();
+  await day(page, /December 2, 2026/).click();
+  await expect(page.getByText("No events this day.")).toBeVisible();
+  await expect(await occurrence(/December 9, 2026/, /Class/)).toBeVisible();
+
+  // This and following: later, from 9 December on.
+  await (await occurrence(/December 9, 2026/, /Class/)).click();
+  await edit.getByRole("radio", { name: "This and following events" }).check();
+  await expect(edit.getByLabel("Repeats")).toHaveValue("weekly");
+  await edit.getByLabel("Start time").fill("19:00");
+  await edit.getByLabel("End time").fill("20:00");
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(
+    await occurrence(/December 9, 2026/, /19:00–20:00\s*Class/),
+  ).toBeVisible();
+  // Earlier occurrences keep their time.
+  await page.getByRole("button", { name: "Previous month" }).click();
+  await expect(
+    await occurrence(/November 18, 2026/, /18:00–19:00\s*Class/),
+  ).toBeVisible();
+});

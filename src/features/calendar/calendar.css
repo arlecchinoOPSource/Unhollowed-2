@@ -343,3 +343,9 @@
   font-size: 12px;
   white-space: nowrap;
 }
+
+.calendar-event-repeat {
+  display: inline-flex;
+  align-self: center;
+  color: var(--muted);
+}
