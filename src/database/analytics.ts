@@ -120,3 +120,73 @@ export function analyticsError(error: unknown): string {
       return "Could not read local data. Try again.";
   }
 }
+
+/** Totals for issues that are not archived. docs/ANALYTICS.md, "Progress". */
+export interface ProgressTotals {
+  total: number;
+  open: number;
+  done: number;
+  canceled: number;
+  /** done / (total - canceled) x 100; null when that is zero. */
+  completionPercent: number | null;
+  overdue: number;
+  upcoming: number;
+  undatedOpen: number;
+}
+
+export interface ProjectProgress {
+  projectId: string;
+  name: string;
+  status: string;
+  issues: ProgressTotals;
+  milestonesOpen: number;
+  milestonesClosed: number;
+  objectives: number;
+  objectiveLinked: number;
+  objectiveDone: number;
+}
+
+export interface Deadline {
+  kind: "issue" | "milestone";
+  id: string;
+  number: number | null;
+  title: string;
+  projectId: string | null;
+  projectName: string | null;
+  dueDate: string;
+  overdue: boolean;
+}
+
+export interface TrendBucket {
+  start: string;
+  end: string;
+  completed: number;
+}
+
+export interface CompletionTrend {
+  granularity: "day" | "week";
+  buckets: TrendBucket[];
+  /** Issues done now, and how many of them have a stored completion time. */
+  doneTotal: number;
+  withTime: number;
+  withoutTime: number;
+}
+
+export interface ProgressAnalytics {
+  from: string;
+  to: string;
+  today: string;
+  projectId: string | null;
+  totals: ProgressTotals;
+  projects: ProjectProgress[];
+  deadlines: Deadline[];
+  trend: CompletionTrend;
+}
+
+export const getProgressAnalytics = (
+  from: string,
+  to: string,
+  projectId: string | null,
+  timeZone: string,
+): Promise<ProgressAnalytics> =>
+  invoke("get_progress_analytics", { from, to, projectId, timeZone });

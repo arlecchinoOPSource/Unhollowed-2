@@ -581,5 +581,6 @@ pub async fn get_workspace_analytics(
     .await
 }
 
+pub mod progress;
 #[cfg(test)]
 mod tests;

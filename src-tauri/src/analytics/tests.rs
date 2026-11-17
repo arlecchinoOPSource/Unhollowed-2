@@ -2,6 +2,7 @@
 //! day boundaries, the project filter, availability, errors, workspace scope,
 //! and a representative size. Dates and records are synthetic.
 
+use super::progress::progress;
 use super::*;
 use crate::checkins::save as save_checkin;
 use crate::habits::{create as create_habit, set_completion};
@@ -574,5 +575,309 @@ fn a_restart_recomputes_exactly_the_same_statistics() {
         assert_eq!(run(&pool, None).await, before);
         assert_eq!(run(&pool, Some("p1")).await, filtered);
         pool.close().await;
+    });
+}
+
+async fn progress_for(
+    pool: &SqlitePool,
+    project: Option<&str>,
+) -> super::progress::ProgressAnalytics {
+    progress(pool, WS, "2026-11-01", "2026-11-30", project, ZONE, TODAY)
+        .await
+        .unwrap()
+}
+
+#[test]
+fn progress_totals_rollups_and_deadlines_follow_the_documented_denominators() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        seed(&pool).await;
+        let p = progress_for(&pool, None).await;
+        // Six unarchived issues: 2 open, 2 done, 2 canceled. Canceled work is
+        // neither done nor outstanding, so the rate is done / (6 - 2).
+        let t = &p.totals;
+        assert_eq!((t.total, t.open, t.done, t.canceled), (6, 2, 2, 2));
+        assert_eq!(t.completion_percent, Some(50.0));
+        assert_eq!((t.overdue, t.upcoming, t.undated_open), (1, 0, 0));
+
+        // Archived projects are not listed; the rest are by name.
+        let names: Vec<_> = p.projects.iter().map(|x| x.name.as_str()).collect();
+        assert_eq!(names, ["p1", "p2", "p4"]);
+        let p1 = &p.projects[0];
+        assert_eq!((p1.issues.total, p1.issues.done), (4, 1));
+        assert!((p1.issues.completion_percent.unwrap() - 100.0 / 3.0).abs() < 1e-9);
+        // Milestone completion is the milestones' own state, not issue progress.
+        assert_eq!((p1.milestones_open, p1.milestones_closed), (1, 1));
+        assert_eq!(
+            (p1.objectives, p1.objective_linked, p1.objective_done),
+            (1, 2, 1)
+        );
+        assert_eq!(p.projects[1].issues.completion_percent, Some(100.0));
+        // A project with no issues has a defined empty answer, not 0 or 100.
+        assert_eq!(
+            (
+                p.projects[2].issues.total,
+                p.projects[2].issues.completion_percent
+            ),
+            (0, None)
+        );
+
+        // Open issues and milestones overdue or due in the next 14 days.
+        let list: Vec<_> = p
+            .deadlines
+            .iter()
+            .map(|d| {
+                (
+                    d.kind.as_str(),
+                    d.title.as_str(),
+                    d.due_date.as_str(),
+                    d.overdue,
+                )
+            })
+            .collect();
+        assert_eq!(
+            list,
+            [
+                ("issue", "Issue", "2026-11-12", true),
+                ("milestone", "m1", "2026-11-12", true),
+                ("milestone", "m4", "2026-11-25", false),
+            ]
+        );
+        // The project filter narrows every part.
+        let f = progress_for(&pool, Some("p1")).await;
+        assert_eq!((f.totals.total, f.totals.done), (4, 1));
+        assert_eq!(f.projects.len(), 1);
+        assert_eq!(f.deadlines.len(), 2);
+        assert!(f
+            .deadlines
+            .iter()
+            .all(|d| d.project_id.as_deref() == Some("p1")));
+    });
+}
+
+#[test]
+fn progress_agrees_with_the_project_overview_for_the_same_project() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        seed(&pool).await;
+        // Open issues across the upcoming window and undated ones too.
+        issue(
+            &pool,
+            8,
+            Some("p1"),
+            "todo",
+            "2026-11-04T08:00:00.000Z",
+            None,
+            None,
+            false,
+        )
+        .await;
+        issue(
+            &pool,
+            9,
+            Some("p1"),
+            "blocked",
+            "2026-11-04T08:00:00.000Z",
+            None,
+            Some("2026-11-20"),
+            false,
+        )
+        .await;
+        for id in ["p1", "p2", "p4"] {
+            let overview = crate::overview::overview(&pool, WS, id, TODAY)
+                .await
+                .unwrap();
+            let ours = progress_for(&pool, Some(id))
+                .await
+                .projects
+                .remove(0)
+                .issues;
+            assert_eq!(
+                (ours.total, ours.open),
+                (overview.total, overview.open),
+                "{id}"
+            );
+            assert_eq!(ours.done, overview.statuses.done, "{id}");
+            assert_eq!(ours.canceled, overview.statuses.canceled, "{id}");
+            assert_eq!(ours.overdue, overview.overdue_count, "{id}");
+            assert_eq!(ours.upcoming, overview.upcoming_count, "{id}");
+            assert_eq!(ours.undated_open, overview.undated_open, "{id}");
+            assert_eq!(
+                ours.completion_percent,
+                overview.completion.map(|c| c * 100.0),
+                "{id}"
+            );
+        }
+    });
+}
+
+#[test]
+fn the_completion_trend_uses_stored_times_and_reports_what_it_cannot_place() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        // Done with a time, done without one (before times were kept), done
+        // then reopened, and an archived done issue.
+        issue(
+            &pool,
+            1,
+            None,
+            "done",
+            "2026-10-01T00:00:00.000Z",
+            Some("2026-11-10T09:00:00.000Z"),
+            None,
+            false,
+        )
+        .await;
+        issue(
+            &pool,
+            2,
+            None,
+            "done",
+            "2026-10-01T00:00:00.000Z",
+            None,
+            None,
+            false,
+        )
+        .await;
+        issue(
+            &pool,
+            3,
+            None,
+            "todo",
+            "2026-10-01T00:00:00.000Z",
+            None,
+            None,
+            false,
+        )
+        .await;
+        issue(
+            &pool,
+            4,
+            None,
+            "done",
+            "2026-10-01T00:00:00.000Z",
+            Some("2026-11-10T10:00:00.000Z"),
+            None,
+            true,
+        )
+        .await;
+        // 23:30Z on Nov 30 is Dec 1 in Paris, so it is in December's trend.
+        issue(
+            &pool,
+            5,
+            None,
+            "done",
+            "2026-10-01T00:00:00.000Z",
+            Some("2026-11-30T23:30:00.000Z"),
+            None,
+            false,
+        )
+        .await;
+        let t = progress_for(&pool, None).await.trend;
+        assert_eq!(t.granularity, "day");
+        assert_eq!(t.buckets.len(), 30);
+        assert_eq!(t.buckets[9].start, "2026-11-10");
+        assert_eq!(t.buckets[9].completed, 1);
+        assert_eq!(t.buckets.iter().map(|b| b.completed).sum::<i64>(), 1);
+        // Three unarchived done issues; one of them has no completion time.
+        assert_eq!((t.done_total, t.with_time, t.without_time), (3, 2, 1));
+        let december = progress(
+            &pool,
+            WS,
+            "2026-12-01",
+            "2026-12-01",
+            None,
+            ZONE,
+            "2026-12-01",
+        )
+        .await
+        .unwrap()
+        .trend;
+        assert_eq!(december.buckets[0].completed, 1);
+
+        // A long period is shown by Monday-to-Sunday week, clipped to it.
+        let long = progress(&pool, WS, "2026-08-01", "2026-12-01", None, ZONE, TODAY)
+            .await
+            .unwrap()
+            .trend;
+        assert_eq!(long.granularity, "week");
+        assert_eq!(long.buckets[0].start, "2026-08-01");
+        assert_eq!(long.buckets[0].end, "2026-08-02");
+        assert_eq!(long.buckets[1].start, "2026-08-03");
+        assert_eq!(long.buckets.iter().map(|b| b.completed).sum::<i64>(), 2);
+        assert_eq!(long.buckets.last().unwrap().end, "2026-12-01");
+    });
+}
+
+#[test]
+fn progress_enforces_bounds_and_workspace_scope() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        add_workspace(&pool, OTHER_WORKSPACE, "Other").await;
+        seed(&pool).await;
+        for (from, to, project, error) in [
+            (
+                "2026-11-30",
+                "2026-11-01",
+                None,
+                AnalyticsError::InvalidRange,
+            ),
+            (
+                "2026-01-01",
+                "2027-01-02",
+                None,
+                AnalyticsError::InvalidRange,
+            ),
+            (
+                "2026-02-30",
+                "2026-03-01",
+                None,
+                AnalyticsError::InvalidDate,
+            ),
+            (
+                "2026-11-01",
+                "2026-11-30",
+                Some("missing"),
+                AnalyticsError::NotFound,
+            ),
+        ] {
+            assert_eq!(
+                progress(&pool, WS, from, to, project, ZONE, TODAY).await,
+                Err(error)
+            );
+        }
+        assert_eq!(
+            progress(
+                &pool,
+                OTHER_WORKSPACE,
+                "2026-11-01",
+                "2026-11-30",
+                Some("p1"),
+                ZONE,
+                TODAY
+            )
+            .await,
+            Err(AnalyticsError::NotFound)
+        );
+        let theirs = progress(
+            &pool,
+            OTHER_WORKSPACE,
+            "2026-11-01",
+            "2026-11-30",
+            None,
+            ZONE,
+            TODAY,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (
+                theirs.totals.total,
+                theirs.projects.len(),
+                theirs.deadlines.len()
+            ),
+            (0, 0, 0)
+        );
+        assert_eq!(theirs.totals.completion_percent, None);
     });
 }

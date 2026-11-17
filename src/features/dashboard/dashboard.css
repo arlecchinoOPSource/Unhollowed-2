@@ -1,0 +1,93 @@
+.dash-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.dash-controls label {
+  display: grid;
+  gap: 4px;
+}
+
+.dash-controls select {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.dash-section h3 {
+  margin: 20px 0 6px;
+}
+
+.dash-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.dash-tiles > div {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.dash-tiles dt {
+  color: var(--muted);
+}
+
+.dash-tiles dd {
+  margin: 4px 0 0;
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dash-table :is(th, td) {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.dash-deadlines {
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
+}
+
+.dash-chart {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+}
+
+.dash-axes line {
+  stroke: var(--line);
+}
+
+.dash-axes text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.dash-bar {
+  fill: var(--accent);
+}
+
+.dash-zero {
+  fill: var(--muted);
+}
+
+.dash-details {
+  max-width: 640px;
+}
