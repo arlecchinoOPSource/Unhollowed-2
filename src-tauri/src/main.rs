@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod acceptance_tests;
 
+mod analytics;
 mod checkins;
 mod database;
 mod document_links;
@@ -169,6 +170,7 @@ fn main() {
             checkins::save_checkin,
             checkins::delete_checkin,
             checkins::analytics::get_checkin_analytics,
+            analytics::get_workspace_analytics,
             labels::list_labels,
             labels::create_label,
             labels::update_label,
