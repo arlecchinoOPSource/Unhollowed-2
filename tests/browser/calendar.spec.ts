@@ -592,3 +592,115 @@ test("restores calendar preferences and honors explicit deep links", async ({
   await page.reload();
   await expect(page.getByRole("columnheader").first()).toHaveText("Mon");
 });
+
+test("drags out a range, resizes, and confirms a moved appointment", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedEvents: [
+        {
+          title: "Schedule review",
+          timeZone: "Europe/Paris",
+          startLocal: "2026-11-16T09:00",
+          endLocal: "2026-11-16T10:30",
+          startAt: "2026-11-16T08:00:00Z",
+          endAt: "2026-11-16T09:30:00Z",
+        },
+      ],
+    }),
+  );
+  await page.goto("/calendar?view=week&date=2026-11-16");
+  const monday = page.getByRole("group", { name: "Monday, November 16" });
+  const tuesday = page.getByRole("group", { name: "Tuesday, November 17" });
+  const event = monday.getByRole("button", { name: /Schedule review/ });
+  await expect(event).toBeVisible();
+  const second = (await tuesday.boundingBox())!;
+  const hour = second.height / 24;
+  async function drag(x: number, y: number, endX: number, endY: number) {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(endX, endY, { steps: 6 });
+    await page.mouse.up();
+  }
+  await drag(
+    second.x + 25,
+    second.y + hour * 9.1,
+    second.x + 25,
+    second.y + hour * 10.1,
+  );
+  const editor = page.getByRole("dialog", { name: "New event" });
+  await expect(editor.getByLabel("Start time")).toHaveValue("09:00");
+  await expect(editor.getByLabel("End time")).toHaveValue("10:30");
+  await page.keyboard.press("Escape");
+
+  const edit = page.getByRole("dialog", { name: "Edit event" });
+  const first = (await monday.boundingBox())!;
+  const handle = (await event.locator("[data-resize]").boundingBox())!;
+  await drag(handle.x + 12, handle.y + 2, first.x + 25, first.y + hour * 11.1);
+  await expect(edit.getByLabel("End time")).toHaveValue("11:00");
+  await page.keyboard.press("Escape");
+  await expect(event).toContainText("09:00–10:30");
+
+  const box = (await event.boundingBox())!;
+  const destination = (await tuesday.boundingBox())!;
+  await drag(
+    box.x + 12,
+    box.y + 5,
+    destination.x + 25,
+    destination.y + hour * 11.1,
+  );
+  await expect(edit.getByLabel("Start date")).toHaveValue("2026-11-17");
+  await expect(edit.getByLabel("Start time")).toHaveValue("11:00");
+  await expect(edit.getByLabel("End time")).toHaveValue("12:30");
+  await dispatch(page, "fail-once", "update_calendar_event");
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(edit.getByRole("alert")).toBeVisible();
+  await expect(event).toBeAttached();
+  await edit.getByRole("button", { name: "Save event" }).click();
+  await expect(
+    tuesday.getByRole("button", { name: /Schedule review/ }),
+  ).toBeVisible();
+  await expect(event).toHaveCount(0);
+});
+
+test("moves a recurring all-day event by proposing dates and an occurrence scope", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedEvents: [
+        {
+          title: "Retreat",
+          allDay: true,
+          startDate: "2026-11-16",
+          endDate: "2026-11-18",
+          repeatFreq: "weekly",
+          repeatInterval: 1,
+        },
+      ],
+    }),
+  );
+  await page.goto("/calendar?view=week&date=2026-11-16");
+  const item = page
+    .getByRole("group", { name: "All day" })
+    .getByRole("button", { name: /Retreat/ });
+  await expect(item).toBeVisible();
+  const source = (await item.boundingBox())!;
+  const target = (await page
+    .locator(".timeline-day-name[data-schedule-day='2026-11-19']")
+    .boundingBox())!;
+  await page.mouse.move(source.x + 12, source.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(target.x + 20, target.y + target.height / 2, {
+    steps: 6,
+  });
+  await page.mouse.up();
+  const edit = page.getByRole("dialog", { name: "Edit event" });
+  await expect(edit.getByLabel("Start date")).toHaveValue("2026-11-19");
+  await expect(edit.getByLabel("Last day")).toHaveValue("2026-11-20");
+  await expect(edit.getByRole("radio", { name: "This event" })).toBeChecked();
+  await expect(
+    edit.getByRole("radio", { name: "This and following events" }),
+  ).toBeVisible();
+});

@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
   type MouseEvent,
+  type PointerEvent,
 } from "react";
 import { Link, useSearchParams } from "react-router";
 import { calendarColors, schedulingError } from "../../database/calendars";
@@ -37,7 +38,22 @@ import {
 import { useDeviceZone } from "./useDeviceZone";
 import { useEventEditing } from "./useEventEditing";
 import { ViewSwitch } from "./ViewSwitch";
+import { proposedSpan, type GestureMode } from "./schedulingGesture";
 import "./timeline.css";
+
+interface Slot {
+  day: string;
+  minute: number;
+}
+interface Gesture {
+  pointer: number;
+  x: number;
+  y: number;
+  origin: Slot;
+  item?: CalendarItem;
+  mode: GestureMode;
+  dragged: boolean;
+}
 
 function colorName(item: CalendarItem) {
   return calendarColors[item.color as keyof typeof calendarColors]?.name;
@@ -96,6 +112,13 @@ export function TimelineView({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [request, setRequest] = useState(0);
+  const gesture = useRef<Gesture | null>(null);
+  const swallowClick = useRef(false);
+  const [preview, setPreview] = useState<{
+    from: Slot;
+    to: Slot;
+    selecting: boolean;
+  } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const editing = useEventEditing({
     onMessage: setMessage,
@@ -174,6 +197,142 @@ export function TimelineView({
       day,
       Math.min(MINUTES_PER_DAY - step, Math.floor(minute / step) * step),
     );
+  }
+
+  function slot(element: HTMLElement, y: number): Slot {
+    const box = element.getBoundingClientRect();
+    const step = settings.increment;
+    const minute = element.dataset.scheduleTimeline
+      ? Math.min(
+          MINUTES_PER_DAY - step,
+          Math.max(
+            0,
+            Math.floor(
+              (((y - box.top) / box.height) * MINUTES_PER_DAY) / step,
+            ) * step,
+          ),
+        )
+      : 0;
+    return { day: element.dataset.scheduleDay!, minute };
+  }
+
+  function begin(event: PointerEvent<HTMLDivElement>) {
+    swallowClick.current = false;
+    if (
+      event.button !== 0 ||
+      event.pointerType !== "mouse" ||
+      !(event.target instanceof HTMLElement)
+    )
+      return;
+    const handle = event.target.closest<HTMLElement>("[data-schedule-item]");
+    const column = event.target.closest<HTMLElement>("[data-schedule-day]");
+    const item = handle
+      ? visible.find(({ id }) => id === handle.dataset.scheduleItem)
+      : undefined;
+    if (
+      (!item &&
+        (!column ||
+          event.target !== column ||
+          !column.dataset.scheduleTimeline)) ||
+      item?.kind === "workBlock"
+    )
+      return;
+    const origin = column
+      ? slot(column, event.clientY)
+      : { day: item!.startDate!, minute: 0 };
+    gesture.current = {
+      pointer: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      origin,
+      item,
+      mode: event.target.closest("[data-resize]") ? "resize" : "move",
+      dragged: false,
+    };
+  }
+
+  function targetSlot(
+    event: PointerEvent<HTMLDivElement>,
+    item?: CalendarItem,
+  ) {
+    const candidate = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-schedule-day]");
+    if (
+      !candidate ||
+      !event.currentTarget.contains(candidate) ||
+      (!item?.allDay && !candidate.dataset.scheduleTimeline)
+    )
+      return;
+    return slot(candidate, event.clientY);
+  }
+
+  function move(event: PointerEvent<HTMLDivElement>) {
+    const active = gesture.current;
+    if (!active || active.pointer !== event.pointerId) return;
+    if (
+      !active.dragged &&
+      Math.hypot(event.clientX - active.x, event.clientY - active.y) < 5
+    )
+      return;
+    if (!active.dragged) event.currentTarget.setPointerCapture(event.pointerId);
+    active.dragged = true;
+    const to = targetSlot(event, active.item);
+    setPreview(
+      to ? { from: active.origin, to, selecting: !active.item } : null,
+    );
+  }
+
+  function finish(event: PointerEvent<HTMLDivElement>) {
+    const active = gesture.current;
+    if (!active || active.pointer !== event.pointerId) return;
+    gesture.current = null;
+    setPreview(null);
+    if (!active.dragged) return;
+    swallowClick.current = true;
+    const target = targetSlot(event, active.item);
+    if (!target) return;
+    setError("");
+    if (active.item) {
+      const offset =
+        active.mode === "move" && !active.item.allDay
+          ? Math.max(
+              0,
+              active.origin.minute -
+                minutesOf(active.item.start!.slice(11, 16)),
+            )
+          : 0;
+      const minute = Math.max(0, target.minute - offset);
+      const span = proposedSpan(
+        active.item,
+        target.day,
+        clock(minute),
+        zone,
+        active.mode,
+        settings.increment,
+      );
+      if (span) void editing.openItem(active.item, span);
+      else
+        setError(
+          "This time range cannot be scheduled. Choose another time or edit the event.",
+        );
+      return;
+    }
+    const ordered = [active.origin, target].sort(
+      (a, b) => a.day.localeCompare(b.day) || a.minute - b.minute,
+    );
+    const [start, end] = ordered;
+    const endMinute = end.minute + settings.increment;
+    editing.openNew({
+      ...newDraft(
+        start.day,
+        zone,
+        editing.defaultCalendar,
+        clock(start.minute),
+        clock(endMinute % MINUTES_PER_DAY),
+      ),
+      endDate: endMinute === MINUTES_PER_DAY ? addDays(end.day, 1) : end.day,
+    });
   }
 
   function newEvent() {
@@ -267,6 +426,21 @@ export function TimelineView({
         aria-labelledby="timeline-range"
         aria-busy={loaded?.key !== key}
         style={gridStyle}
+        onPointerDown={begin}
+        onPointerMove={move}
+        onPointerUp={finish}
+        onPointerCancel={() => {
+          gesture.current = null;
+          setPreview(null);
+        }}
+        onClickCapture={(event) => {
+          if (!swallowClick.current) return;
+          swallowClick.current = false;
+          if (event.detail > 0) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
       >
         <div className="timeline-head">
           <span className="timeline-corner" aria-hidden="true" />
@@ -274,6 +448,8 @@ export function TimelineView({
             <div
               key={day}
               className="timeline-day-name"
+              data-schedule-day={day}
+              data-drop-preview={preview?.to.day === day}
               aria-current={day === today ? "date" : undefined}
               data-workday={settings.workDays.includes(
                 parseLocalDate(day).getDay(),
@@ -318,6 +494,8 @@ export function TimelineView({
               ) : (
                 <button
                   type="button"
+                  data-schedule-item={item.id}
+                  title="Drag to a day heading to move"
                   onClick={() => void editing.openItem(item)}
                 >
                   <span className="timeline-band-text">{item.title}</span>
@@ -354,6 +532,8 @@ export function TimelineView({
                 <div
                   key={day}
                   className="timeline-day"
+                  data-schedule-day={day}
+                  data-schedule-timeline="true"
                   role="group"
                   aria-label={dayName(day, "long")}
                   data-today={day === today}
@@ -362,6 +542,16 @@ export function TimelineView({
                   )}
                   onClick={(event) => onDayClick(event, day)}
                 >
+                  {preview?.to.day === day && (
+                    <span
+                      className="timeline-gesture-preview"
+                      aria-hidden="true"
+                      style={{
+                        top: `${((preview.from.day === day && preview.selecting ? Math.min(preview.from.minute, preview.to.minute) : preview.to.minute) / MINUTES_PER_DAY) * 100}%`,
+                        height: `${((preview.from.day === day && preview.selecting ? Math.abs(preview.from.minute - preview.to.minute) + settings.increment : settings.increment) / MINUTES_PER_DAY) * 100}%`,
+                      }}
+                    />
+                  )}
                   {day === today && (
                     <span
                       className="timeline-now"
@@ -429,7 +619,15 @@ function TimelineBlock({
           </span>
         </Link>
       ) : (
-        <button type="button" onClick={onOpen}>
+        <button type="button" onClick={onOpen} data-schedule-item={item.id}>
+          {!block.continuesAfter && (
+            <span
+              className="timeline-resize"
+              title="Drag to resize"
+              data-resize
+              aria-hidden="true"
+            />
+          )}
           <span className="timeline-item-time">{times}</span>
           <span className="timeline-item-title">
             {item.title}
