@@ -8,6 +8,7 @@ use crate::documents::is_rich_text;
 use crate::issues::{search_text, IssueQuery, IssueSummary, PRIORITIES, STATUSES};
 use crate::labels::COLORS;
 use crate::projects::valid_date;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Sqlite, SqlitePool, Transaction};
 use std::collections::{HashMap, HashSet};
@@ -955,8 +956,9 @@ async fn save_with_dialog(
     app: AppHandle,
     name: String,
     filter: (&'static str, &'static str),
-    content: String,
+    content: impl Into<Vec<u8>>,
 ) -> Result<Option<String>, PortError> {
+    let content = content.into();
     use tauri_plugin_dialog::DialogExt;
     tauri::async_runtime::spawn_blocking(move || {
         let Some(path) = app
@@ -990,6 +992,7 @@ pub async fn save_document_file(
         "txt" => ("Plain text", "txt"),
         "md" => ("Markdown", "md"),
         "html" => ("HTML", "html"),
+        "docx" => ("Word document", "docx"),
         _ => return Err(PortError::WriteFailed),
     };
     if content.len() > 32 * 1024 * 1024 {
@@ -1008,7 +1011,14 @@ pub async fn save_document_file(
         .collect();
     let name = name.trim_matches(|c: char| c.is_whitespace() || c == '.');
     let name = if name.is_empty() { "Untitled" } else { name };
-    save_with_dialog(app, format!("{name}.{format}"), filter, content).await
+    let bytes = if format == "docx" {
+        STANDARD
+            .decode(content)
+            .map_err(|_| PortError::WriteFailed)?
+    } else {
+        content.into_bytes()
+    };
+    save_with_dialog(app, format!("{name}.{format}"), filter, bytes).await
 }
 
 async fn scope(instances: &DbInstances) -> Result<(SqlitePool, String), PortError> {

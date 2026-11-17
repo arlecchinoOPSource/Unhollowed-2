@@ -46,14 +46,18 @@ export function DocumentExport({
             <option value="txt">Plain text</option>
             <option value="md">Markdown</option>
             <option value="html">HTML</option>
+            <option value="docx">Word (.docx)</option>
           </select>
         </label>
         <button type="button" disabled={busy} onClick={() => void save()}>
           Save document file
         </button>
       </div>
-      {format !== "html" && (
+      {(format === "md" || format === "txt") && (
         <p>Page layout, custom styling, and embedded images are omitted.</p>
+      )}
+      {format === "docx" && (
+        <p>Review page breaks and advanced formatting in Word.</p>
       )}
       {message && <p role="status">{message}</p>}
       {error && <p role="alert">{error}</p>}

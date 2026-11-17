@@ -131,16 +131,62 @@ pub async fn create_library_document(
     title: String,
     content: Option<String>,
     folder: Option<String>,
+    images: Option<HashMap<String, String>>,
 ) -> Result<LibraryDocument, DocumentError> {
     let (db, workspace) = scope(&instances).await?;
-    sqlx::query_as(&format!(
+    create_from_file(
+        &db,
+        &workspace,
+        &title,
+        content.as_deref(),
+        folder.as_deref(),
+        images.unwrap_or_default(),
+    )
+    .await
+}
+
+async fn create_from_file(
+    db: &SqlitePool,
+    workspace: &str,
+    title: &str,
+    content: Option<&str>,
+    folder: Option<&str>,
+    images: HashMap<String, String>,
+) -> Result<LibraryDocument, DocumentError> {
+    let mut assets = Vec::new();
+    let mut mapping = HashMap::new();
+    let mut final_content = valid_content(content.unwrap_or(EMPTY_CONTENT))?.to_string();
+    if !images.is_empty() {
+        if images.len() > 64 || images.values().map(String::len).sum::<usize>() > 28 * 1024 * 1024 {
+            return Err(DocumentError::InvalidContent);
+        }
+        for (old_id, data) in images {
+            let (mime, bytes) = super::assets::decode_image(&data)?;
+            let id = Uuid::new_v4().to_string();
+            mapping.insert(old_id, id.clone());
+            assets.push((id, mime, bytes));
+        }
+        let mut value: Value =
+            serde_json::from_str(&final_content).map_err(|_| DocumentError::InvalidContent)?;
+        remap_images(&mut value, &mapping);
+        final_content = value.to_string();
+    }
+    let mut tx = db.begin().await.map_err(storage_failed)?;
+    let document: LibraryDocument = sqlx::query_as(&format!(
         "INSERT INTO documents (id, workspace_id, title, content, folder_id, created_at, updated_at, opened_at)
          SELECT ?1, ?2, ?3, ?4, ?5, {NOW}, {NOW}, {NOW}
          WHERE ?5 IS NULL OR EXISTS (SELECT 1 FROM document_folders WHERE workspace_id = ?2 AND id = ?5)
          RETURNING {FIELDS}"
-    )).bind(Uuid::new_v4().to_string()).bind(workspace).bind(valid_title(&title)?)
-        .bind(valid_content(content.as_deref().unwrap_or(EMPTY_CONTENT))?).bind(folder)
-        .fetch_optional(&db).await.map_err(storage_failed)?.ok_or(DocumentError::NotFound)
+    )).bind(Uuid::new_v4().to_string()).bind(workspace).bind(valid_title(title)?)
+        .bind(valid_content(&final_content)?).bind(folder)
+        .fetch_optional(&mut *tx).await.map_err(storage_failed)?.ok_or(DocumentError::NotFound)?;
+    for (id, mime, bytes) in assets {
+        sqlx::query("INSERT INTO document_assets (id, workspace_id, document_id, mime, bytes) VALUES (?, ?, ?, ?, ?)")
+            .bind(id).bind(workspace).bind(&document.id).bind(mime).bind(bytes)
+            .execute(&mut *tx).await.map_err(storage_failed)?;
+    }
+    tx.commit().await.map_err(storage_failed)?;
+    Ok(document)
 }
 
 fn remap_images(node: &mut Value, assets: &HashMap<String, String>) {
@@ -226,6 +272,60 @@ pub async fn duplicate_document(
 mod tests {
     use super::*;
     use crate::test_support::{add_workspace, migrated_pool, DEFAULT_WORKSPACE, OTHER_WORKSPACE};
+
+    #[test]
+    fn imports_images_and_document_together_with_new_workspace_owned_ids() {
+        tauri::async_runtime::block_on(async {
+            let db = migrated_pool().await;
+            add_workspace(&db, OTHER_WORKSPACE, "Other").await;
+            let body = r#"{"type":"doc","content":[{"type":"localImage","attrs":{"assetId":"original"}}]}"#;
+            assert!(create_from_file(
+                &db,
+                DEFAULT_WORKSPACE,
+                "Invalid",
+                Some(body),
+                None,
+                HashMap::from([("original".into(), "not an image".into())])
+            )
+            .await
+            .is_err());
+            assert!(super::super::list(&db, DEFAULT_WORKSPACE)
+                .await
+                .unwrap()
+                .is_empty());
+            let image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jL1sAAAAASUVORK5CYII=";
+            let created = create_from_file(
+                &db,
+                DEFAULT_WORKSPACE,
+                "Imported",
+                Some(body),
+                None,
+                HashMap::from([("original".into(), image.into())]),
+            )
+            .await
+            .unwrap();
+            let saved = super::super::get(&db, DEFAULT_WORKSPACE, &created.id)
+                .await
+                .unwrap();
+            let content: Value = serde_json::from_str(&saved.content).unwrap();
+            let asset = content["content"][0]["attrs"]["assetId"].as_str().unwrap();
+            assert_ne!(asset, "original");
+            let (workspace, document, mime): (String, String, String) = sqlx::query_as(
+                "SELECT workspace_id, document_id, mime FROM document_assets WHERE id = ?",
+            )
+            .bind(asset)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+            assert_eq!(
+                (workspace.as_str(), document.as_str(), mime.as_str()),
+                (DEFAULT_WORKSPACE, created.id.as_str(), "image/png")
+            );
+            assert!(super::super::get(&db, OTHER_WORKSPACE, &created.id)
+                .await
+                .is_err());
+        });
+    }
 
     #[test]
     fn library_changes_preserve_identity_and_cannot_cross_workspaces() {

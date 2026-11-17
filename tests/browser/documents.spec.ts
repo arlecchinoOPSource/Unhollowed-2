@@ -1,3 +1,4 @@
+import { strFromU8, unzipSync } from "fflate";
 import { expect, test, type Page } from "@playwright/test";
 
 async function setup(page: Page, version?: number) {
@@ -52,6 +53,7 @@ async function setup(page: Page, version?: number) {
             parentId?: string | null;
             folder?: string | null;
             format?: string;
+            images?: Record<string, string>;
           } = {},
         ) {
           const { id, title, content, data, input, name, parentId, folder } =
@@ -79,6 +81,10 @@ async function setup(page: Page, version?: number) {
               return structuredClone(item);
             }
             case "create_library_document": {
+              if (args.images) {
+                Reflect.set(window, "importedImages", args.images);
+                image = Object.values(args.images)[0] ?? "";
+              }
               const item = {
                 ...first,
                 ...meta,
@@ -379,7 +385,7 @@ test("imports Markdown as a separate document and exports Markdown, text, and HT
   page,
 }) => {
   await setup(page);
-  const file = page.getByLabel("Import Markdown or text");
+  const file = page.getByLabel("Import document");
   await file.setInputFiles({
     name: "Field notes.md",
     mimeType: "text/markdown",
@@ -423,4 +429,68 @@ test("imports Markdown as a separate document and exports Markdown, text, and HT
     buffer: Buffer.from("Line one\n\nLine three"),
   });
   await expect(editor.locator("p")).toHaveText(["Line one", "", "Line three"]);
+});
+
+test("writes a real Word file and imports its formatting, table, and image", async ({
+  page,
+}) => {
+  await setup(page);
+  const input = page.getByLabel("Import document");
+  await input.setInputFiles({
+    name: "Word sample.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      "# Findings\n\nThis is **important** and has a [source](https://example.com).\n\n| Region | Result |\n|---|---|\n| North | Good |",
+    ),
+  });
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await expect(editor.getByRole("heading", { name: "Findings" })).toBeVisible();
+  await page.getByText("Insert and tables", { exact: true }).click();
+  await editor.press("ControlOrMeta+End");
+  await page.getByLabel("Insert image").setInputFiles({
+    name: "word-picture.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jL1sAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
+  await expect(page.getByRole("img", { name: "word-picture" })).toBeVisible();
+  await page.getByText("Export document", { exact: true }).click();
+  await page.getByLabel("File format").selectOption("docx");
+  await page.getByRole("button", { name: "Save document file" }).click();
+  const saved = () =>
+    page.evaluate(() => Reflect.get(window, "savedDocumentFile"));
+  await expect
+    .poll(saved)
+    .toMatchObject({ format: "docx", title: "Word sample" });
+  const data = Buffer.from((await saved()).content, "base64");
+  const entries = unzipSync(data);
+  const xml = strFromU8(entries["word/document.xml"]);
+  expect(xml).toContain('w:val="Heading1"');
+  expect(xml).toContain("<w:tbl>");
+  expect(xml).toContain("w:hyperlink");
+  expect(xml).toContain("w:drawing");
+  expect(
+    Object.keys(entries).some(
+      (name) => name.startsWith("word/media/") && name.endsWith(".png"),
+    ),
+  ).toBe(true);
+  await input.setInputFiles({
+    name: "Round trip.docx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    buffer: data,
+  });
+  await expect(page.getByLabel("Document title")).toHaveValue("Round trip");
+  await expect(editor.getByRole("heading", { name: "Findings" })).toBeVisible();
+  await expect(editor.locator("strong")).toHaveText("important");
+  await expect(editor.getByRole("link", { name: "source" })).toHaveAttribute(
+    "href",
+    "https://example.com/",
+  );
+  await expect(editor.locator("td").filter({ hasText: "North" })).toHaveCount(
+    1,
+  );
+  await expect(page.getByRole("img", { name: "word-picture" })).toBeVisible();
 });

@@ -22,12 +22,7 @@ fn mime(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
-async fn store(
-    db: &SqlitePool,
-    workspace: &str,
-    document: &str,
-    encoded: &str,
-) -> Result<String, DocumentError> {
+pub(super) fn decode_image(encoded: &str) -> Result<(&'static str, Vec<u8>), DocumentError> {
     if encoded.len() > MAX_BYTES.div_ceil(3) * 4 {
         return Err(DocumentError::InvalidContent);
     }
@@ -37,6 +32,16 @@ async fn store(
     let mime = mime(&bytes)
         .filter(|_| bytes.len() <= MAX_BYTES)
         .ok_or(DocumentError::InvalidContent)?;
+    Ok((mime, bytes))
+}
+
+async fn store(
+    db: &SqlitePool,
+    workspace: &str,
+    document: &str,
+    encoded: &str,
+) -> Result<String, DocumentError> {
+    let (mime, bytes) = decode_image(encoded)?;
     let id = Uuid::new_v4().to_string();
     let inserted = sqlx::query(
         "INSERT INTO document_assets (id, workspace_id, document_id, mime, bytes)

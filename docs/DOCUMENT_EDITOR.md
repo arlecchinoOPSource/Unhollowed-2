@@ -22,3 +22,17 @@ images locally and includes supported editor styles and print settings.
 Workspace links appear as their visible labels in portable documents.
 Markdown and plain text omit page layout, images, and custom typography.
 Use Print to save a PDF with the platform print dialog.
+
+### Microsoft Word
+
+Import and export DOCX entirely offline. Word import supports headings,
+lists, common emphasis, basic tables, links, and embedded PNG, JPEG, GIF
+and WebP images. It imports supported paper size, orientation, and a single
+uniform margin. Image bytes and the imported document are saved together.
+
+Word export writes editable paragraphs, headings, lists, tables, links and
+images, plus supported typography and page settings. Images are sized to
+the available page. WebP is converted to PNG in the export. The Word
+converter can omit authoring details such as arbitrary Word styles,
+different margins per edge, multiple sections, and review markup. Review
+layout and formatting in Word before sharing the result.

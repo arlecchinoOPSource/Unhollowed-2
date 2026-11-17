@@ -239,10 +239,10 @@ export function Documents() {
               <FilePlus size={15} aria-hidden="true" /> New document
             </button>
             <label className="word-controls">
-              Import Markdown or text
+              Import document
               <input
                 type="file"
-                accept=".md,.markdown,.txt"
+                accept=".docx,.md,.markdown,.txt"
                 disabled={busy}
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0];
@@ -253,12 +253,13 @@ export function Documents() {
                     try {
                       const { readWritingFile } =
                         await import("./editor/fileTransfer");
-                      const { title, content, warning } =
+                      const { title, content, warning, images } =
                         await readWritingFile(file);
                       const imported = await addLibraryDocument(
                         title,
                         content,
                         folder === "all" ? null : folder || null,
+                        images,
                       );
                       upsert(imported);
                       setView("active");

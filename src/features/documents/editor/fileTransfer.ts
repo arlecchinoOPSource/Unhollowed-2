@@ -4,23 +4,33 @@ import { documentExtensions, readDocument, safeWebLink } from "./schema";
 import { pageCss, readLayout } from "./pageLayout";
 import wordCss from "./word.css?raw";
 
-export type ExportFormat = "txt" | "md" | "html";
+export type ExportFormat = "txt" | "md" | "html" | "docx";
 const maxImportBytes = 512 * 1024;
 const maxExportSize = 32 * 1024 * 1024;
 
 export async function readWritingFile(file: File) {
-  const extension = /\.(txt|md|markdown)$/i.exec(file.name);
-  if (!extension) throw new Error("Choose a Markdown or plain text file.");
-  if (file.size > maxImportBytes)
-    throw new Error("Choose a file under 512 KiB.");
-  const text = new TextDecoder("utf-8", { fatal: true }).decode(
-    await file.arrayBuffer(),
-  );
+  const extension = /\.(txt|md|markdown|docx)$/i.exec(file.name);
+  if (!extension)
+    throw new Error("Choose a Word, Markdown, or plain text file.");
   const title = Array.from(
     file.name.slice(0, -extension[0].length).trim() || "Untitled",
   )
     .slice(0, 200)
     .join("");
+  if (extension[1].toLowerCase() === "docx") {
+    const { importWordFile } = await import("./importWord");
+    const result = await importWordFile(file);
+    return {
+      ...result,
+      title,
+      content: readDocument(JSON.stringify(result.content)),
+    };
+  }
+  if (file.size > maxImportBytes)
+    throw new Error("Choose a file under 512 KiB.");
+  const text = new TextDecoder("utf-8", { fatal: true }).decode(
+    await file.arrayBuffer(),
+  );
   const warnings: string[] = [];
   let content: JSONContent;
   if (extension[1].toLowerCase() === "txt") {
@@ -46,6 +56,7 @@ export async function readWritingFile(file: File) {
     title,
     content: readDocument(JSON.stringify(content)),
     warning: warnings[0],
+    images: undefined,
   };
 }
 
@@ -137,6 +148,17 @@ export async function saveWritingFile(
   title: string,
   format: ExportFormat,
 ) {
+  if (format === "docx") {
+    const { exportWordFile } = await import("./exportWord");
+    const content = await exportWordFile(editor.getJSON(), id, title);
+    if (content.length > maxExportSize)
+      throw new Error("This document exceeds the 32 MiB export limit.");
+    return invoke<string | null>("save_document_file", {
+      title,
+      format,
+      content,
+    });
+  }
   const content =
     format === "txt"
       ? editor.getText({ blockSeparator: "\n" })

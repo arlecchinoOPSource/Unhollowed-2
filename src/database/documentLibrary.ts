@@ -34,11 +34,13 @@ export function addLibraryDocument(
   title: string,
   content: JSONContent | null,
   folder: string | null,
+  images?: Record<string, string>,
 ): Promise<LibraryDocument> {
   return invoke("create_library_document", {
     title,
     content: content ? JSON.stringify(content) : null,
     folder,
+    images,
   });
 }
 
