@@ -134,6 +134,10 @@ function EditorBody({
     function escape(event: KeyboardEvent) {
       if (
         event.key !== "Escape" ||
+        (event.target instanceof HTMLElement &&
+          event.target.closest(
+            ".document-navigation[data-search-open='true']",
+          )) ||
         window.document.querySelector("dialog[open]")
       )
         return;

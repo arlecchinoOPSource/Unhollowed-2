@@ -8,6 +8,8 @@ Document autosave is debounced by 700 ms. Writes for an ID run in order across e
 
 SQLite checkpoints the displaced content up to once every five minutes per document. An explicit restore always checkpoints the displaced version in the same transaction. The latest 20 checkpoints per document are kept. The revision picker is disabled until current edits are saved or discarded.
 
+Command+F on macOS or Ctrl+F opens Find & Replace, including in Focus Mode. Typing `[[` opens document suggestions. Use the down arrow to enter the suggestions, Enter to insert a link, or Escape to dismiss them. Workspace search indexes the titles and contents of active documents and opens matches directly.
+
 Find matches literal text without regard to case inside a block, including across adjacent formatting runs. Replace all is one undoable change. The heading outline navigates to headings, and Focus Mode centers the writing area. Escape or the visible exit control restores the normal layout.
 
 ## File transfer

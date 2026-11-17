@@ -246,7 +246,12 @@
 .workspace:has([data-writing-focus="true"]) .workspace-body > header,
 .workspace:has([data-writing-focus="true"]) .documents > :first-child,
 .documents:has([data-writing-focus="true"]) .document-usage,
-[data-writing-focus="true"] :is(.word-tools, .document-navigation, .word-more) {
+[data-writing-focus="true"]
+  :is(
+    .word-tools,
+    .document-navigation:not([data-search-open="true"]),
+    .word-more
+  ) {
   display: none;
 }
 

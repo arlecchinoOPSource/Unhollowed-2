@@ -129,6 +129,7 @@ export default function Graph() {
             style: {
               label: "data(title)",
               "font-size": 12,
+              "min-zoomed-font-size": 7,
               width: 18,
               height: 18,
               "background-color": theme.getPropertyValue("--accent").trim(),

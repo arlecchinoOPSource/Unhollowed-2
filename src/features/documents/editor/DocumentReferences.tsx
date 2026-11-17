@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Mark, useEditorState, type Editor } from "@tiptap/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   listDocuments,
@@ -48,6 +48,7 @@ export function ReferencePicker({
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [failed, setFailed] = useState(false);
   const [dismissed, setDismissed] = useState<typeof match>(null);
+  const picker = useRef<HTMLDivElement>(null);
   const open = match !== null;
   useEffect(() => {
     if (!open) return;
@@ -59,6 +60,26 @@ export function ReferencePicker({
       active = false;
     };
   }, [open]);
+  useEffect(() => {
+    if (!match || !picker.current) return;
+    const element = editor.view.dom;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDismissed(match);
+      } else if (event.key === "ArrowDown") {
+        const first = picker.current?.querySelector<HTMLButtonElement>(
+          "button[data-document-option]",
+        );
+        if (first) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    element.addEventListener("keydown", onKey, true);
+    return () => element.removeEventListener("keydown", onKey, true);
+  }, [editor, match, dismissed]);
   if (
     !match ||
     (dismissed?.text === match.text && dismissed.from === match.from)
@@ -76,11 +97,28 @@ export function ReferencePicker({
       role="group"
       aria-label="Insert document link"
       className="editor-toolbar"
+      ref={picker}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setDismissed(match);
+          editor.commands.focus();
+        }
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+        const buttons = [...(picker.current?.querySelectorAll("button") ?? [])];
+        const index = buttons.indexOf(event.target as HTMLButtonElement);
+        if (index === -1) return;
+        const next = index + (event.key === "ArrowDown" ? 1 : -1);
+        event.preventDefault();
+        if (next < 0) editor.commands.focus();
+        else buttons[next]?.focus();
+      }}
     >
       {choices.map((document) => (
         <button
           key={document.id}
           type="button"
+          data-document-option
           onClick={() => {
             editor
               .chain()

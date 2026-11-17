@@ -1,130 +1,153 @@
 import { strFromU8, unzipSync } from "fflate";
 import { expect, test, type Page } from "@playwright/test";
 
-async function setup(page: Page, version?: number) {
-  await page.addInitScript((schemaVersion) => {
-    const content = JSON.stringify({
-      type: "doc",
-      ...(schemaVersion ? { attrs: { schemaVersion } } : {}),
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "A saved document" }],
-        },
-      ],
-    });
-    const meta = {
-      folderId: null as string | null,
-      favorite: false,
-      archivedAt: null as string | null,
-      openedAt: null as string | null,
-    };
-    const first = {
-      ...meta,
-      id: "one",
-      title: "First draft",
-      content,
-      updatedAt: "",
-      createdAt: "",
-    };
-    const second = {
-      ...meta,
-      id: "two",
-      title: "Second draft",
-      content,
-      updatedAt: "",
-      createdAt: "",
-    };
-    const documents = [first, second];
-    const folders: { id: string; parentId: string | null; name: string }[] = [];
-    let image = "";
-    Object.assign(window, {
-      isTauri: true,
-      __TAURI_INTERNALS__: {
-        invoke(
-          command: string,
-          args: {
-            id?: string;
-            title?: string;
-            content?: string;
-            data?: string;
-            input?: { kind: string; folder?: string; value?: boolean };
-            name?: string;
-            parentId?: string | null;
-            folder?: string | null;
-            format?: string;
-            images?: Record<string, string>;
-          } = {},
-        ) {
-          const { id, title, content, data, input, name, parentId, folder } =
-            args;
-          const document = documents.find((item) => item.id === id);
-          switch (command) {
-            case "list_document_library":
-              return structuredClone({ documents, folders });
-            case "change_document_library":
-              if (!document) throw new Error("Missing document");
-              if (input?.kind === "move")
-                document.folderId = input.folder ?? null;
-              if (input?.kind === "favorite")
-                document.favorite = Boolean(input.value);
-              if (input?.kind === "archive") document.archivedAt = "2026-11-17";
-              if (input?.kind === "restore") document.archivedAt = null;
-              return structuredClone(document);
-            case "create_document_folder": {
-              const item = {
-                id: `folder-${folders.length + 1}`,
-                parentId: parentId ?? null,
-                name: name!,
-              };
-              folders.push(item);
-              return structuredClone(item);
-            }
-            case "create_library_document": {
-              if (args.images) {
-                Reflect.set(window, "importedImages", args.images);
-                image = Object.values(args.images)[0] ?? "";
+async function setup(page: Page, version?: number, graphSize = 0) {
+  await page.addInitScript(
+    ({ schemaVersion, graphSize }) => {
+      const content = JSON.stringify({
+        type: "doc",
+        ...(schemaVersion ? { attrs: { schemaVersion } } : {}),
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "A saved document" }],
+          },
+        ],
+      });
+      const meta = {
+        folderId: null as string | null,
+        favorite: false,
+        archivedAt: null as string | null,
+        openedAt: null as string | null,
+      };
+      const first = {
+        ...meta,
+        id: "one",
+        title: "First draft",
+        content,
+        updatedAt: "",
+        createdAt: "",
+      };
+      const second = {
+        ...meta,
+        id: "two",
+        title: "Second draft",
+        content,
+        updatedAt: "",
+        createdAt: "",
+      };
+      const documents = [first, second];
+      const folders: { id: string; parentId: string | null; name: string }[] =
+        [];
+      let image = "";
+      Object.assign(window, {
+        isTauri: true,
+        __TAURI_INTERNALS__: {
+          invoke(
+            command: string,
+            args: {
+              id?: string;
+              title?: string;
+              content?: string;
+              data?: string;
+              input?: { kind: string; folder?: string; value?: boolean };
+              name?: string;
+              parentId?: string | null;
+              folder?: string | null;
+              format?: string;
+              images?: Record<string, string>;
+            } = {},
+          ) {
+            const { id, title, content, data, input, name, parentId, folder } =
+              args;
+            const document = documents.find((item) => item.id === id);
+            switch (command) {
+              case "list_document_library":
+                return structuredClone({ documents, folders });
+              case "change_document_library":
+                if (!document) throw new Error("Missing document");
+                if (input?.kind === "move")
+                  document.folderId = input.folder ?? null;
+                if (input?.kind === "favorite")
+                  document.favorite = Boolean(input.value);
+                if (input?.kind === "archive")
+                  document.archivedAt = "2026-11-17";
+                if (input?.kind === "restore") document.archivedAt = null;
+                return structuredClone(document);
+              case "create_document_folder": {
+                const item = {
+                  id: `folder-${folders.length + 1}`,
+                  parentId: parentId ?? null,
+                  name: name!,
+                };
+                folders.push(item);
+                return structuredClone(item);
               }
-              const item = {
-                ...first,
-                ...meta,
-                id: `doc-${documents.length + 1}`,
-                title: title!,
-                content: content!,
-                folderId: folder ?? null,
-              };
-              documents.push(item);
-              return structuredClone(item);
+              case "create_library_document": {
+                if (args.images) {
+                  Reflect.set(window, "importedImages", args.images);
+                  image = Object.values(args.images)[0] ?? "";
+                }
+                const item = {
+                  ...first,
+                  ...meta,
+                  id: `doc-${documents.length + 1}`,
+                  title: title!,
+                  content: content!,
+                  folderId: folder ?? null,
+                };
+                documents.push(item);
+                return structuredClone(item);
+              }
+              case "get_document_graph":
+                if (graphSize) {
+                  const extra = Array.from(
+                    { length: graphSize },
+                    (_, index) => ({
+                      id: `node-${index}`,
+                      title: `Graph note ${index}`,
+                      folderId: null,
+                    }),
+                  );
+                  return {
+                    documents: [...documents, ...extra],
+                    links: extra.map((item, index) => ({
+                      source: index ? extra[index - 1].id : "one",
+                      target: item.id,
+                    })),
+                    memberships: [],
+                  };
+                }
+                return { documents, links: [{ source: "one", target: "two" }] };
+              case "list_document_references":
+                return [];
+              case "save_document_file":
+                Reflect.set(window, "savedDocumentFile", args);
+                return "test";
+              case "list_documents":
+                return structuredClone(documents);
+              case "get_document":
+                return structuredClone(document);
+              case "get_document_usage":
+                return { projects: [], issues: [] };
+              case "store_document_image":
+                image = data ?? "";
+                return "image-1";
+              case "get_document_image":
+                return { mime: "image/png", data: image };
+              case "update_document": {
+                Object.assign(document!, { title, content });
+                return structuredClone(document);
+              }
+              default:
+                throw new Error(`Unexpected command: ${command}`);
             }
-            case "get_document_graph":
-              return { documents, links: [{ source: "one", target: "two" }] };
-            case "list_document_references":
-              return [];
-            case "save_document_file":
-              Reflect.set(window, "savedDocumentFile", args);
-              return "test";
-            case "list_documents":
-              return structuredClone(documents);
-            case "get_document":
-              return structuredClone(document);
-            case "get_document_usage":
-              return { projects: [], issues: [] };
-            case "store_document_image":
-              image = data ?? "";
-              return "image-1";
-            case "get_document_image":
-              return { mime: "image/png", data: image };
-            case "update_document": {
-              Object.assign(document!, { title, content });
-              return structuredClone(document);
-            }
-            default:
-              throw new Error(`Unexpected command: ${command}`);
-          }
+          },
         },
-      },
-    });
-  }, version);
+      });
+    },
+    { schemaVersion: version, graphSize },
+  );
   await page.goto("/documents?doc=one");
 }
 
@@ -356,10 +379,13 @@ test("inserts a document reference and follows it in the editor", async ({
   await editor.press("End");
   await editor.press("Enter");
   await page.keyboard.insertText("[[Second");
-  await page
+  const option = page
     .getByRole("group", { name: "Insert document link" })
-    .getByRole("button", { name: "Second draft" })
-    .click();
+    .getByRole("button", { name: "Second draft" });
+  await expect(option).toBeVisible();
+  await editor.press("ArrowDown");
+  await expect(option).toBeFocused();
+  await page.keyboard.press("Enter");
   const link = editor.getByRole("link", { name: "Second draft" });
   await expect(link).toHaveAttribute("href", "/documents?doc=two");
   await link.click();
@@ -531,5 +557,58 @@ test("round-trips a native document with fonts and rejects unknown versions", as
   await expect(page.getByLabel("Document title")).toHaveValue("Native copy");
   await expect(editor.locator(".u2-font-georgia")).toHaveText(
     "A saved document",
+  );
+});
+
+test("finds text by keyboard in a long document while Focus Mode is on", async ({
+  page,
+}) => {
+  await setup(page);
+  const body = Array.from(
+    { length: 250 },
+    (_, i) =>
+      `Sample notes ${i + 1}. The observation stays readable after editing and saving.`,
+  ).join("\n");
+  await page.getByLabel("Import document").setInputFiles({
+    name: "Long draft.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from(body),
+  });
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await expect(editor.locator("p")).toHaveCount(250);
+  await page.getByRole("button", { name: "Focus mode", exact: true }).click();
+  await editor.press("ControlOrMeta+f");
+  const find = page.getByRole("searchbox", { name: "Find", exact: true });
+  await expect(find).toBeFocused();
+  await find.fill("Sample notes 249.");
+  await expect(page.getByRole("button", { name: "Next match" })).toBeEnabled();
+  await find.press("Escape");
+  await expect(find).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Exit focus mode" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Focus mode", exact: true }),
+  ).toBeVisible();
+});
+
+test("renders a global graph with 500 connected notes and filters its navigation by title", async ({
+  page,
+}) => {
+  await setup(page, undefined, 500);
+  await page.getByRole("link", { name: "Graph", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Knowledge graph" }),
+  ).toBeVisible();
+  await expect(page.locator(".graph-canvas canvas").first()).toBeVisible();
+  await page
+    .getByRole("searchbox", { name: "Find a document" })
+    .fill("Graph note 499");
+  await expect(
+    page.getByRole("link", { name: "Graph note 499" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Graph note 498" })).toHaveCount(
+    0,
   );
 });
