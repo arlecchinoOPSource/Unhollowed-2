@@ -36,3 +36,12 @@ the available page. WebP is converted to PNG in the export. The Word
 converter can omit authoring details such as arbitrary Word styles,
 different margins per edge, multiple sections, and review markup. Review
 layout and formatting in Word before sharing the result.
+
+### Native document files
+
+Export an Unhollowed file (.u2doc) to keep the document body, supported
+formatting, layout, and referenced images together. Import creates a
+separate document in the active workspace and assigns its images new
+local IDs. Internal links keep their document IDs and resolve when those
+targets exist in the active workspace. A document file travels independently
+of folder placement, project associations, and version history.

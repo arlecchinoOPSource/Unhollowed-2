@@ -4,14 +4,20 @@ import { documentExtensions, readDocument, safeWebLink } from "./schema";
 import { pageCss, readLayout } from "./pageLayout";
 import wordCss from "./word.css?raw";
 
-export type ExportFormat = "txt" | "md" | "html" | "docx";
+export type ExportFormat = "txt" | "md" | "html" | "docx" | "u2doc";
 const maxImportBytes = 512 * 1024;
 const maxExportSize = 32 * 1024 * 1024;
 
 export async function readWritingFile(file: File) {
+  if (/\.u2doc$/i.test(file.name)) {
+    const { readNativeFile } = await import("./nativeFile");
+    return readNativeFile(file);
+  }
   const extension = /\.(txt|md|markdown|docx)$/i.exec(file.name);
   if (!extension)
-    throw new Error("Choose a Word, Markdown, or plain text file.");
+    throw new Error(
+      "Choose an Unhollowed, Word, Markdown, or plain text file.",
+    );
   const title = Array.from(
     file.name.slice(0, -extension[0].length).trim() || "Untitled",
   )
@@ -164,7 +170,11 @@ export async function saveWritingFile(
       ? editor.getText({ blockSeparator: "\n" })
       : format === "md"
         ? await exportMarkdown(editor)
-        : await exportHtml(editor, id, title);
+        : format === "u2doc"
+          ? await (
+              await import("./nativeFile")
+            ).exportNativeFile(editor.getJSON(), id, title)
+          : await exportHtml(editor, id, title);
   if (new TextEncoder().encode(content).length > maxExportSize)
     throw new Error("This document exceeds the 32 MiB export limit.");
   return invoke<string | null>("save_document_file", {

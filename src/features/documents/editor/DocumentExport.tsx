@@ -47,6 +47,7 @@ export function DocumentExport({
             <option value="md">Markdown</option>
             <option value="html">HTML</option>
             <option value="docx">Word (.docx)</option>
+            <option value="u2doc">Unhollowed (.u2doc)</option>
           </select>
         </label>
         <button type="button" disabled={busy} onClick={() => void save()}>

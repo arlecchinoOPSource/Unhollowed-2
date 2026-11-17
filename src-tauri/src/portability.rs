@@ -993,6 +993,7 @@ pub async fn save_document_file(
         "md" => ("Markdown", "md"),
         "html" => ("HTML", "html"),
         "docx" => ("Word document", "docx"),
+        "u2doc" => ("Unhollowed document", "u2doc"),
         _ => return Err(PortError::WriteFailed),
     };
     if content.len() > 32 * 1024 * 1024 {

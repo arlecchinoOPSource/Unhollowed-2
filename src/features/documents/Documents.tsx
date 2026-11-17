@@ -242,7 +242,7 @@ export function Documents() {
               Import document
               <input
                 type="file"
-                accept=".docx,.md,.markdown,.txt"
+                accept=".u2doc,.docx,.md,.markdown,.txt"
                 disabled={busy}
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0];

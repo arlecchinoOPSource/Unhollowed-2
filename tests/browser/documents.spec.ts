@@ -494,3 +494,42 @@ test("writes a real Word file and imports its formatting, table, and image", asy
   );
   await expect(page.getByRole("img", { name: "word-picture" })).toBeVisible();
 });
+
+test("round-trips a native document with fonts and rejects unknown versions", async ({
+  page,
+}) => {
+  await setup(page);
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await expect(editor).toHaveText("A saved document");
+  await editor.press("ControlOrMeta+a");
+  await page
+    .getByRole("combobox", { name: "Font family" })
+    .selectOption("georgia");
+  await page.getByText("Export document", { exact: true }).click();
+  await page.getByLabel("File format").selectOption("u2doc");
+  await page.getByRole("button", { name: "Save document file" }).click();
+  const result = () =>
+    page.evaluate(() => Reflect.get(window, "savedDocumentFile"));
+  await expect.poll(result).toMatchObject({ format: "u2doc" });
+  const portable = JSON.parse((await result()).content);
+  expect(portable.content.attrs.schemaVersion).toBe(1);
+  const file = page.getByLabel("Import document");
+  await file.setInputFiles({
+    name: "Future.u2doc",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({ ...portable, title: "Future", version: 2 }),
+    ),
+  });
+  await expect(page.getByRole("alert")).toContainText("unsupported format");
+  await expect(page.getByLabel("Document title")).toHaveValue("First draft");
+  await file.setInputFiles({
+    name: "Native.u2doc",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ ...portable, title: "Native copy" })),
+  });
+  await expect(page.getByLabel("Document title")).toHaveValue("Native copy");
+  await expect(editor.locator(".u2-font-georgia")).toHaveText(
+    "A saved document",
+  );
+});
