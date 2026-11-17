@@ -45,6 +45,10 @@ pub enum DocumentError {
     InvalidTitle,
     InvalidContent,
     StorageFailed,
+    /// Paper, orientation, or margins outside what the editor allows.
+    InvalidPrintSettings,
+    /// The native print dialog could not be opened in this window.
+    PrintUnavailable,
 }
 
 impl From<DatabaseError> for DocumentError {

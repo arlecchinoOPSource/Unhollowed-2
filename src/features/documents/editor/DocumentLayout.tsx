@@ -34,6 +34,9 @@ export function DocumentLayout({
   const [printError, setPrintError] = useState("");
   const sheet = pageCss(layout);
   const applied = useRef(false);
+  // Set while a print request is in flight, so a second click cannot open a
+  // second native print operation before the first dialog appears.
+  const printing = useRef(false);
 
   useEffect(() => {
     try {
@@ -53,6 +56,7 @@ export function DocumentLayout({
   }, [sheet]);
 
   async function print() {
+    if (printing.current) return;
     if (!applied.current) {
       setPrintError(
         "This webview could not apply the printable page settings.",
@@ -60,6 +64,7 @@ export function DocumentLayout({
       return;
     }
     setPrintError("");
+    printing.current = true;
     try {
       const native =
         isTauri() &&
@@ -71,8 +76,15 @@ export function DocumentLayout({
           },
         }));
       if (!native) window.print();
-    } catch {
-      setPrintError("Could not open the print dialog. Try again.");
+    } catch (cause) {
+      const code = (cause as { code?: string } | null)?.code;
+      setPrintError(
+        code === "invalid_print_settings"
+          ? "These page settings cannot be printed. Check the margins."
+          : "Could not open the print dialog. Try again.",
+      );
+    } finally {
+      printing.current = false;
     }
   }
 

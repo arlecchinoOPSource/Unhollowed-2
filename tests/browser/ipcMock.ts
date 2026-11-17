@@ -686,13 +686,11 @@ export async function installIpcMock(page: Page) {
                   item.content.toLowerCase().includes(text),
               );
               return structuredClone({
-                documents: documentHits
-                  .slice(0, 8)
-                  .map(({ id, title }) => ({
-                    id,
-                    title,
-                    preview: `${title} body`,
-                  })),
+                documents: documentHits.slice(0, 8).map(({ id, title }) => ({
+                  id,
+                  title,
+                  preview: `${title} body`,
+                })),
                 documentTotal: documentHits.length,
                 projects: found.slice(0, 8).map(({ id, name, status }) => ({
                   id,

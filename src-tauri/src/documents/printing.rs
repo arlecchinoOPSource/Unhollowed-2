@@ -22,8 +22,9 @@ pub async fn print_document(
     webview: WebviewWindow,
     settings: PrintSettings,
 ) -> Result<bool, DocumentError> {
+    // The editor's own range, from `readLayout` in pageLayout.ts.
     if !(10.0..=50.0).contains(&settings.margin) {
-        return Err(DocumentError::InvalidContent);
+        return Err(DocumentError::InvalidPrintSettings);
     }
     #[cfg(target_os = "macos")]
     {
@@ -34,9 +35,9 @@ pub async fn print_document(
             })
             .map_err(|error| {
                 eprintln!("Could not open document print panel: {error}");
-                DocumentError::StorageFailed
+                DocumentError::PrintUnavailable
             })?;
-        rx.recv().await.ok_or(DocumentError::StorageFailed)??;
+        rx.recv().await.ok_or(DocumentError::PrintUnavailable)??;
         Ok(true)
     }
     #[cfg(not(target_os = "macos"))]
@@ -70,15 +71,24 @@ mod macos {
         // while the raw handle is borrowed.
         let view = unsafe { &*webview.inner().cast::<WKWebView>() };
         if !view.respondsToSelector(objc2::sel!(printOperationWithPrintInfo:)) {
-            return Err(DocumentError::StorageFailed);
+            return Err(DocumentError::PrintUnavailable);
         }
-        let window = view.window().ok_or(DocumentError::StorageFailed)?;
+        let window = view.window().ok_or(DocumentError::PrintUnavailable)?;
+        // A print sheet is already open, for example after a repeated request.
+        // Starting another would stack a second operation on the window.
+        if window.attachedSheet().is_some() {
+            return Ok(());
+        }
         // Give each request its own print settings so they cannot leak to later dialogs.
         let info = NSPrintInfo::new();
         info.setPaperSize(NSSize::new(points(width), points(height)));
         if settings.landscape {
             info.setOrientation(NSPaperOrientation::Landscape);
         }
+        // When the page has CSS `@page` margins, as every document does,
+        // WebKit uses them and ignores these. Measured with a WKWebView
+        // print-to-PDF harness: 40 mm CSS with 10 mm here printed at 40 mm,
+        // and the reverse at 10 mm. These only apply if the CSS has none.
         info.setTopMargin(margin);
         info.setBottomMargin(margin);
         info.setLeftMargin(margin);
@@ -86,9 +96,9 @@ mod macos {
 
         // The selector exists, and the operation is presented with its live window
         // on the UI thread. AppKit manages the modal operation until it closes.
+        // It stays on the UI thread: WebKit views expect to be drawn there.
         unsafe {
             let operation = view.printOperationWithPrintInfo(&info);
-            operation.setCanSpawnSeparateThread(true);
             operation.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
                 &window,
                 None,

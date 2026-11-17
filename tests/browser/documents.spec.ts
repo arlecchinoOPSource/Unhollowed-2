@@ -100,9 +100,26 @@ async function setup(page: Page, version?: number, graphSize = 0) {
                 documents.push(item);
                 return structuredClone(item);
               }
-              case "print_document":
+              case "print_document": {
+                // `nativePrintMode` picks the backend's answer: unset is the
+                // WebView fallback, "native" opens the native dialog, "slow"
+                // does so after a delay, and "fail" or "invalid" reject.
                 Reflect.set(window, "nativePrintSettings", args.settings);
-                return false;
+                Reflect.set(
+                  window,
+                  "nativePrintCalls",
+                  (Reflect.get(window, "nativePrintCalls") ?? 0) + 1,
+                );
+                const mode = Reflect.get(window, "nativePrintMode");
+                if (mode === "fail") throw { code: "print_unavailable" };
+                if (mode === "invalid")
+                  throw { code: "invalid_print_settings" };
+                if (mode === "slow")
+                  return new Promise((resolve) =>
+                    setTimeout(() => resolve(true), 300),
+                  );
+                return mode === "native";
+              }
               case "get_document_graph":
                 if (graphSize) {
                   const extra = Array.from(
@@ -316,7 +333,7 @@ test("prints the selected paper geometry and an explicit page break", async ({
     .toBe(true);
   expect(
     await page.evaluate(() => Reflect.get(window, "nativePrintSettings")),
-  ).toMatchObject({ paper: "letter", landscape: true });
+  ).toEqual({ paper: "letter", landscape: true, margin: 25.4 });
   const pdf = await page.pdf({ preferCSSPageSize: true });
   const structure = pdf.toString("latin1");
   expect(structure).toMatch(/\/MediaBox\s*\[0 0 792 612\]/);
@@ -331,6 +348,54 @@ test("prints the selected paper geometry and an explicit page break", async ({
   await expect(page.getByLabel("Page header", { exact: true })).toHaveValue(
     "Research brief",
   );
+});
+
+test("uses the native print dialog once and reports print failures", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByRole("textbox", { name: "Document content" }).waitFor();
+  await page.getByText("Page setup and print", { exact: true }).click();
+  await page.evaluate(() => {
+    window.print = () => {
+      Reflect.set(
+        window,
+        "webviewPrints",
+        (Reflect.get(window, "webviewPrints") ?? 0) + 1,
+      );
+    };
+    Reflect.set(window, "nativePrintMode", "slow");
+  });
+  const button = page.getByRole("button", { name: "Print / Save as PDF" });
+  const count = (name: string) =>
+    page.evaluate((key) => Reflect.get(window, key) ?? 0, name);
+
+  // A double click sends one request, and the native dialog replaces the
+  // WebView's print.
+  await button.dblclick();
+  await expect.poll(() => count("nativePrintCalls")).toBe(1);
+  await page.waitForTimeout(400);
+  expect(await count("nativePrintCalls")).toBe(1);
+  expect(await count("webviewPrints")).toBe(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  // Failures are reported, and the WebView print is not used instead.
+  await page.evaluate(() => Reflect.set(window, "nativePrintMode", "fail"));
+  await button.click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Could not open the print dialog. Try again.",
+  );
+  await page.evaluate(() => Reflect.set(window, "nativePrintMode", "invalid"));
+  await button.click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "These page settings cannot be printed. Check the margins.",
+  );
+  expect(await count("webviewPrints")).toBe(0);
+
+  // A later success clears the message.
+  await page.evaluate(() => Reflect.set(window, "nativePrintMode", "native"));
+  await button.click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test("organizes documents in nested folders, filters favorites, and creates a template", async ({
