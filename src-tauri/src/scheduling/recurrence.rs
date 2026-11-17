@@ -471,12 +471,24 @@ pub(crate) async fn occurrences(
     window: &Window,
     limit: usize,
 ) -> Result<Vec<CalendarItem>, SchedulingError> {
+    occurrences_of(conn, workspace, window, limit, None).await
+}
+
+/// Like `occurrences`, for only the named events when `only` is set. `limit`
+/// applies to each series.
+pub(crate) async fn occurrences_of(
+    conn: &mut SqliteConnection,
+    workspace: &str,
+    window: &Window,
+    limit: usize,
+    only: Option<&HashSet<String>>,
+) -> Result<Vec<CalendarItem>, SchedulingError> {
     let event_fields = EVENT_FIELDS
         .split(", ")
         .map(|field| format!("e.{}", field.trim()))
         .collect::<Vec<_>>()
         .join(", ");
-    let series: Vec<EventRow> = sqlx::query_as(&format!(
+    let mut series: Vec<EventRow> = sqlx::query_as(&format!(
         "SELECT {event_fields}, c.color FROM events AS e
          JOIN calendars AS c ON c.id = e.calendar_id
          WHERE e.workspace_id = ? AND e.repeat_freq IS NOT NULL
@@ -488,6 +500,9 @@ pub(crate) async fn occurrences(
     .bind(window.to.to_string())
     .fetch_all(&mut *conn)
     .await?;
+    if let Some(only) = only {
+        series.retain(|row| only.contains(&row.event.id));
+    }
     if series.is_empty() {
         return Ok(Vec::new());
     }

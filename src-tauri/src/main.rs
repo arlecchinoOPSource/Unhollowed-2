@@ -54,6 +54,7 @@ fn main() {
             scheduling::get_calendar_event,
             scheduling::create_issue_work_block,
             scheduling::delete_issue_work_block,
+            scheduling::search::search_calendar_items,
             scheduling::calendars::create_calendar,
             scheduling::calendars::update_calendar,
             scheduling::calendars::set_calendar_hidden,

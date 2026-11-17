@@ -150,6 +150,28 @@ The editor shows **Apply changes to: This event / This and following events / Al
 
 Errors are typed values, such as `invalid_time_zone`, `invalid_date`, `invalid_time`, `invalid_range`, and `range_too_long`, so the UI can say what to fix. Writes run in one transaction. Archived calendars keep their events but accept no new ones.
 
+## Searching
+
+`search_calendar_items({ text, timeZone, today, kinds, calendarIds, includeCompleted })` finds calendar items without a date window. It reads the same tables as `list_calendar_items`, keeps no index or copy of its own, and is scoped to the active workspace, so it cannot return another workspace's items. A calendar ID from another workspace matches nothing.
+
+- **Matching.** `text` is a literal, Unicode case-insensitive substring of an event's title or description, or of an issue's title or description for deadlines and work blocks. `%` and `_` are ordinary characters. Blank text matches everything, which makes the result the list of upcoming items. Text over 200 characters matches nothing.
+- **Order.** Results run forward from `today` (a date in `timeZone`), soonest first, then continue backward through earlier items, most recent first. `upcoming` counts the leading items that end on or after `today`. Ties break by end, title, and ID, as in views.
+- **Cap.** At most 100 items are returned and `truncated` is set if more matched. Every ordered stream stops after the cap, so the nearest matches are the same however large the history is, and the cost does not grow with it.
+- **Filters** combine with AND, and an empty list means none, never all.
+  - `kinds`: event, deadline, workBlock. Absent means all.
+  - `calendarIds`: limits events to those calendars. Absent means every visible calendar. Deadlines and work blocks belong to issues, so it does not apply to them.
+  - `includeCompleted`: includes deadlines and work blocks of done and canceled issues. It is off unless set.
+- **Visibility.** As in views, events in hidden or archived calendars and items of archived issues are left out.
+- **Recurring events.** A series is never expanded to match. It is one result: its next occurrence within 400 days after `today`, else its latest within 400 days before, else the day the series began. Occurrence changes apply, so a cancelled occurrence is skipped and a moved one is shown where it moved. A series matches on its own title and description, not on text changed for single occurrences. At most 500 matching series are followed.
+- **Project filter.** Events and work blocks have no project, so a project filter waits for the sources in U2-P3-11 and U2-P3-13.
+
+The calendar page (`src/features/calendar/CalendarSearch.tsx`) puts **Search calendar** above every view.
+
+- The query and filters live above the views, so changing view or date keeps them. **Clear** resets all of them, and Escape clears the text, then closes the panel.
+- Each change cancels the pending search and ignores any reply that arrives after a newer one. Typing waits 200 ms.
+- The text field is a combobox. Arrow keys, Home, and End move through results, and Enter opens the chosen one.
+- An event opens in the shared event editor over its date. A deadline or work block opens its issue, whose back link returns to the date found.
+
 ## Views
 
 `/calendar` opens on **Week** for a fresh profile. **Day**, **Workweek**, and **Month** are one click away, and the view and date are kept in the URL (`?view=day&date=2026-11-18`, or `?view=month&month=2026-11`).

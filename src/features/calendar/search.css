@@ -1,0 +1,142 @@
+.calendar-search-bar {
+  margin: 8px 0;
+}
+
+.calendar-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.calendar-search-badge {
+  padding: 1px 8px;
+  font-size: 0.8em;
+  background: var(--selection);
+  border-radius: 999px;
+}
+
+.calendar-search {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.calendar-search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-search-field input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.calendar-search-field button,
+.calendar-search-close {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.calendar-search-field button:disabled {
+  opacity: 0.55;
+}
+
+.calendar-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+}
+
+.calendar-search-filters fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.calendar-search-filters legend {
+  float: left;
+  margin-right: 12px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.calendar-search-filters .calendar-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-search-status {
+  margin: 0;
+  color: var(--muted);
+}
+
+.calendar-search-results {
+  display: grid;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.calendar-search-results li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 0 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.calendar-search-results li[data-boundary="earlier"] {
+  border-top: 2px solid var(--line);
+}
+
+.calendar-search-results li.is-active {
+  background: var(--selection);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.calendar-search-title {
+  grid-column: 2;
+  font-weight: 600;
+}
+
+.calendar-search-meta {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.calendar-search-results .label-dot {
+  grid-column: 1;
+  grid-row: 1;
+}
