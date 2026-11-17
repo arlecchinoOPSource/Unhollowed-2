@@ -268,6 +268,7 @@ Habits and their daily completions follow the [habit contract](HABITS.md), which
 - Past days can be edited at any time. A day after today cannot be saved, and dates before 1900 are refused.
 - A record's day, ID, and workspace cannot change. Another workspace's record is neither visible nor changeable. `list_checkins` returns at most about ten years, oldest first, with absent days absent.
 - Commands: `get_checkin`, `list_checkins`, `save_checkin`, `delete_checkin`.
+- **Screen.** `/mood` has a date picker with previous, next, and Today (never past today), three radio groups where **Not set** is a visible, default choice, an optional note, and the last 60 days of check-ins. Choosing another day with unsaved changes is refused until they are saved or discarded. A failed save keeps the draft and shows the error. Saving with nothing chosen says that nothing was saved, or that the day's check-in was removed. The history list shows ratings only: a note's text appears only for the selected day.
 
 ## Migrations
 

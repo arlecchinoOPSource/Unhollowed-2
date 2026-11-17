@@ -6,6 +6,7 @@ import { Documents } from "../features/documents/Documents";
 import { Calendars } from "../features/calendar/Calendars";
 import { CalendarPage } from "../features/calendar/CalendarPage";
 import { Habits } from "../features/habits/Habits";
+import { Mood } from "../features/mood/Mood";
 import { Home } from "../features/home/Home";
 import { TodayPage, UpcomingPage } from "../features/today/TaskViews";
 import { IssueDetail } from "../features/issues/IssueDetail";
@@ -42,6 +43,7 @@ export function App() {
           }
         />
         <Route path="/habits" element={<Habits />} />
+        <Route path="/mood" element={<Mood />} />
         <Route path="/documents" element={<Documents />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
@@ -64,6 +66,7 @@ export function App() {
                 "/calendar",
                 "/graph",
                 "/habits",
+                "/mood",
               ].includes(path),
           )
           .map(({ path, title, description }) => (

@@ -1,0 +1,89 @@
+.mood-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.mood-date label {
+  display: grid;
+  gap: 4px;
+}
+
+.mood-date input,
+.mood-note textarea {
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.mood-date input {
+  height: 34px;
+  padding: 0 8px;
+}
+
+.mood-form fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.mood-form legend small {
+  color: var(--muted);
+}
+
+.mood-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+}
+
+.mood-note {
+  display: grid;
+  gap: 4px;
+  max-width: 560px;
+}
+
+.mood-note textarea {
+  padding: 8px;
+  resize: vertical;
+}
+
+.mood-hint {
+  color: var(--muted);
+}
+
+.mood-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mood-recent {
+  display: grid;
+  gap: 6px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.mood-recent button {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.mood-recent button[aria-current="date"] {
+  font-weight: 700;
+}
