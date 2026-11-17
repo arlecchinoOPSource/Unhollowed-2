@@ -682,6 +682,83 @@ pub(crate) fn event_item(event: Event, color: String, window: &Window) -> Calend
     }
 }
 
+/// The bundled IANA time-zone database release, such as `2025b`.
+pub(crate) fn tzdb_version() -> &'static str {
+    jiff_tzdb::VERSION.unwrap_or("unknown")
+}
+
+/// Re-resolves stored UTC instants from their wall-clock intent when the
+/// workspace last resolved them with a different time-zone database. The
+/// intent is the source of truth, so a rules update moves the instant, not
+/// the time the user chose. Unknown zones and ranges that a rule change
+/// would invert are left as stored. Returns how many rows changed.
+pub(crate) async fn refresh_instants(
+    pool: &SqlitePool,
+    workspace: &str,
+    version: &str,
+) -> Result<usize, SchedulingError> {
+    let checked: Option<String> =
+        sqlx::query_scalar("SELECT tzdb_version FROM scheduling_state WHERE workspace_id = ?")
+            .bind(workspace)
+            .fetch_optional(pool)
+            .await?;
+    if checked.as_deref() == Some(version) {
+        return Ok(0);
+    }
+    let mut tx = pool.begin().await?;
+    let mut changed = 0;
+    for table in ["events", "work_blocks"] {
+        let timed = if table == "events" {
+            "AND all_day = 0"
+        } else {
+            ""
+        };
+        let rows: Vec<(String, String, String, String, String, String)> = sqlx::query_as(&format!(
+            "SELECT id, time_zone, start_local, end_local, start_at, end_at FROM {table}
+             WHERE workspace_id = ? {timed}"
+        ))
+        .bind(workspace)
+        .fetch_all(&mut *tx)
+        .await?;
+        for (id, zone, start_local, end_local, start_at, end_at) in rows {
+            let Some(zone) = time::zone(&zone) else {
+                continue;
+            };
+            let resolve = |local: &str| {
+                time::wall_clock(local)
+                    .and_then(|local| time::resolve(local, &zone))
+                    .map(time::instant)
+            };
+            let (Some(start), Some(end)) = (resolve(&start_local), resolve(&end_local)) else {
+                continue;
+            };
+            if end <= start || (start == start_at && end == end_at) {
+                continue;
+            }
+            // Not a user edit, so `updated_at` stays.
+            sqlx::query(&format!(
+                "UPDATE {table} SET start_at = ?, end_at = ? WHERE id = ?"
+            ))
+            .bind(&start)
+            .bind(&end)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
+            changed += 1;
+        }
+    }
+    sqlx::query(
+        "INSERT INTO scheduling_state (workspace_id, tzdb_version) VALUES (?, ?)
+         ON CONFLICT (workspace_id) DO UPDATE SET tzdb_version = excluded.tzdb_version",
+    )
+    .bind(workspace)
+    .bind(version)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(changed)
+}
+
 /// Events, issue deadlines, and work blocks that overlap the window.
 /// Events in hidden or archived calendars and archived issues are left out.
 pub async fn list_items(
@@ -690,6 +767,7 @@ pub async fn list_items(
     range: ItemRange,
 ) -> Result<CalendarItems, SchedulingError> {
     let window = window(&range)?;
+    refresh_instants(pool, workspace, tzdb_version()).await?;
     let (from, to) = (window.from.to_string(), window.to.to_string());
     let limit = MAX_ITEMS as i64 + 1;
     let mut conn = pool.acquire().await?;

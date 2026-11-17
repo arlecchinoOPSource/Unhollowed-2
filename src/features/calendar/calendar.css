@@ -336,3 +336,10 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+.calendar-event-zone {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}

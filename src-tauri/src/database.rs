@@ -129,6 +129,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0020_scheduling.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 21,
+            description: "Track the time-zone rules calendar instants use",
+            sql: include_str!("../migrations/0021_time_zone_rules.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

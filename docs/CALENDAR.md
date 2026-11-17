@@ -12,7 +12,7 @@ There are three kinds of calendar item. Each has its own storage, so none is a c
 | **Issue deadline** | None. It is projected from `issues.due_date` when read | Date only        |
 | **Work block**     | A row in `work_blocks`, tied to one issue              | Timed            |
 
-- **Deadlines** stay where they are. Rescheduling a deadline changes `issues.due_date` through the existing issue commands, and reading the calendar never writes. Archived issues are left out. Closed issues are included with `closed: true`, so views can choose whether to show them.
+- **Deadlines** stay where they are. Rescheduling a deadline changes `issues.due_date` through the existing issue commands, and reading the calendar never creates or changes calendar items. Archived issues are left out. Closed issues are included with `closed: true`, so views can choose whether to show them.
 - **Work blocks** schedule time to work on an issue without copying it. Deleting the issue deletes its blocks. Their editing UI arrives with U2-P3-12.
 - **Calendars** group events. Each workspace has exactly one default calendar, enforced by a partial unique index. Rust creates it, named Personal, the first time anything needs it. Events in hidden or archived calendars are stored but left out of calendar reads.
 
@@ -45,6 +45,27 @@ Rules:
 - **Day boundaries.** A day in a zone runs from its first instant to the next day's first instant, so it can last 23 or 25 hours. Where midnight does not exist, the day starts at the first time that does.
 - **Time zone database.** The IANA database is bundled with the app (`jiff`), so results are the same on every platform and work offline, whatever zone files the device has.
 - **Limits.** One event or work block lasts at most 366 days.
+
+### The viewer's zone
+
+Views show timed items in the device's current zone, which they re-read when the window regains focus or becomes visible. So after travel or a settings change, timed items move to the new local times, while all-day events and deadlines keep their dates.
+
+- When an item's own zone differs from the viewer's, the day list shows its time there too, for example "09:00 Asia/Tokyo".
+- In the same case, the editor says which zone its times are in.
+- New events use the device's zone.
+
+### Time zone rule updates
+
+Governments change daylight-saving rules, and each app release bundles the current IANA database. The wall-clock intent is the source of truth, and the UTC instants are a cache of it:
+
+- `scheduling_state` (migration 21) records, per workspace, the database release the stored instants were resolved with.
+- The first calendar read after an update to a different release re-resolves every timed event and work block from its intent in one transaction, then records the release. Reads under the same release skip this, at the cost of one primary-key lookup.
+- A changed instant does not touch `updated_at`, because the user did not edit it.
+- Unknown zones, and ranges a rule change would invert, are left as stored.
+
+### Recurring times
+
+Recurring timed events (U2-P3-04) repeat their wall-clock time in their own zone. A weekly 09:00 meeting in New York stays at 09:00 New York time across daylight saving, so its UTC instant shifts by an hour. Each occurrence resolves gaps and folds with the same compatible rule. All-day occurrences are dates and never pass through a zone.
 
 ## Reading
 
