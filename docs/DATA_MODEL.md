@@ -254,6 +254,10 @@ Not included in version 1: documents and document links, saved views, repeat ser
 
 **CSV export.** `export_issues_csv` writes the list's current filters and sort (with every page) as CSV to a user-chosen location. Columns: Key, Title, Status, Priority, Project, Milestone, Labels, Start date, Due date, Completed at, Created at, Updated at, Archived. Fields are quoted per RFC 4180 (commas, quotes, and line breaks). Fields that a spreadsheet could run as a formula (starting with `=`, `+`, `-`, `@`, a tab, or a carriage return) are prefixed with `'`.
 
+## Habits
+
+Habits and their daily completions follow the [habit contract](HABITS.md), which also records how Ember data maps into a workspace and where Unhollowed differs from Ember.
+
 ## Migrations
 
 - Files are `src-tauri/migrations/NNNN_description.sql`, numbered in order and registered in `migrations()`. A test fails if a file and the registered list disagree.
