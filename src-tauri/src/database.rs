@@ -135,6 +135,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0021_time_zone_rules.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 22,
+            description: "Add recurring events and occurrence exceptions",
+            sql: include_str!("../migrations/0022_event_recurrence.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

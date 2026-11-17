@@ -104,6 +104,10 @@ export async function installIpcMock(page: Page) {
             endLocal: null,
             startAt: null,
             endAt: null,
+            repeatFreq: null,
+            repeatInterval: null,
+            repeatCount: null,
+            repeatUntil: null,
             createdAt: "2026-11-16T00:00:00Z",
             updatedAt: "2026-11-16T00:00:00Z",
             ...seed,
@@ -114,6 +118,75 @@ export async function installIpcMock(page: Page) {
       const found = events.find((item) => item.id === id);
       if (!found) throw { code: "not_found" };
       return found;
+    };
+    // Occurrence changes, keyed `${eventId}|${occurrence}`.
+    const changes = new Map<
+      string,
+      { canceled: boolean; title?: string; start?: string; end?: string }
+    >();
+    const shiftDays = (date: string, days: number) => {
+      const day = new Date(`${date}T00:00:00Z`);
+      day.setUTCDate(day.getUTCDate() + days);
+      return day.toISOString().slice(0, 10);
+    };
+    const shiftMinutes = (local: string, minutes: number) =>
+      new Date(Date.parse(`${local}:00Z`) + minutes * 60_000)
+        .toISOString()
+        .slice(0, 16);
+    /** A small version of the backend's expansion for daily, weekly, and
+     * monthly rules, with count and until limits. */
+    const occurrencesOf = (event: CalendarEvent, from: string, to: string) => {
+      const first = event.allDay ? event.startDate! : event.startLocal!;
+      const time = event.allDay ? "" : first.slice(10);
+      const length = event.allDay
+        ? (Date.parse(event.endDate!) - Date.parse(event.startDate!)) / 60_000
+        : (Date.parse(`${event.endLocal}:00Z`) -
+            Date.parse(`${event.startLocal}:00Z`)) /
+          60_000;
+      const found: {
+        key: string;
+        start: string;
+        end: string;
+        title: string;
+      }[] = [];
+      let ordinal = 0;
+      for (let n = 0; n < 1000; n += 1) {
+        const step = n * (event.repeatInterval ?? 1);
+        let day = first.slice(0, 10);
+        if (event.repeatFreq === "daily") day = shiftDays(day, step);
+        else if (event.repeatFreq === "weekly") day = shiftDays(day, step * 7);
+        else {
+          const date = new Date(`${day}T00:00:00Z`);
+          const months = event.repeatFreq === "yearly" ? step * 12 : step;
+          const target = new Date(
+            Date.UTC(
+              date.getUTCFullYear(),
+              date.getUTCMonth() + months,
+              date.getUTCDate(),
+            ),
+          );
+          if (target.getUTCDate() !== date.getUTCDate()) continue;
+          day = target.toISOString().slice(0, 10);
+        }
+        if (event.repeatCount !== null && ordinal >= event.repeatCount) break;
+        if (event.repeatUntil && day > event.repeatUntil) break;
+        ordinal += 1;
+        if (day >= to) break;
+        const key = event.allDay ? day : `${day}${time}`;
+        const change = changes.get(`${event.id}|${key}`);
+        if (change?.canceled) continue;
+        found.push({
+          key,
+          start: change?.start ?? key,
+          end:
+            change?.end ??
+            (event.allDay
+              ? shiftDays(day, length / 1440)
+              : shiftMinutes(key, length)),
+          title: change?.title ?? event.title,
+        });
+      }
+      return found.filter(({ start, end }) => start < to && end > from);
     };
     const eventFields = (input: EventInput) => {
       if (!input.title.trim()) throw { code: "invalid_title" };
@@ -141,6 +214,10 @@ export async function installIpcMock(page: Page) {
         endLocal: input.allDay ? null : input.end!,
         startAt: null,
         endAt: null,
+        repeatFreq: input.repeat?.freq ?? null,
+        repeatInterval: input.repeat?.interval ?? null,
+        repeatCount: input.repeat?.count ?? null,
+        repeatUntil: input.repeat?.until ?? null,
       };
     };
     const findCalendar = (id?: string) => {
@@ -1018,35 +1095,77 @@ export async function installIpcMock(page: Page) {
               );
               calendarDefault();
               const items: CalendarItem[] = [];
+              const base = (
+                kind: CalendarItem["kind"],
+                id: string,
+                title: string,
+              ): CalendarItem => ({
+                kind,
+                id,
+                eventId: null,
+                occurrence: null,
+                recurring: false,
+                title,
+                calendarId: null,
+                color: null,
+                issueId: null,
+                issueNumber: null,
+                closed: false,
+                allDay: true,
+                startDate: null,
+                endDate: null,
+                start: null,
+                end: null,
+                startAt: null,
+                endAt: null,
+                timeZone: null,
+                localStart: null,
+                localEnd: null,
+              });
               for (const event of events) {
                 if (!shown.has(event.calendarId)) continue;
-                const start = event.allDay
-                  ? event.startDate!
-                  : viewerLocal(event.startAt, event.startLocal)!;
-                const end = event.allDay
-                  ? event.endDate!
-                  : viewerLocal(event.endAt, event.endLocal)!;
-                if (!(start < `${to}` && end > `${from}`)) continue;
-                items.push({
-                  kind: "event",
-                  id: event.id,
-                  title: event.title,
-                  calendarId: event.calendarId,
-                  color:
-                    calendars.find(({ id }) => id === event.calendarId)
-                      ?.color ?? "blue",
-                  issueId: null,
-                  issueNumber: null,
-                  closed: false,
-                  allDay: event.allDay,
-                  startDate: event.startDate,
-                  endDate: event.endDate,
-                  start: event.allDay ? null : start,
-                  end: event.allDay ? null : end,
-                  startAt: event.startAt,
-                  endAt: event.endAt,
-                  timeZone: event.timeZone,
-                });
+                const color =
+                  calendars.find(({ id }) => id === event.calendarId)?.color ??
+                  "blue";
+                const spans = event.repeatFreq
+                  ? occurrencesOf(event, from, to)
+                  : [
+                      {
+                        key: null,
+                        start: event.allDay
+                          ? event.startDate!
+                          : viewerLocal(event.startAt, event.startLocal)!,
+                        end: event.allDay
+                          ? event.endDate!
+                          : viewerLocal(event.endAt, event.endLocal)!,
+                        title: event.title,
+                      },
+                    ];
+                for (const span of spans) {
+                  if (!(span.start < to && span.end > from)) continue;
+                  items.push({
+                    ...base(
+                      "event",
+                      span.key ? `${event.id}:${span.key}` : event.id,
+                      span.title,
+                    ),
+                    eventId: event.id,
+                    occurrence: span.key,
+                    recurring: Boolean(event.repeatFreq),
+                    calendarId: event.calendarId,
+                    color,
+                    allDay: event.allDay,
+                    startDate: event.allDay ? span.start : null,
+                    endDate: event.allDay ? span.end : null,
+                    start: event.allDay ? null : span.start,
+                    end: event.allDay ? null : span.end,
+                    startAt: event.repeatFreq ? null : event.startAt,
+                    endAt: event.repeatFreq ? null : event.endAt,
+                    timeZone: event.timeZone,
+                    localStart: event.allDay ? null : span.start,
+                    localEnd: event.allDay ? null : span.end,
+                  });
+                }
               }
               for (const issue of issues)
                 if (
@@ -1056,22 +1175,11 @@ export async function installIpcMock(page: Page) {
                   issue.dueDate < to
                 )
                   items.push({
-                    kind: "deadline",
-                    id: issue.id,
-                    title: issue.title,
-                    calendarId: null,
-                    color: null,
+                    ...base("deadline", issue.id, issue.title),
                     issueId: issue.id,
                     issueNumber: issue.number,
                     closed: issue.closed,
-                    allDay: true,
                     startDate: issue.dueDate,
-                    endDate: null,
-                    start: null,
-                    end: null,
-                    startAt: null,
-                    endAt: null,
-                    timeZone: null,
                   });
               items.sort((a, b) =>
                 (a.startDate ?? a.start!).localeCompare(
@@ -1124,6 +1232,52 @@ export async function installIpcMock(page: Page) {
               const event = findEvent(args.id);
               events.splice(events.indexOf(event), 1);
               return null;
+            }
+            case "update_event_occurrence":
+            case "cancel_event_occurrence": {
+              const event = findEvent(args.id);
+              const key = (args as unknown as { occurrence: string })
+                .occurrence;
+              if (command === "cancel_event_occurrence")
+                changes.set(`${event.id}|${key}`, { canceled: true });
+              else {
+                const input = (args as unknown as { input: EventInput }).input;
+                changes.set(`${event.id}|${key}`, {
+                  canceled: false,
+                  title: input.title,
+                  start: input.allDay ? input.startDate! : input.start!,
+                  end: input.allDay ? input.endDate! : input.end!,
+                });
+              }
+              return null;
+            }
+            case "split_event_series": {
+              const event = findEvent(args.id);
+              const key = (args as unknown as { occurrence: string })
+                .occurrence;
+              const input = (args as unknown as { input: EventInput }).input;
+              event.repeatCount = null;
+              event.repeatUntil = shiftDays(key.slice(0, 10), -1);
+              const created: CalendarEvent = {
+                ...structuredClone(event),
+                id: `event-${events.length + 1}`,
+                ...eventFields(input),
+              };
+              events.push(created);
+              return {
+                series: structuredClone(event),
+                created: structuredClone(created),
+                keptChanges: 0,
+                droppedChanges: 0,
+              };
+            }
+            case "end_event_series": {
+              const event = findEvent(args.id);
+              const key = (args as unknown as { occurrence: string })
+                .occurrence;
+              event.repeatCount = null;
+              event.repeatUntil = shiftDays(key.slice(0, 10), -1);
+              return structuredClone(event);
             }
             case "list_labels":
               return structuredClone(

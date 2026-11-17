@@ -96,6 +96,12 @@ export function schedulingError(cause: unknown): string {
       return "Enter valid times.";
     case "invalid_range":
       return "Make the end later than the start, and keep it under a year.";
+    case "invalid_repeat":
+      return "Check the repeat: every 1 to 99, up to 999 times, ending on or after the start.";
+    case "occurrence_not_found":
+      return "That occurrence is no longer part of its series.";
+    case "occurrence_kind":
+      return "A single occurrence cannot switch between all-day and timed.";
     case "database_unavailable":
     case "workspace_read_failed":
       return "Could not open the workspace database.";

@@ -120,6 +120,32 @@ Recurring timed events (U2-P3-04) repeat their wall-clock time in their own zone
   - Escape or Cancel closes without saving.
 - The calendar's day panel lists the selected day's events and has **New event**. The timeline views (U2-P3-06) reuse the same editor.
 
-Errors are typed values, such as `invalid_time_zone`, `invalid_date`, `invalid_time`, `invalid_range`, and `range_too_long`, so the UI can say what to fix. Writes run in one transaction. Archived calendars keep their events but accept no new ones.
+### Recurring events
 
-Recurrence (U2-P3-04) extends these commands.
+A recurring event is one `events` row with a repeat rule (migration 22). Occurrences are computed when a window is read, never stored, so an open-ended series costs nothing until it is shown.
+
+- **Rules** follow iCalendar (RFC 5545) `FREQ`, `INTERVAL`, `COUNT`, and `UNTIL`:
+  - daily, weekly, monthly, or yearly, every 1–99 units
+  - ending never, after 1–999 occurrences, or on a last date (inclusive)
+  - weekly repeats the start's weekday
+- **Missing days are skipped, not clamped.** Monthly and yearly rules repeat the start's day of the month: a monthly event on the 31st happens only in months with a 31st, and a yearly one on 29 February only in leap years. `COUNT` counts real occurrences.
+- **Timed series** repeat their wall-clock start and length in their own zone (see [Recurring times](#recurring-times)). If a daylight-saving gap pushes an occurrence's start past its end, it keeps its scheduled length in elapsed time.
+- **Bounded expansion.** Daily and weekly series jump straight to the requested window. Monthly and yearly series step from their start, which is at most twelve steps a year. A safety bound stops any expansion.
+- **Occurrence identity.** An occurrence is identified by its original start, `YYYY-MM-DD` or the wall-clock `YYYY-MM-DDTHH:MM` in the event's zone. Items carry it as `occurrence`, with `id` = `{eventId}:{occurrence}`.
+
+Changes to single occurrences are rows in `event_exceptions`, keyed by that original start, so a moved occurrence keeps its identity:
+
+| Command                                                | Effect                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_event_occurrence`                              | Changes one occurrence's title, text, or time. It stays all-day or timed like its series, in the series' zone and calendar. Only values that differ from the series are stored, so later series edits still reach unchanged fields                                                                                                                                                                                         |
+| `cancel_event_occurrence` / `restore_event_occurrence` | Removes one occurrence, or undoes any change to it                                                                                                                                                                                                                                                                                                                                                                         |
+| `update_calendar_event`                                | Edits the whole series. Changes to occurrences the edited series no longer has are removed in the same transaction. The editor moves the series' first occurrence by the same amount as the occurrence being edited                                                                                                                                                                                                        |
+| `split_event_series`                                   | **This and following.** Ends the series before the occurrence, by its count or with a last date the day before, and starts a new series there with the new values. Later occurrences' changes move to the new series, shifted by the same amount, when it repeats with the same frequency and interval. Otherwise they cannot be matched: they are removed, and `droppedChanges` reports how many so the editor can say so |
+| `end_event_series`                                     | **Delete this and following.** From the first occurrence, it deletes the event                                                                                                                                                                                                                                                                                                                                             |
+
+- Duplicating a series copies its rule and its occurrence changes.
+- Moved occurrences are re-resolved with everything else when the time-zone rules change.
+
+The editor shows **Apply changes to: This event / This and following events / All events** for occurrences, and the same three choices when deleting. A single occurrence cannot change the repeat, zone, or calendar, so those controls are hidden while **This event** is chosen.
+
+Errors are typed values, such as `invalid_time_zone`, `invalid_date`, `invalid_time`, `invalid_range`, and `range_too_long`, so the UI can say what to fix. Writes run in one transaction. Archived calendars keep their events but accept no new ones.

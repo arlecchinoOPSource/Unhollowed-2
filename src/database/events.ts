@@ -19,8 +19,24 @@ export interface CalendarEvent {
   /** Timed events: the same moments in UTC. */
   startAt: string | null;
   endAt: string | null;
+  /** Set for recurring events. */
+  repeatFreq: RepeatFreq | null;
+  repeatInterval: number | null;
+  repeatCount: number | null;
+  /** The last date an occurrence may start on, inclusive. */
+  repeatUntil: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type RepeatFreq = "daily" | "weekly" | "monthly" | "yearly";
+
+/** A repeat rule: every `interval` units, ending after `count` or on `until`. */
+export interface RepeatRule {
+  freq: RepeatFreq;
+  interval: number;
+  count: number | null;
+  until: string | null;
 }
 
 export interface EventInput {
@@ -36,6 +52,8 @@ export interface EventInput {
   timeZone?: string | null;
   start?: string | null;
   end?: string | null;
+  /** Makes the event recurring; absent or `null` for a single event. */
+  repeat?: RepeatRule | null;
 }
 
 export type ItemKind = "event" | "deadline" | "workBlock";
@@ -43,7 +61,13 @@ export type ItemKind = "event" | "deadline" | "workBlock";
 /** One entry for a calendar view, from `list_calendar_items`. */
 export interface CalendarItem {
   kind: ItemKind;
+  /** Unique per item. An occurrence's is `{eventId}:{occurrence}`. */
   id: string;
+  /** The stored event an event item comes from. */
+  eventId: string | null;
+  /** A recurring occurrence's original start, which identifies it. */
+  occurrence: string | null;
+  recurring: boolean;
   title: string;
   calendarId: string | null;
   color: string | null;
@@ -60,6 +84,9 @@ export interface CalendarItem {
   endAt: string | null;
   /** Timed items: the zone the item was scheduled in. */
   timeZone: string | null;
+  /** Timed items: wall-clock times in their own zone. */
+  localStart: string | null;
+  localEnd: string | null;
 }
 
 export interface CalendarItems {
@@ -97,6 +124,53 @@ export function duplicateEvent(id: string): Promise<CalendarEvent> {
 
 export function deleteEvent(id: string): Promise<void> {
   return invoke("delete_calendar_event", { id });
+}
+
+/** Changes one occurrence of a recurring event; it keeps its identity. */
+export function updateOccurrence(
+  id: string,
+  occurrence: string,
+  input: EventInput,
+): Promise<void> {
+  return invoke("update_event_occurrence", { id, occurrence, input });
+}
+
+export function cancelOccurrence(
+  id: string,
+  occurrence: string,
+): Promise<void> {
+  return invoke("cancel_event_occurrence", { id, occurrence });
+}
+
+export function restoreOccurrence(
+  id: string,
+  occurrence: string,
+): Promise<void> {
+  return invoke("restore_event_occurrence", { id, occurrence });
+}
+
+export interface SplitResult {
+  series: CalendarEvent;
+  created: CalendarEvent | null;
+  keptChanges: number;
+  droppedChanges: number;
+}
+
+/** Applies `input` to an occurrence and every later one. */
+export function splitSeries(
+  id: string,
+  occurrence: string,
+  input: EventInput,
+): Promise<SplitResult> {
+  return invoke("split_event_series", { id, occurrence, input });
+}
+
+/** Deletes an occurrence and every later one. */
+export function endSeries(
+  id: string,
+  occurrence: string,
+): Promise<CalendarEvent | null> {
+  return invoke("end_event_series", { id, occurrence });
 }
 
 /** The device's IANA time zone, used to show and enter times. */

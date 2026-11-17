@@ -215,6 +215,8 @@ for (const scheme of ["light", "dark"] as const) {
     const editor = page.getByRole("dialog", { name: "New event" });
     await editor.getByText("More details").click();
     await expect(editor.getByLabel("Time zone")).toBeVisible();
+    await editor.getByLabel("Repeats").selectOption("monthly");
+    await editor.getByLabel("Ends").selectOption("until");
     await scan(page, "event editor", found);
     await page.keyboard.press("Escape");
 

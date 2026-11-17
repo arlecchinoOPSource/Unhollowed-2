@@ -7,6 +7,7 @@
 
 pub(crate) mod calendars;
 pub(crate) mod events;
+pub(crate) mod recurrence;
 pub(crate) mod time;
 
 use crate::database::{active_workspace, pool, DatabaseError};
@@ -49,6 +50,14 @@ pub enum SchedulingError {
     CalendarArchived,
     /// Archiving the default needs an active replacement default.
     ReplacementRequired,
+    /// The repeat rule is incomplete or out of range.
+    InvalidRepeat,
+    /// The event does not repeat.
+    NotRecurring,
+    /// The series has no occurrence with that original start.
+    OccurrenceNotFound,
+    /// A single occurrence cannot switch between all-day and timed.
+    OccurrenceKind,
     InvalidTimeZone,
     InvalidDate,
     InvalidTime,
@@ -109,12 +118,20 @@ pub struct Event {
     pub end_local: Option<String>,
     pub start_at: Option<String>,
     pub end_at: Option<String>,
+    /// `daily`, `weekly`, `monthly`, or `yearly` for a recurring event.
+    pub repeat_freq: Option<String>,
+    pub repeat_interval: Option<i64>,
+    pub repeat_count: Option<i64>,
+    /// The last date an occurrence may start on, inclusive.
+    pub repeat_until: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
 
-pub(crate) const EVENT_FIELDS: &str = "id, calendar_id, title, description, location, url, all_day, \
-     start_date, end_date, time_zone, start_local, end_local, start_at, end_at, created_at, updated_at";
+pub(crate) const EVENT_FIELDS: &str =
+    "id, calendar_id, title, description, location, url, all_day, \
+     start_date, end_date, time_zone, start_local, end_local, start_at, end_at, \
+     repeat_freq, repeat_interval, repeat_count, repeat_until, created_at, updated_at";
 
 /// The fields of a new or edited event. All-day events use `startDate` and
 /// an exclusive `endDate`. Timed events use `timeZone`, `start`, and an
@@ -135,6 +152,9 @@ pub struct EventInput {
     pub time_zone: Option<String>,
     pub start: Option<String>,
     pub end: Option<String>,
+    /// Makes the event recurring. `None` makes it a single event.
+    #[serde(default)]
+    pub repeat: Option<recurrence::RepeatRule>,
 }
 
 #[derive(Clone, Debug, FromRow, PartialEq, Serialize)]
@@ -407,6 +427,7 @@ pub async fn create_event(
 ) -> Result<Event, SchedulingError> {
     clean_text(&mut input)?;
     let timing = event_timing(&input)?;
+    let rule = recurrence::validate(&input.repeat, &timing)?;
     let mut tx = pool.begin().await?;
     let calendar = match input.calendar_id.clone() {
         Some(id) => {
@@ -417,8 +438,9 @@ pub async fn create_event(
     };
     let query = sqlx::query(
         "INSERT INTO events (id, workspace_id, calendar_id, title, description, location, url,
-             all_day, start_date, end_date, time_zone, start_local, end_local, start_at, end_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             all_day, start_date, end_date, time_zone, start_local, end_local, start_at, end_at,
+             repeat_freq, repeat_interval, repeat_count, repeat_until)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     );
     let id = Uuid::new_v4().to_string();
     let query = query
@@ -429,7 +451,14 @@ pub async fn create_event(
         .bind(&input.description)
         .bind(&input.location)
         .bind(&input.url);
-    bind_timing(query, &timing).execute(&mut *tx).await?;
+    let (freq, interval, count, until) = recurrence::rule_columns(&rule);
+    bind_timing(query, &timing)
+        .bind(freq)
+        .bind(interval)
+        .bind(count)
+        .bind(until)
+        .execute(&mut *tx)
+        .await?;
     let event = get_event_on(&mut tx, workspace, &id).await?;
     tx.commit().await?;
     Ok(event)
@@ -544,7 +573,14 @@ pub enum ItemKind {
 #[serde(rename_all = "camelCase")]
 pub struct CalendarItem {
     pub kind: ItemKind,
+    /// Unique per item. An occurrence's is `{eventId}:{occurrence}`.
     pub id: String,
+    /// The stored event an event item comes from.
+    pub event_id: Option<String>,
+    /// For occurrences of a recurring event, the original start that
+    /// identifies the occurrence. It does not change when it is moved.
+    pub occurrence: Option<String>,
+    pub recurring: bool,
     pub title: String,
     pub calendar_id: Option<String>,
     pub color: Option<String>,
@@ -559,6 +595,9 @@ pub struct CalendarItem {
     pub start_at: Option<String>,
     pub end_at: Option<String>,
     pub time_zone: Option<String>,
+    /// Timed items: wall-clock times in their own `time_zone`.
+    pub local_start: Option<String>,
+    pub local_end: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -576,6 +615,8 @@ pub(crate) struct Window {
     pub zone: TimeZone,
     pub start_at: String,
     pub end_at: String,
+    pub start: Timestamp,
+    pub end: Timestamp,
 }
 
 pub(crate) fn window(range: &ItemRange) -> Result<Window, SchedulingError> {
@@ -594,14 +635,16 @@ pub(crate) fn window(range: &ItemRange) -> Result<Window, SchedulingError> {
         zone,
         start_at: time::instant(start_at),
         end_at: time::instant(end_at),
+        start: start_at,
+        end: end_at,
     })
 }
 
 #[derive(FromRow)]
-struct EventRow {
+pub(crate) struct EventRow {
     #[sqlx(flatten)]
-    event: Event,
-    color: String,
+    pub event: Event,
+    pub color: String,
 }
 
 #[derive(FromRow)]
@@ -613,20 +656,14 @@ struct BlockRow {
     closed: bool,
 }
 
-pub(crate) fn timed_item(
-    kind: ItemKind,
-    id: String,
-    title: String,
-    zone_name: String,
-    start_at: &str,
-    end_at: &str,
-    window: &Window,
-) -> CalendarItem {
-    let local =
-        |value: &str| time::parse_instant(value).map(|instant| time::local(instant, &window.zone));
+/// An item with only its identity set.
+pub(crate) fn blank(kind: ItemKind, id: String, title: String) -> CalendarItem {
     CalendarItem {
         kind,
         id,
+        event_id: None,
+        occurrence: None,
+        recurring: false,
         title,
         calendar_id: None,
         color: None,
@@ -636,50 +673,70 @@ pub(crate) fn timed_item(
         all_day: false,
         start_date: None,
         end_date: None,
-        start: local(start_at),
-        end: local(end_at),
-        start_at: Some(start_at.to_owned()),
-        end_at: Some(end_at.to_owned()),
-        time_zone: Some(zone_name),
+        start: None,
+        end: None,
+        start_at: None,
+        end_at: None,
+        time_zone: None,
+        local_start: None,
+        local_end: None,
     }
 }
 
+/// Sets a timed span: the viewer's wall-clock times, the instants, and the
+/// item's own zone and wall-clock times.
+pub(crate) fn set_times(
+    item: &mut CalendarItem,
+    zone_name: &str,
+    local: (&str, &str),
+    instants: (&str, &str),
+    window: &Window,
+) {
+    let viewer =
+        |value: &str| time::parse_instant(value).map(|instant| time::local(instant, &window.zone));
+    item.all_day = false;
+    item.start = viewer(instants.0);
+    item.end = viewer(instants.1);
+    item.start_at = Some(instants.0.to_owned());
+    item.end_at = Some(instants.1.to_owned());
+    item.time_zone = Some(zone_name.to_owned());
+    item.local_start = Some(local.0.to_owned());
+    item.local_end = Some(local.1.to_owned());
+}
+
+pub(crate) fn set_dates(item: &mut CalendarItem, start: &str, end: &str) {
+    item.all_day = true;
+    item.start_date = Some(start.to_owned());
+    item.end_date = Some(end.to_owned());
+}
+
 pub(crate) fn event_item(event: Event, color: String, window: &Window) -> CalendarItem {
-    let base = if event.all_day {
-        CalendarItem {
-            kind: ItemKind::Event,
-            id: event.id.clone(),
-            title: event.title.clone(),
-            calendar_id: None,
-            color: None,
-            issue_id: None,
-            issue_number: None,
-            closed: false,
-            all_day: true,
-            start_date: event.start_date.clone(),
-            end_date: event.end_date.clone(),
-            start: None,
-            end: None,
-            start_at: None,
-            end_at: None,
-            time_zone: None,
-        }
+    let mut item = blank(ItemKind::Event, event.id.clone(), event.title.clone());
+    if event.all_day {
+        set_dates(
+            &mut item,
+            event.start_date.as_deref().unwrap_or_default(),
+            event.end_date.as_deref().unwrap_or_default(),
+        );
     } else {
-        timed_item(
-            ItemKind::Event,
-            event.id.clone(),
-            event.title.clone(),
-            event.time_zone.clone().unwrap_or_default(),
-            event.start_at.as_deref().unwrap_or_default(),
-            event.end_at.as_deref().unwrap_or_default(),
+        set_times(
+            &mut item,
+            event.time_zone.as_deref().unwrap_or_default(),
+            (
+                event.start_local.as_deref().unwrap_or_default(),
+                event.end_local.as_deref().unwrap_or_default(),
+            ),
+            (
+                event.start_at.as_deref().unwrap_or_default(),
+                event.end_at.as_deref().unwrap_or_default(),
+            ),
             window,
-        )
-    };
-    CalendarItem {
-        calendar_id: Some(event.calendar_id),
-        color: Some(color),
-        ..base
+        );
     }
+    item.event_id = Some(event.id);
+    item.calendar_id = Some(event.calendar_id);
+    item.color = Some(color);
+    item
 }
 
 /// The bundled IANA time-zone database release, such as `2025b`.
@@ -747,6 +804,41 @@ pub(crate) async fn refresh_instants(
             changed += 1;
         }
     }
+    // Moved occurrences of recurring events use their event's zone.
+    let moved: Vec<(String, String, String, String, String, String, String)> = sqlx::query_as(
+        "SELECT x.event_id, x.occurrence, e.time_zone, x.start_local, x.end_local, x.start_at, x.end_at
+         FROM event_exceptions AS x JOIN events AS e ON e.id = x.event_id
+         WHERE e.workspace_id = ? AND x.start_local IS NOT NULL AND e.time_zone IS NOT NULL",
+    )
+    .bind(workspace)
+    .fetch_all(&mut *tx)
+    .await?;
+    for (event, occurrence, zone, start_local, end_local, start_at, end_at) in moved {
+        let Some(zone) = time::zone(&zone) else {
+            continue;
+        };
+        let resolve = |local: &str| {
+            time::wall_clock(local)
+                .and_then(|local| time::resolve(local, &zone))
+                .map(time::instant)
+        };
+        let (Some(start), Some(end)) = (resolve(&start_local), resolve(&end_local)) else {
+            continue;
+        };
+        if end <= start || (start == start_at && end == end_at) {
+            continue;
+        }
+        sqlx::query(
+            "UPDATE event_exceptions SET start_at = ?, end_at = ? WHERE event_id = ? AND occurrence = ?",
+        )
+        .bind(&start)
+        .bind(&end)
+        .bind(&event)
+        .bind(&occurrence)
+        .execute(&mut *tx)
+        .await?;
+        changed += 1;
+    }
     sqlx::query(
         "INSERT INTO scheduling_state (workspace_id, tzdb_version) VALUES (?, ?)
          ON CONFLICT (workspace_id) DO UPDATE SET tzdb_version = excluded.tzdb_version",
@@ -780,7 +872,7 @@ pub async fn list_items(
          WHERE e.workspace_id = ?1 AND c.archived_at IS NULL AND c.hidden = 0";
     let timed: Vec<EventRow> = sqlx::query_as(&format!(
         "SELECT {event_fields}, c.color FROM events AS e {visible}
-           AND e.all_day = 0 AND e.start_at < ?3 AND e.end_at > ?2
+           AND e.repeat_freq IS NULL AND e.all_day = 0 AND e.start_at < ?3 AND e.end_at > ?2
          ORDER BY e.start_at, e.id LIMIT ?4"
     ))
     .bind(workspace)
@@ -791,7 +883,7 @@ pub async fn list_items(
     .await?;
     let dated: Vec<EventRow> = sqlx::query_as(&format!(
         "SELECT {event_fields}, c.color FROM events AS e {visible}
-           AND e.all_day = 1 AND e.start_date < ?3 AND e.end_date > ?2
+           AND e.repeat_freq IS NULL AND e.all_day = 1 AND e.start_date < ?3 AND e.end_date > ?2
          ORDER BY e.start_date, e.id LIMIT ?4"
     ))
     .bind(workspace)
@@ -839,34 +931,21 @@ pub async fn list_items(
         let next = time::date(&due)
             .and_then(|day| time::add_days(day, 1))
             .map(|day| day.to_string());
-        items.push(CalendarItem {
-            kind: ItemKind::Deadline,
-            id: id.clone(),
-            title,
-            calendar_id: None,
-            color: None,
-            issue_id: Some(id),
-            issue_number: Some(number),
-            closed,
-            all_day: true,
-            start_date: Some(due),
-            end_date: next,
-            start: None,
-            end: None,
-            start_at: None,
-            end_at: None,
-            time_zone: None,
-        });
+        let mut item = blank(ItemKind::Deadline, id.clone(), title);
+        set_dates(&mut item, &due, next.as_deref().unwrap_or_default());
+        item.issue_id = Some(id);
+        item.issue_number = Some(number);
+        item.closed = closed;
+        items.push(item);
     }
     for row in blocks {
         let block = row.block;
-        let mut item = timed_item(
-            ItemKind::WorkBlock,
-            block.id,
-            row.title,
-            block.time_zone,
-            &block.start_at,
-            &block.end_at,
+        let mut item = blank(ItemKind::WorkBlock, block.id, row.title);
+        set_times(
+            &mut item,
+            &block.time_zone,
+            (&block.start_local, &block.end_local),
+            (&block.start_at, &block.end_at),
             &window,
         );
         item.issue_id = Some(block.issue_id);
@@ -874,6 +953,8 @@ pub async fn list_items(
         item.closed = row.closed;
         items.push(item);
     }
+    // Recurring events are expanded for this window only.
+    items.extend(recurrence::occurrences(&mut conn, workspace, &window, MAX_ITEMS + 1).await?);
     sort_items(&mut items);
     let truncated = items.len() > MAX_ITEMS;
     items.truncate(MAX_ITEMS);

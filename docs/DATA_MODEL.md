@@ -283,3 +283,4 @@ Not included in version 1: documents and document links, saved views, repeat ser
 | 0019      | Workspace document text index for local search                                                            |
 | 0020      | `calendars`, `events`, and `work_blocks`, with same-workspace triggers ([calendar contract](CALENDAR.md)) |
 | 0021      | `scheduling_state`, the time-zone database release calendar instants were resolved with                   |
+| 0022      | Event repeat rules and `event_exceptions` for changed or canceled occurrences                             |
