@@ -1887,6 +1887,7 @@ test("opens a document from a workspace content search", async ({ page }) => {
     Reflect.set(window, "__seedDocuments", ["Field notes"]),
   );
   await page.goto("/issues");
+  await expect(page.getByRole("link", { name: "Exercise" })).toBeVisible();
   await page.keyboard.press("ControlOrMeta+K");
   const dialog = page.getByRole("dialog", { name: "Search the workspace" });
   await dialog.getByRole("combobox").fill("body");
