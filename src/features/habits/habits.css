@@ -384,3 +384,98 @@
 .habit-legend {
   color: var(--muted);
 }
+
+.habit-history h3 {
+  margin: 0;
+  min-width: 9em;
+  text-align: center;
+}
+
+.habit-days {
+  display: grid;
+  gap: 3px;
+  margin: 8px 0;
+}
+
+.habit-days-month {
+  grid-template-columns: repeat(7, minmax(36px, 52px));
+}
+
+.habit-days-year {
+  grid-template-rows: repeat(7, 14px);
+  grid-auto-flow: column;
+  grid-auto-columns: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.habit-days button {
+  display: grid;
+  place-items: center;
+  min-height: 14px;
+  padding: 0;
+  border: 1px solid var(--control-line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.habit-days-month button {
+  min-height: 44px;
+  align-content: center;
+}
+
+.habit-days-year button span {
+  font-size: 10px;
+}
+
+.habit-days button[data-state="completed"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--background);
+}
+
+.habit-days button[data-state="missed"] {
+  background: var(--surface);
+}
+
+.habit-days button[data-state="before"],
+.habit-days button[data-state="after"] {
+  border-style: dotted;
+  color: var(--muted);
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    var(--line) 3px 4px
+  );
+}
+
+.habit-days button[data-state="future"] {
+  border-style: dashed;
+  background: transparent;
+}
+
+.habit-days button[aria-current="date"] {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.habit-days button[data-selected] {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.habit-days button:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 2px;
+}
+
+.habit-day-number {
+  font-size: 11px;
+}
+
+.habit-day-detail {
+  min-height: 2.5em;
+}

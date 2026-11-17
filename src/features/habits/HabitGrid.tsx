@@ -29,6 +29,8 @@ interface Props {
   isDone: (key: string) => boolean;
   isSaving: (key: string) => boolean;
   failedKey: string | null;
+  /** A cell to land on, from a history link. Ignored if it is not in view. */
+  target?: { habitId: string; date: string } | null;
   onToggle: (habit: Habit, date: string) => void;
 }
 
@@ -47,27 +49,38 @@ export function HabitGrid({
   isDone,
   isSaving,
   failedKey,
+  target,
   onToggle,
 }: Props) {
   const tableRef = useRef<HTMLTableElement>(null);
   // The parent keys the grid by month, so each month starts at today's row
   // when it is in view, otherwise day 1.
   const todayRow = dates.indexOf(today);
-  const [focus, setFocus] = useState<[number, number]>([
-    Math.max(0, todayRow),
-    0,
-  ]);
+  const targetRow = target ? dates.indexOf(target.date) : -1;
+  const targetCol = target
+    ? habits.findIndex((habit) => habit.id === target.habitId)
+    : -1;
+  const landing = targetRow >= 0 && targetCol >= 0;
+  const [focus, setFocus] = useState<[number, number]>(
+    landing ? [targetRow, targetCol] : [Math.max(0, todayRow), 0],
+  );
   const row = Math.min(focus[0], dates.length - 1);
   const col = Math.min(focus[1], Math.max(0, habits.length - 1));
-  const moved = useRef(false);
+  const moved = useRef(landing);
 
   // Bring today's row into view inside the grid, without scrolling the page.
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const region = scrollRef.current;
-    const current = region?.querySelector<HTMLElement>("[aria-current='date']");
+    const current = region?.querySelector<HTMLElement>(
+      landing
+        ? `[data-cell="${targetRow}:${targetCol}"]`
+        : "[aria-current='date']",
+    );
     if (region && current)
       region.scrollTop = current.offsetTop - region.clientHeight / 2;
+    // Runs once per mount; the parent remounts the grid for each month.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
