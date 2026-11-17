@@ -10,6 +10,11 @@ import type { ProjectGoals } from "../../src/database/goals";
 import type { RelationKind } from "../../src/database/relationships";
 import type { Label, LabelInput } from "../../src/database/labels";
 import type { Calendar, CalendarInput } from "../../src/database/calendars";
+import type {
+  CalendarEvent,
+  CalendarItem,
+  EventInput,
+} from "../../src/database/events";
 import type { SavedView, ViewConfig } from "../../src/database/savedViews";
 import type { Milestone, MilestoneInput } from "../../src/database/milestones";
 import type { Project } from "../../src/database/projects";
@@ -73,6 +78,70 @@ export async function installIpcMock(page: Page) {
         calendars.push(found);
       }
       return found;
+    };
+    // Events, stored like the backend: all-day with an exclusive end date,
+    // timed with wall-clock times. The browser tests use one zone, so a
+    // viewer sees timed events at the times they were entered.
+    const events: CalendarEvent[] = [];
+    const seededEvents = () => {
+      const seeds = (
+        window as unknown as { __seedEvents?: Partial<CalendarEvent>[] }
+      ).__seedEvents;
+      if (seeds && !events.length)
+        for (const [index, seed] of seeds.entries())
+          events.push({
+            id: `event-${index + 1}`,
+            calendarId: calendarDefault().id,
+            title: `Event ${index + 1}`,
+            description: "",
+            location: null,
+            url: null,
+            allDay: false,
+            startDate: null,
+            endDate: null,
+            timeZone: "Europe/Paris",
+            startLocal: null,
+            endLocal: null,
+            startAt: null,
+            endAt: null,
+            createdAt: "2026-11-16T00:00:00Z",
+            updatedAt: "2026-11-16T00:00:00Z",
+            ...seed,
+          });
+    };
+    const findEvent = (id?: string) => {
+      seededEvents();
+      const found = events.find((item) => item.id === id);
+      if (!found) throw { code: "not_found" };
+      return found;
+    };
+    const eventFields = (input: EventInput) => {
+      if (!input.title.trim()) throw { code: "invalid_title" };
+      if (input.url && !/^https?:\/\/[a-z0-9.[\]:-]+/i.test(input.url))
+        throw { code: "invalid_url" };
+      if (input.allDay) {
+        if (
+          !input.startDate ||
+          !input.endDate ||
+          input.endDate <= input.startDate
+        )
+          throw { code: "invalid_range" };
+      } else if (!input.start || !input.end || input.end <= input.start)
+        throw { code: "invalid_range" };
+      return {
+        title: input.title.trim(),
+        description: input.description,
+        location: input.location?.trim() || null,
+        url: input.url?.trim() || null,
+        allDay: input.allDay,
+        startDate: input.allDay ? input.startDate! : null,
+        endDate: input.allDay ? input.endDate! : null,
+        timeZone: input.allDay ? null : input.timeZone!,
+        startLocal: input.allDay ? null : input.start!,
+        endLocal: input.allDay ? null : input.end!,
+        startAt: null,
+        endAt: null,
+      };
     };
     const findCalendar = (id?: string) => {
       const found = calendars.find((item) => item.id === id);
@@ -915,6 +984,123 @@ export async function installIpcMock(page: Page) {
               calendar.archivedAt = null;
               return structuredClone(calendar);
             }
+            case "list_calendar_items": {
+              seededEvents();
+              const { from, to } = (
+                args as unknown as { range: { from: string; to: string } }
+              ).range;
+              const shown = new Set(
+                calendars
+                  .filter(({ hidden, archivedAt }) => !hidden && !archivedAt)
+                  .map(({ id }) => id),
+              );
+              calendarDefault();
+              const items: CalendarItem[] = [];
+              for (const event of events) {
+                if (!shown.has(event.calendarId)) continue;
+                const start = event.allDay
+                  ? event.startDate!
+                  : event.startLocal!;
+                const end = event.allDay ? event.endDate! : event.endLocal!;
+                if (!(start < `${to}` && end > `${from}`)) continue;
+                items.push({
+                  kind: "event",
+                  id: event.id,
+                  title: event.title,
+                  calendarId: event.calendarId,
+                  color:
+                    calendars.find(({ id }) => id === event.calendarId)
+                      ?.color ?? "blue",
+                  issueId: null,
+                  issueNumber: null,
+                  closed: false,
+                  allDay: event.allDay,
+                  startDate: event.startDate,
+                  endDate: event.endDate,
+                  start: event.startLocal,
+                  end: event.endLocal,
+                  startAt: null,
+                  endAt: null,
+                  timeZone: event.timeZone,
+                });
+              }
+              for (const issue of issues)
+                if (
+                  issue.dueDate &&
+                  !issue.archivedAt &&
+                  issue.dueDate >= from &&
+                  issue.dueDate < to
+                )
+                  items.push({
+                    kind: "deadline",
+                    id: issue.id,
+                    title: issue.title,
+                    calendarId: null,
+                    color: null,
+                    issueId: issue.id,
+                    issueNumber: issue.number,
+                    closed: issue.closed,
+                    allDay: true,
+                    startDate: issue.dueDate,
+                    endDate: null,
+                    start: null,
+                    end: null,
+                    startAt: null,
+                    endAt: null,
+                    timeZone: null,
+                  });
+              items.sort((a, b) =>
+                (a.startDate ?? a.start!).localeCompare(
+                  b.startDate ?? b.start!,
+                ),
+              );
+              return { items: structuredClone(items), truncated: false };
+            }
+            case "get_calendar_event":
+              return structuredClone(findEvent(args.id));
+            case "create_calendar_event": {
+              seededEvents();
+              const input = (args as unknown as { input: EventInput }).input;
+              const calendar = input.calendarId
+                ? findCalendar(input.calendarId)
+                : calendarDefault();
+              if (calendar.archivedAt) throw { code: "calendar_not_found" };
+              const event: CalendarEvent = {
+                id: `event-${events.length + 1}`,
+                calendarId: calendar.id,
+                ...eventFields(input),
+                createdAt: now(),
+                updatedAt: now(),
+              };
+              events.push(event);
+              return structuredClone(event);
+            }
+            case "update_calendar_event": {
+              const event = findEvent(args.id);
+              const input = (args as unknown as { input: EventInput }).input;
+              const fields = eventFields(input);
+              if (input.calendarId && input.calendarId !== event.calendarId) {
+                const calendar = findCalendar(input.calendarId);
+                if (calendar.archivedAt) throw { code: "calendar_not_found" };
+                event.calendarId = calendar.id;
+              }
+              Object.assign(event, fields, { updatedAt: now() });
+              return structuredClone(event);
+            }
+            case "duplicate_calendar_event": {
+              const event = findEvent(args.id);
+              const copy = {
+                ...structuredClone(event),
+                id: `event-${events.length + 1}`,
+              };
+              events.push(copy);
+              return structuredClone(copy);
+            }
+            case "delete_calendar_event": {
+              const event = findEvent(args.id);
+              events.splice(events.indexOf(event), 1);
+              return null;
+            }
             case "list_labels":
               return structuredClone(
                 labels
@@ -1206,4 +1392,17 @@ export async function installIpcMock(page: Page) {
       isTauri: true,
     });
   });
+}
+
+/** Sends a test control event to the mock, such as `fail-command`. */
+export function dispatch(page: Page, type: string, detail?: string) {
+  return page.evaluate(
+    ([name, value]) =>
+      window.dispatchEvent(
+        value === undefined
+          ? new Event(name)
+          : new CustomEvent(name, { detail: value }),
+      ),
+    [type, detail] as const,
+  );
 }

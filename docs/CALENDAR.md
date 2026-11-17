@@ -80,6 +80,25 @@ Rules:
 - Colors are the label palette. Each color is named in the UI, so color is never the only cue.
 - **Calendars** (`/calendar/calendars`, linked from the calendar) manages all of this.
 
+### Editing events
+
+| Command                    | Effect                                                                                                                                                |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_calendar_event`    | Replaces an event's fields in one transaction. Without `calendarId` it stays in its calendar. A new calendar must be active and in the same workspace |
+| `duplicate_calendar_event` | Copies an event, with a new ID, into the same active calendar at the same time                                                                        |
+| `delete_calendar_event`    | Permanently deletes an event. The editor asks for confirmation first                                                                                  |
+
+- **Text.** Titles are 1–200 characters, descriptions up to 10,000, and locations up to 200. Blank optional fields are stored as absent.
+- **Links.** Only `http` and `https` addresses with a host are accepted, because the app may open them. `javascript:`, `file:`, and other schemes are refused with `invalid_url`.
+- **The editor** (`src/features/calendar/EventEditor.tsx`) is shared by every calendar view.
+  - Quick fields come first: title, all day, start, and end. Calendar, time zone, location, link, and description are under **More details**.
+  - All-day events show an inclusive last day, and the API stores an exclusive end. `eventDraft.ts` converts between the two.
+  - A failed save keeps every entered value, and Rust's transaction leaves the saved event unchanged.
+  - **Duplicate** opens the copy for editing.
+  - **Delete…** asks for confirmation, with focus on the confirming button.
+  - Escape or Cancel closes without saving.
+- The calendar's day panel lists the selected day's events and has **New event**. The timeline views (U2-P3-06) reuse the same editor.
+
 Errors are typed values, such as `invalid_time_zone`, `invalid_date`, `invalid_time`, `invalid_range`, and `range_too_long`, so the UI can say what to fix. Writes run in one transaction. Archived calendars keep their events but accept no new ones.
 
-Later Phase 3 issues extend these commands: event editing (U2-P3-03) and recurrence (U2-P3-04).
+Recurrence (U2-P3-04) extends these commands.

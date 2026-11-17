@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added event editing: a shared editor with quick fields and details for creating, editing, duplicating, moving between calendars, and deleting timed, all-day, and multi-day events, with location, validated web links, and description. Failed saves keep what was entered, and the calendar day panel lists the day's events.
 - Added calendar management: create, rename, recolor, and describe calendars, show or hide them, choose the default, and archive or restore them while keeping their events. Archiving the default asks for a replacement, and events can move between calendars without changing identity.
 - Added the scheduling data model: calendars with one default per workspace, timed and all-day events, issue work blocks, and issue deadlines projected without copies. Timed items keep their IANA zone and wall-clock intent alongside UTC instants, with documented half-open ranges and daylight-saving rules, and range reads use indexes. Adds migration 20.
 - Improved accessibility and polish from a measured audit: light-mode accent text now meets 4.5:1 contrast, form fields have 3:1 borders in both themes, the description editor, date fields, and search field show focus, the board no longer widens the page, workspace search reaches "See all" with the arrow keys, and library animations honor reduced motion. Added automated WCAG checks for every page and open panel in light and dark mode, and repeatable backend and rendering timings recorded in `docs/PERFORMANCE.md`.

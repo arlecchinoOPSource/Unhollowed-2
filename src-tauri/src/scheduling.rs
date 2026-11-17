@@ -6,6 +6,7 @@
 //! Every read and write is scoped to the active workspace.
 
 pub(crate) mod calendars;
+pub(crate) mod events;
 pub(crate) mod time;
 
 use crate::database::{active_workspace, pool, DatabaseError};
@@ -36,6 +37,9 @@ pub enum SchedulingError {
     /// The issue does not exist in the active workspace.
     IssueNotFound,
     InvalidTitle,
+    InvalidLocation,
+    /// Only http and https addresses with a host are accepted.
+    InvalidUrl,
     InvalidName,
     InvalidDescription,
     InvalidColor,
@@ -239,8 +243,7 @@ pub(crate) fn event_timing(input: &EventInput) -> Result<Timing, SchedulingError
     }
 }
 
-/// Trims and checks the text fields. Location and URL rules arrive with
-/// event editing.
+/// Trims and checks the text fields. Empty location and URL become `None`.
 pub(crate) fn clean_text(input: &mut EventInput) -> Result<(), SchedulingError> {
     input.title = input.title.trim().to_owned();
     if input.title.is_empty() || input.title.chars().count() > 200 || input.title.contains('\0') {
@@ -249,7 +252,55 @@ pub(crate) fn clean_text(input: &mut EventInput) -> Result<(), SchedulingError> 
     if input.description.chars().count() > 10_000 || input.description.contains('\0') {
         return Err(SchedulingError::InvalidDescription);
     }
+    input.location = input
+        .location
+        .take()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    if input
+        .location
+        .as_ref()
+        .is_some_and(|value| value.chars().count() > 200 || value.chars().any(char::is_control))
+    {
+        return Err(SchedulingError::InvalidLocation);
+    }
+    input.url = input
+        .url
+        .take()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    if input.url.as_deref().is_some_and(|value| !valid_url(value)) {
+        return Err(SchedulingError::InvalidUrl);
+    }
     Ok(())
+}
+
+/// Accepts an `http` or `https` address with a host and no spaces or
+/// control characters. Other schemes, such as `javascript:` or `file:`,
+/// are refused, because the editor opens links.
+pub(crate) fn valid_url(value: &str) -> bool {
+    if value.len() > 2000 || value.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return false;
+    }
+    let lower = value.to_ascii_lowercase();
+    let Some(rest) = lower
+        .strip_prefix("https://")
+        .or_else(|| lower.strip_prefix("http://"))
+    else {
+        return false;
+    };
+    let host = rest
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .rsplit('@')
+        .next()
+        .unwrap_or_default();
+    let host = host.split(':').next().unwrap_or_default();
+    !host.is_empty()
+        && host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '[' | ']'))
 }
 
 /// The workspace's default calendar, created on first use. A partial unique
@@ -376,20 +427,8 @@ pub async fn create_event(
         .bind(&calendar)
         .bind(&input.title)
         .bind(&input.description)
-        .bind(
-            input
-                .location
-                .as_deref()
-                .map(str::trim)
-                .filter(|v| !v.is_empty()),
-        )
-        .bind(
-            input
-                .url
-                .as_deref()
-                .map(str::trim)
-                .filter(|v| !v.is_empty()),
-        );
+        .bind(&input.location)
+        .bind(&input.url);
     bind_timing(query, &timing).execute(&mut *tx).await?;
     let event = get_event_on(&mut tx, workspace, &id).await?;
     tx.commit().await?;

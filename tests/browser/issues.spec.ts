@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { Issue } from "../../src/database/issues";
-import { installIpcMock } from "./ipcMock";
+import { dispatch, installIpcMock } from "./ipcMock";
 
 test.beforeEach(({ page }) => installIpcMock(page));
 
@@ -762,18 +762,6 @@ test("leaves modal keyboard handling and focus restoration to the dialog", async
   await expect(modal).toBeHidden();
   await expect(create).toBeFocused();
 });
-
-function dispatch(page: Page, type: string, detail?: string) {
-  return page.evaluate(
-    ([name, value]) =>
-      window.dispatchEvent(
-        value === undefined
-          ? new Event(name)
-          : new CustomEvent(name, { detail: value }),
-      ),
-    [type, detail] as const,
-  );
-}
 
 test("moves issues on the board by keyboard and by dragging", async ({
   page,

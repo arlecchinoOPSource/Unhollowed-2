@@ -22,6 +22,7 @@ import { StatusBadge } from "../issues/IssueBadges";
 import { useIssueReferences } from "../issues/useIssueReferences";
 import { addDays } from "../today/dates";
 import { useLocalToday } from "../today/useLocalToday";
+import { DayEvents } from "./DayEvents";
 import {
   fullDate,
   gridDays,
@@ -456,6 +457,8 @@ export function IssueCalendar() {
 
         <section className="calendar-day-panel" aria-labelledby="calendar-day">
           <h2 id="calendar-day">{fullDate(day)}</h2>
+          <DayEvents day={day} onMessage={setMessage} />
+          <h3>Issues due</h3>
           {loaded === null && !loadError && <p>Loading issues…</p>}
           {loaded && selectedIssues.length === 0 && (
             <p>No issues due this day.</p>
