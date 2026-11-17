@@ -621,6 +621,12 @@ test("drags out a range, resizes, and confirms a moved appointment", async ({
   const tuesday = page.getByRole("group", { name: "Tuesday, November 17" });
   const event = monday.getByRole("button", { name: /Schedule review/ });
   await expect(event).toBeVisible();
+  // The grid scrolls to the working day after it renders. Measure after that,
+  // or a slow run measures the columns in the wrong place.
+  await page.waitForFunction(
+    () => (document.querySelector(".timeline-scroll")?.scrollTop ?? 0) > 0,
+  );
+  await page.waitForTimeout(300);
   const second = (await tuesday.boundingBox())!;
   const hour = second.height / 24;
   async function drag(x: number, y: number, endX: number, endY: number) {
@@ -639,6 +645,7 @@ test("drags out a range, resizes, and confirms a moved appointment", async ({
   await expect(editor.getByLabel("Start time")).toHaveValue("09:00");
   await expect(editor.getByLabel("End time")).toHaveValue("10:30");
   await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
 
   const edit = page.getByRole("dialog", { name: "Edit event" });
   const first = (await monday.boundingBox())!;
@@ -646,6 +653,7 @@ test("drags out a range, resizes, and confirms a moved appointment", async ({
   await drag(handle.x + 12, handle.y + 2, first.x + 25, first.y + hour * 11.1);
   await expect(edit.getByLabel("End time")).toHaveValue("11:00");
   await page.keyboard.press("Escape");
+  await expect(edit).toBeHidden();
   await expect(event).toContainText("09:00–10:30");
 
   const box = (await event.boundingBox())!;

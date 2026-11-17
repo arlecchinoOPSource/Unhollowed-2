@@ -82,6 +82,53 @@ The existing browser tests cover the main workflows by keyboard: capture with N,
 
 Reduced motion: the app's own CSS has no animations or transitions. A global `prefers-reduced-motion` rule now also stops library animations, such as the calendar's drag revert.
 
+## Calendar
+
+U2-P3-19 recorded this baseline for the calendar. No optimization was made, so these numbers are a starting point, not an improvement.
+
+### Backend
+
+`perf_tests::measure_calendar_sizes` builds disposable file databases of 500 and 5,000 events. Each has one repeating series per ten events (daily, weekly, and monthly, with cancelled occurrences), all-day and timed events in four time zones, a reminder on one in four, links on one in five, and half as many issues, each with a deadline and a work block. Queries are the mean of 20 runs after a warm-up. The ICS rows run once.
+
+```sh
+cargo test --release --manifest-path src-tauri/Cargo.toml measure_calendar_sizes -- --ignored --nocapture
+```
+
+Release build, Apple M5, macOS 26.5.1:
+
+| Operation                     | 500 events | 5,000 events |
+| ----------------------------- | ---------: | -----------: |
+| Day view                      |    0.48 ms |      5.12 ms |
+| Week view                     |    0.58 ms |      6.76 ms |
+| Month view (six weeks)        |    1.86 ms |     20.31 ms |
+| Search: text                  |    4.46 ms |     51.38 ms |
+| Search: blank (upcoming)      |    7.40 ms |     31.25 ms |
+| Reminders: check for due ones |    0.97 ms |     10.40 ms |
+| Event links                   |    0.08 ms |      0.14 ms |
+| ICS export (all events)       |    5.04 ms |     54.90 ms |
+| ICS import (all events)       |   33.26 ms |  1,112.90 ms |
+
+At 500 events every page query is inside one frame (16 ms). At 5,000 events the Month view (20 ms) and both searches (31 and 51 ms) are over it. They stay well under a perceptible delay, and search is typed, not scrolled, so no index or query was changed. If a larger schedule matters, the first candidates are an index on event titles for search and narrowing the Month read to the visible range.
+
+### Rendering
+
+`tests/browser/performance.spec.ts` seeds timed events across November 2026 and times a navigation until the first event is in the page, the median of three runs, with the in-memory IPC mock (so UI cost only). The events are dense: 500 is about 18 a day, and 2,000 about 70 a day.
+
+```sh
+PERF=1 npx playwright test performance -g "calendar views" --reporter=line
+```
+
+Chromium (Playwright), Apple M5:
+
+| View   | 500 events | Long tasks | 2,000 events | Long tasks |
+| ------ | ---------: | ---------: | -----------: | ---------: |
+| Day    |      69 ms |       none |        83 ms |       none |
+| Week   |      91 ms |       none |       173 ms |      69 ms |
+| Month  |     136 ms |       none |       298 ms |     223 ms |
+| Agenda |     183 ms |      74 ms |       431 ms |     340 ms |
+
+At 500 events every view meets the 200 ms target, though Agenda has one 74 ms task. At 2,000 events Month and Agenda miss both the time target and the 50 ms task limit. That is a month holding about 70 events a day, far denser than personal use, and a day view of that many events draws columns too narrow to read. The calendar loads at most 2,000 items per window and says so when it truncates. Rendering only the visible days of Month and Agenda is the likely fix if it is needed.
+
 ## Gaps
 
 - **Relationship picker at large sizes.** Adding a relationship loads every issue and renders one `<select>` option per issue: 42 ms backend and 80 ms rendering at 2,000 to 5,000 issues, and slow to scan by keyboard. It meets the target at the representative size. A searchable picker backed by `query_issues` would remove the full load. This is tracked in #52 rather than built speculatively here.

@@ -309,3 +309,207 @@ fn measure() {
         }
     });
 }
+
+// --- Calendar ---------------------------------------------------------------
+
+use crate::scheduling::{
+    self, ics, links, recurrence::RepeatRule, reminders, search::CalendarSearch, EventInput,
+    ItemRange, WorkBlockInput,
+};
+
+/// A schedule of `events` single events across a year, one repeating series
+/// per ten of them (daily, weekly, and monthly, some with a cancelled and a
+/// changed occurrence), a work block and a deadline for every issue, a
+/// reminder on one event in four, and a document and project link on one in
+/// five. Returns the IDs of the issues, for reuse.
+async fn calendar_fixture(pool: &SqlitePool, events: usize) {
+    let ws = DEFAULT_WORKSPACE;
+    let project = add_project(pool, ws, "Schedule").await;
+    let document = crate::documents::create(pool, ws, Some("Notes"))
+        .await
+        .unwrap()
+        .id;
+    let zones = ["Europe/Paris", "America/New_York", "Asia/Tokyo", "UTC"];
+    for index in 0..events {
+        let month = 1 + index % 12;
+        let day = 1 + index % 28;
+        let hour = 8 + index % 9;
+        let zone = zones[index % zones.len()];
+        let mut input = EventInput {
+            title: format!("Meeting {index} about launch plans"),
+            description: "Agenda and notes for the launch plans meeting.".into(),
+            location: (index % 3 == 0).then(|| "Room 4".into()),
+            ..Default::default()
+        };
+        if index % 7 == 0 {
+            input.all_day = true;
+            input.start_date = Some(format!("2026-{month:02}-{day:02}"));
+            input.end_date = Some(format!("2026-{month:02}-{:02}", day + 1));
+        } else {
+            input.time_zone = Some(zone.into());
+            input.start = Some(format!("2026-{month:02}-{day:02}T{hour:02}:00"));
+            input.end = Some(format!("2026-{month:02}-{day:02}T{hour:02}:45"));
+        }
+        let series = index % 10 == 0;
+        if series {
+            input.repeat = Some(RepeatRule {
+                freq: ["daily", "weekly", "monthly"][index / 10 % 3].into(),
+                interval: 1 + (index / 30) as i64 % 3,
+                count: (index % 20 == 0).then_some(200),
+                until: None,
+            });
+        }
+        let event = scheduling::create_event(pool, ws, input).await.unwrap();
+        if series && index % 20 == 0 && event.time_zone.is_some() {
+            let key = event.start_local.clone().unwrap();
+            scheduling::recurrence::cancel_occurrence(pool, ws, &event.id, &key)
+                .await
+                .unwrap();
+        }
+        if index % 4 == 0 && !event.all_day {
+            reminders::set_reminder(pool, ws, &event.id, Some(15))
+                .await
+                .unwrap();
+        }
+        if index % 5 == 0 {
+            links::link(pool, ws, &event.id, links::Target::Document, &document)
+                .await
+                .unwrap();
+            links::link(pool, ws, &event.id, links::Target::Project, &project)
+                .await
+                .unwrap();
+        }
+    }
+    // Issues with deadlines and work blocks spread over the same year.
+    for index in 0..events / 2 {
+        let id = crate::issues::create(
+            pool,
+            ws,
+            crate::issues::IssueFields {
+                title: format!("Issue {index} about launch plans"),
+                due_date: Some(format!("2026-{:02}-{:02}", 1 + index % 12, 1 + index % 28)),
+                ..Default::default()
+            },
+            Some(&project),
+        )
+        .await
+        .unwrap()
+        .summary
+        .id;
+        scheduling::create_work_block(
+            pool,
+            ws,
+            WorkBlockInput {
+                issue_id: id,
+                time_zone: "Europe/Paris".into(),
+                start: format!("2026-{:02}-{:02}T14:00", 1 + index % 12, 1 + index % 28),
+                end: format!("2026-{:02}-{:02}T15:30", 1 + index % 12, 1 + index % 28),
+            },
+        )
+        .await
+        .unwrap();
+    }
+}
+
+fn window(from: &str, to: &str) -> ItemRange {
+    ItemRange {
+        from: from.into(),
+        to: to.into(),
+        time_zone: "Europe/Paris".into(),
+    }
+}
+
+fn search(text: &str) -> CalendarSearch {
+    CalendarSearch {
+        text: text.into(),
+        time_zone: "Europe/Paris".into(),
+        today: "2026-06-15".into(),
+        kinds: None,
+        calendar_ids: None,
+        include_completed: false,
+    }
+}
+
+async fn measure_calendar(events: usize) -> Vec<(&'static str, Duration)> {
+    let database = TempDatabase::new(&format!("perf-calendar-{events}"));
+    let pool = database.open().await;
+    migrator(i64::MAX).await.run(&pool).await.unwrap();
+    let build = Instant::now();
+    calendar_fixture(&pool, events).await;
+    println!("built {events} events in {:.1?}", build.elapsed());
+    let ws = DEFAULT_WORKSPACE;
+    let mut rows = Vec::new();
+    time!(
+        rows,
+        "Day view",
+        scheduling::list_items(&pool, ws, window("2026-06-15", "2026-06-16"))
+    );
+    time!(
+        rows,
+        "Week view",
+        scheduling::list_items(&pool, ws, window("2026-06-15", "2026-06-22"))
+    );
+    time!(
+        rows,
+        "Month view (six weeks)",
+        scheduling::list_items(&pool, ws, window("2026-05-25", "2026-07-06"))
+    );
+    time!(
+        rows,
+        "Search: text",
+        scheduling::search::search_items(&pool, ws, search("launch plans 4"))
+    );
+    time!(
+        rows,
+        "Search: blank (upcoming)",
+        scheduling::search::search_items(&pool, ws, search(""))
+    );
+    time!(
+        rows,
+        "Reminders: check for due ones",
+        reminders::claim_due(&pool, ws, "2026-06-15T07:50:00Z".parse().unwrap())
+    );
+    let first = scheduling::list_items(&pool, ws, window("2026-06-01", "2026-06-30"))
+        .await
+        .unwrap()
+        .items
+        .into_iter()
+        .find_map(|item| item.event_id)
+        .unwrap();
+    time!(rows, "Event links", links::links(&pool, ws, &first));
+    // Whole-file operations run once, since they are not on a page's path.
+    let start = Instant::now();
+    let (file, written) = ics::export(&pool, ws).await.unwrap();
+    rows.push(("ICS export (all events)", start.elapsed()));
+    let target = crate::test_support::migrated_pool().await;
+    let start = Instant::now();
+    let report = ics::import(&target, ws, &file, None, "Europe/Paris", true)
+        .await
+        .unwrap();
+    rows.push(("ICS import (all events)", start.elapsed()));
+    println!(
+        "ics: {written} events, {:.1} KiB, imported {}, skipped {}",
+        file.len() as f64 / 1024.0,
+        report.imported.len(),
+        report.skipped.len()
+    );
+    pool.close().await;
+    rows
+}
+
+#[test]
+#[ignore]
+fn measure_calendar_sizes() {
+    tauri::async_runtime::block_on(async {
+        let small = measure_calendar(500).await;
+        let large = measure_calendar(5000).await;
+        println!("\n| Operation | 500 events | 5,000 events |\n|---|---:|---:|");
+        for ((name, a), (_, b)) in small.iter().zip(&large) {
+            println!(
+                "| {name} | {:.2} ms | {:.2} ms |",
+                a.as_secs_f64() * 1000.0,
+                b.as_secs_f64() * 1000.0
+            );
+        }
+    });
+}

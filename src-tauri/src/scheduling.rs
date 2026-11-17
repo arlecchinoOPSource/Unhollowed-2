@@ -1180,4 +1180,6 @@ pub async fn delete_issue_work_block(
 }
 
 #[cfg(test)]
+mod journey;
+#[cfg(test)]
 mod tests;
