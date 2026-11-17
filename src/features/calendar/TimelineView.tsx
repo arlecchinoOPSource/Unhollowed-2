@@ -37,6 +37,7 @@ import {
 } from "./timeline";
 import { useDeviceZone } from "./useDeviceZone";
 import { useEventEditing } from "./useEventEditing";
+import { availability, conflictsOf, workWindow } from "./intervals";
 import { ViewSwitch } from "./ViewSwitch";
 import { proposedSpan, type GestureMode } from "./schedulingGesture";
 import "./timeline.css";
@@ -176,6 +177,7 @@ export function TimelineView({
   const visible = items.filter(
     (item) => !(item.kind === "deadline" && item.closed && !showClosed),
   );
+  const conflicts = conflictsOf(visible);
   const bands = layoutAllDay(visible, days);
   const bandRows = Math.max(1, ...bands.map(({ row }) => row + 1));
   const unit = view === "day" ? "day" : "week";
@@ -470,6 +472,22 @@ export function TimelineView({
               )}
             >
               {dayName(day, "short")}
+              {settings.workDays.includes(parseLocalDate(day).getDay()) && (
+                <span className="timeline-free">
+                  Free{" "}
+                  {freeLabel(
+                    availability(
+                      visible,
+                      workWindow(
+                        day,
+                        zone,
+                        settings.workStart,
+                        settings.workEnd,
+                      ),
+                    ).freeMs,
+                  )}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -596,6 +614,7 @@ export function TimelineView({
                         <TimelineBlock
                           key={block.item.id}
                           block={block}
+                          conflicts={conflicts.get(block.item.id) ?? []}
                           onOpen={() => void editing.openItem(block.item)}
                         />
                       ))}
@@ -612,11 +631,24 @@ export function TimelineView({
   );
 }
 
+/** "5 h 30 min" for the free time in a day's working hours. */
+function freeLabel(ms: number) {
+  const minutes = Math.round(ms / 60_000);
+  const hours = Math.floor(minutes / 60);
+  return (
+    [hours ? `${hours} h` : "", minutes % 60 ? `${minutes % 60} min` : ""]
+      .filter(Boolean)
+      .join(" ") || "0 min"
+  );
+}
+
 function TimelineBlock({
   block,
+  conflicts,
   onOpen,
 }: {
   block: Block;
+  conflicts: CalendarItem[];
   onOpen: () => void;
 }) {
   const { twelveHour } = useCalendarPreferences();
@@ -632,6 +664,11 @@ function TimelineBlock({
       ? swatchStyle(item.color as keyof typeof calendarColors)
       : {}),
   } as CSSProperties;
+  const overlap = conflicts.length > 0 && (
+    <span className="visually-hidden">
+      {` Overlaps ${conflicts.map(({ title }) => title).join(", ")}.`}
+    </span>
+  );
   const times = `${block.continuesBefore ? "…" : start}–${block.continuesAfter ? "…" : end}`;
   return (
     <li
@@ -639,6 +676,7 @@ function TimelineBlock({
       data-kind={item.kind}
       // Short items put the time and title on one line.
       data-short={bottom - top < 45}
+      data-conflict={conflicts.length > 0}
       style={style}
     >
       {item.kind === "workBlock" ? (
@@ -648,6 +686,7 @@ function TimelineBlock({
             <span className="visually-hidden">Work block: </span>
             {issueKey({ number: item.issueNumber! })} {item.title}
           </span>
+          {overlap}
         </Link>
       ) : (
         <button type="button" onClick={onOpen} data-schedule-item={item.id}>
@@ -667,6 +706,7 @@ function TimelineBlock({
           <span className="visually-hidden">
             {`, ${colorName(item) ?? ""} calendar${item.recurring ? ", repeats" : ""}. Edit event.`}
           </span>
+          {overlap}
         </button>
       )}
     </li>

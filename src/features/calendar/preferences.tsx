@@ -25,11 +25,14 @@ const names = [
 type Preferences = CalendarSettings & {
   view: CalendarView;
   twelveHour: boolean;
+  /** Warn in the event editor when an event overlaps another. */
+  warnOverlaps: boolean;
 };
 const defaults: Preferences = {
   ...defaultSettings,
   view: "week",
   twelveHour: false,
+  warnOverlaps: true,
 };
 
 export function validDate(value: string | null): value is string {
@@ -77,6 +80,7 @@ function read(): Preferences {
           ? value.view
           : defaults.view,
       twelveHour: value.twelveHour === true,
+      warnOverlaps: value.warnOverlaps !== false,
     };
   } catch {
     return defaults;
@@ -206,6 +210,14 @@ export function PreferenceControls({
             <option value="12">12 hour</option>
             <option value="24">24 hour</option>
           </select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={draft.warnOverlaps}
+            onChange={(e) => change({ warnOverlaps: e.target.checked })}
+          />{" "}
+          Warn when an event overlaps another
         </label>
         <label>
           Time grid{" "}

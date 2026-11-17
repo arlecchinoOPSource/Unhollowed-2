@@ -4,7 +4,7 @@ import type { OccurrenceSpan } from "./eventDraft";
 
 export type GestureMode = "move" | "resize";
 
-function wall(instant: number, zone: string) {
+export function wall(instant: number, zone: string) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: zone,
     year: "numeric",
@@ -20,7 +20,7 @@ function wall(instant: number, zone: string) {
 }
 
 /** Resolve a visible grid time, choosing the earlier instant in a fold. */
-function instant(wallTime: string, zone: string) {
+export function instant(wallTime: string, zone: string) {
   const civil = Date.parse(wallTime + "Z");
   const day = 86_400_000;
   const candidates = [civil - day, civil, civil + day]
