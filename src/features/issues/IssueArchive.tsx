@@ -151,6 +151,7 @@ function DeletePanel({
         impact.labels > 0 && plural(impact.labels, "label link"),
         impact.documents > 0 && plural(impact.documents, "document link"),
         impact.objectives > 0 && plural(impact.objectives, "objective link"),
+        impact.workBlocks > 0 && plural(impact.workBlocks, "work session"),
         impact.relationships > 0 &&
           plural(impact.relationships, "relationship"),
       ].filter((item): item is string => Boolean(item))

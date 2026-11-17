@@ -83,6 +83,17 @@ export async function installIpcMock(page: Page) {
     // timed with wall-clock times. The browser tests use one zone, so a
     // viewer sees timed events at the times they were entered.
     const events: CalendarEvent[] = [];
+    const workBlocks: {
+      id: string;
+      issueId: string;
+      timeZone: string;
+      startLocal: string;
+      endLocal: string;
+      startAt: string;
+      endAt: string;
+      createdAt: string;
+      updatedAt: string;
+    }[] = [];
     const seededEvents = () => {
       const seeds = (
         window as unknown as { __seedEvents?: Partial<CalendarEvent>[] }
@@ -811,6 +822,8 @@ export async function installIpcMock(page: Page) {
                   .length,
                 objectives: goals.links.filter(([, id]) => id === issue.id)
                   .length,
+                workBlocks: workBlocks.filter((b) => b.issueId === issue.id)
+                  .length,
                 relationships: relationships.filter(
                   (edge) => edge.child === issue.id || edge.parent === issue.id,
                 ).length,
@@ -1181,6 +1194,29 @@ export async function installIpcMock(page: Page) {
                     closed: issue.closed,
                     startDate: issue.dueDate,
                   });
+              for (const block of workBlocks) {
+                const issue = issues.find(({ id }) => id === block.issueId);
+                const start = viewerLocal(block.startAt, block.startLocal)!;
+                const end = viewerLocal(block.endAt, block.endLocal)!;
+                if (!issue || issue.archivedAt || !(start < to && end > from))
+                  continue;
+                items.push({
+                  ...base("workBlock", block.id, issue.title),
+                  issueId: issue.id,
+                  issueNumber: issue.number,
+                  closed: issue.closed,
+                  allDay: false,
+                  startDate: null,
+                  endDate: null,
+                  start,
+                  end,
+                  startAt: block.startAt,
+                  endAt: block.endAt,
+                  timeZone: block.timeZone,
+                  localStart: block.startLocal,
+                  localEnd: block.endLocal,
+                });
+              }
               items.sort((a, b) =>
                 (a.startDate ?? a.start!).localeCompare(
                   b.startDate ?? b.start!,
@@ -1227,6 +1263,57 @@ export async function installIpcMock(page: Page) {
               };
               events.push(copy);
               return structuredClone(copy);
+            }
+            case "list_issue_work_blocks":
+              return structuredClone(
+                workBlocks
+                  .filter(
+                    (block) =>
+                      block.issueId === (args as { issueId: string }).issueId,
+                  )
+                  .sort((a, b) => a.startAt.localeCompare(b.startAt)),
+              );
+            case "create_issue_work_block":
+            case "update_issue_work_block": {
+              const input = (
+                command === "create_issue_work_block"
+                  ? args.input
+                  : (args as { input: object }).input
+              ) as {
+                issueId?: string;
+                timeZone: string;
+                start: string;
+                end: string;
+              };
+              if (input.end <= input.start) throw { code: "invalid_range" };
+              const block = {
+                id:
+                  command === "create_issue_work_block"
+                    ? `block-${workBlocks.length + 1}`
+                    : (args.id as string),
+                issueId: input.issueId ?? "",
+                timeZone: input.timeZone,
+                startLocal: input.start,
+                endLocal: input.end,
+                startAt: `${input.start}:00Z`,
+                endAt: `${input.end}:00Z`,
+                createdAt: now(),
+                updatedAt: now(),
+              };
+              if (command === "create_issue_work_block") workBlocks.push(block);
+              else {
+                const found = workBlocks.find(({ id }) => id === block.id);
+                if (!found) throw { code: "not_found" };
+                Object.assign(found, { ...block, issueId: found.issueId });
+                return structuredClone(found);
+              }
+              return structuredClone(block);
+            }
+            case "delete_issue_work_block": {
+              const index = workBlocks.findIndex(({ id }) => id === args.id);
+              if (index < 0) throw { code: "not_found" };
+              workBlocks.splice(index, 1);
+              return null;
             }
             case "delete_calendar_event": {
               const event = findEvent(args.id);

@@ -259,6 +259,7 @@ export interface DeletionImpact {
   labels: number;
   documents: number;
   objectives: number;
+  workBlocks: number;
   relationships: number;
   subIssues: number;
   activeSeries: boolean;

@@ -217,3 +217,45 @@ export function timeZones(): string[] {
     a.localeCompare(b),
   );
 }
+
+/** A stored work session on one issue. Ranges are half-open. */
+export interface WorkBlock {
+  id: string;
+  issueId: string;
+  timeZone: string;
+  /** Wall-clock `YYYY-MM-DDTHH:MM` in `timeZone`. */
+  startLocal: string;
+  endLocal: string;
+  startAt: string;
+  endAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkBlockTiming {
+  timeZone: string;
+  start: string;
+  end: string;
+}
+
+export function listWorkBlocks(issueId: string): Promise<WorkBlock[]> {
+  return invoke("list_issue_work_blocks", { issueId });
+}
+
+export function createWorkBlock(
+  issueId: string,
+  timing: WorkBlockTiming,
+): Promise<WorkBlock> {
+  return invoke("create_issue_work_block", { input: { issueId, ...timing } });
+}
+
+export function updateWorkBlock(
+  id: string,
+  input: WorkBlockTiming,
+): Promise<WorkBlock> {
+  return invoke("update_issue_work_block", { id, input });
+}
+
+export function deleteWorkBlock(id: string): Promise<void> {
+  return invoke("delete_issue_work_block", { id });
+}

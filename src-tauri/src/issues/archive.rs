@@ -41,6 +41,8 @@ pub struct DeletionImpact {
     pub labels: i64,
     pub documents: i64,
     pub objectives: i64,
+    /// Scheduled work sessions, which are deleted with the issue.
+    pub work_blocks: i64,
     /// Parent, blocking, and related links, counted once per pair.
     pub relationships: i64,
     /// Sub-issues block deletion.
@@ -68,6 +70,7 @@ const IMPACT: &str = "SELECT 'ISS-' || i.number AS key, i.archived_at IS NOT NUL
          (SELECT count(*) FROM issue_labels WHERE issue_id = i.id) AS labels,
          (SELECT count(*) FROM issue_documents WHERE issue_id = i.id) AS documents,
          (SELECT count(*) FROM objective_issues WHERE issue_id = i.id) AS objectives,
+         (SELECT count(*) FROM work_blocks WHERE issue_id = i.id) AS work_blocks,
          (SELECT count(*) FROM issue_relationships
           WHERE workspace_id = i.workspace_id AND (source_id = i.id OR target_id = i.id))
              AS relationships,

@@ -961,3 +961,225 @@ fn rescheduling_closing_and_archiving_an_issue_only_moves_its_deadline() {
         assert_eq!(count(&pool, "events").await, 1);
     });
 }
+
+fn block(issue: &str, start: &str, end: &str) -> WorkBlockInput {
+    WorkBlockInput {
+        issue_id: issue.into(),
+        time_zone: "UTC".into(),
+        start: start.into(),
+        end: end.into(),
+    }
+}
+
+fn timing(start: &str, end: &str) -> WorkBlockTiming {
+    WorkBlockTiming {
+        time_zone: "UTC".into(),
+        start: start.into(),
+        end: end.into(),
+    }
+}
+
+#[test]
+fn an_issue_keeps_independent_overlapping_sessions_apart_from_other_issues() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let issue = add_issue(&pool, DEFAULT_WORKSPACE, None).await;
+        let other = add_issue(&pool, DEFAULT_WORKSPACE, None).await;
+        let first = create_work_block(
+            &pool,
+            DEFAULT_WORKSPACE,
+            block(&issue, "2026-11-18T09:00", "2026-11-18T11:00"),
+        )
+        .await
+        .unwrap();
+        // Overlaps are allowed, and each session has its own ID.
+        let second = create_work_block(
+            &pool,
+            DEFAULT_WORKSPACE,
+            block(&issue, "2026-11-18T10:00", "2026-11-18T12:00"),
+        )
+        .await
+        .unwrap();
+        create_work_block(
+            &pool,
+            DEFAULT_WORKSPACE,
+            block(&other, "2026-11-18T09:00", "2026-11-18T10:00"),
+        )
+        .await
+        .unwrap();
+        assert_ne!(first.id, second.id);
+
+        let moved = update_work_block(
+            &pool,
+            DEFAULT_WORKSPACE,
+            &second.id,
+            timing("2026-11-19T13:00", "2026-11-19T14:00"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(moved.id, second.id);
+        assert_eq!(moved.issue_id, issue);
+        let listed = list_work_blocks(&pool, DEFAULT_WORKSPACE, &issue)
+            .await
+            .unwrap();
+        assert_eq!(
+            listed.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(),
+            [first.id.as_str(), second.id.as_str()]
+        );
+        assert_eq!(listed[0], first, "the other session is untouched");
+        assert_eq!(
+            list_work_blocks(&pool, DEFAULT_WORKSPACE, &other)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+
+        delete_work_block(&pool, DEFAULT_WORKSPACE, &first.id)
+            .await
+            .unwrap();
+        let left = list_work_blocks(&pool, DEFAULT_WORKSPACE, &issue)
+            .await
+            .unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].id, second.id);
+    });
+}
+
+#[test]
+fn a_failed_move_changes_nothing_and_scheduling_leaves_the_issue_alone() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let issue = add_issue(&pool, DEFAULT_WORKSPACE, None).await;
+        crate::issues::set_due_date(&pool, DEFAULT_WORKSPACE, &issue, Some("2026-11-25"))
+            .await
+            .unwrap();
+        let created = create_work_block(
+            &pool,
+            DEFAULT_WORKSPACE,
+            block(&issue, "2026-11-18T09:00", "2026-11-18T10:00"),
+        )
+        .await
+        .unwrap();
+        let issue_row = || async {
+            sqlx::query_as::<_, (String, Option<String>, String)>(
+                "SELECT status, due_date, updated_at FROM issues WHERE id = ?",
+            )
+            .bind(&issue)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        let before = issue_row().await;
+
+        assert!(matches!(
+            update_work_block(
+                &pool,
+                DEFAULT_WORKSPACE,
+                &created.id,
+                timing("2026-11-18T10:00", "2026-11-18T09:00")
+            )
+            .await,
+            Err(SchedulingError::InvalidRange)
+        ));
+        assert!(matches!(
+            update_work_block(
+                &pool,
+                DEFAULT_WORKSPACE,
+                "missing",
+                timing("2026-11-18T09:00", "2026-11-18T10:00")
+            )
+            .await,
+            Err(SchedulingError::NotFound)
+        ));
+        assert!(matches!(
+            update_work_block(
+                &pool,
+                OTHER_WORKSPACE,
+                &created.id,
+                timing("2026-11-18T09:00", "2026-11-18T10:00")
+            )
+            .await,
+            Err(SchedulingError::NotFound)
+        ));
+        let after = list_work_blocks(&pool, DEFAULT_WORKSPACE, &issue)
+            .await
+            .unwrap();
+        assert_eq!(after, vec![created.clone()]);
+
+        update_work_block(
+            &pool,
+            DEFAULT_WORKSPACE,
+            &created.id,
+            timing("2026-11-20T09:00", "2026-11-20T10:00"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(issue_row().await, before, "status, due date, updated_at");
+    });
+}
+
+#[test]
+fn sessions_survive_completion_hide_with_archive_and_go_with_deletion() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let issue = add_issue(&pool, DEFAULT_WORKSPACE, None).await;
+        create_work_block(
+            &pool,
+            DEFAULT_WORKSPACE,
+            block(&issue, "2026-11-18T09:00", "2026-11-18T10:00"),
+        )
+        .await
+        .unwrap();
+        let in_view = || async {
+            list_items(
+                &pool,
+                DEFAULT_WORKSPACE,
+                range("2026-11-16", "2026-11-23", "UTC"),
+            )
+            .await
+            .unwrap()
+            .items
+            .into_iter()
+            .filter(|item| item.kind == ItemKind::WorkBlock)
+            .collect::<Vec<_>>()
+        };
+
+        crate::issues::set_status(&pool, DEFAULT_WORKSPACE, &issue, "done")
+            .await
+            .unwrap();
+        let shown = in_view().await;
+        assert_eq!(shown.len(), 1);
+        assert!(shown[0].closed, "history stays, marked closed");
+
+        crate::issues::set_archived(&pool, DEFAULT_WORKSPACE, &issue, true)
+            .await
+            .unwrap();
+        assert!(in_view().await.is_empty());
+        assert_eq!(
+            list_work_blocks(&pool, DEFAULT_WORKSPACE, &issue)
+                .await
+                .unwrap()
+                .len(),
+            1,
+            "the issue page still lists them"
+        );
+        let impact = crate::issues::deletion_impact(&pool, DEFAULT_WORKSPACE, &issue)
+            .await
+            .unwrap();
+        assert_eq!(impact.work_blocks, 1);
+
+        crate::issues::set_archived(&pool, DEFAULT_WORKSPACE, &issue, false)
+            .await
+            .unwrap();
+        assert_eq!(in_view().await.len(), 1, "restoring brings them back");
+
+        crate::issues::set_archived(&pool, DEFAULT_WORKSPACE, &issue, true)
+            .await
+            .unwrap();
+        crate::issues::delete(&pool, DEFAULT_WORKSPACE, &issue, "ISS-1")
+            .await
+            .unwrap();
+        assert_eq!(count(&pool, "work_blocks").await, 0);
+    });
+}
