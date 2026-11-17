@@ -1103,6 +1103,30 @@ export async function installIpcMock(page: Page) {
                   parts.find((item) => item.type === type)!.value;
                 return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
               };
+              // The instant a wall-clock time is in a zone, as the backend
+              // stores it.
+              const toInstant = (local: string, zone: string) => {
+                const wanted = Date.parse(`${local}:00Z`);
+                let guess = wanted;
+                for (let pass = 0; pass < 3; pass++) {
+                  const parts = new Intl.DateTimeFormat("en-CA", {
+                    timeZone: zone,
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hourCycle: "h23",
+                  }).formatToParts(new Date(guess));
+                  const part = (type: string) =>
+                    parts.find((item) => item.type === type)!.value;
+                  const shownWall = Date.parse(
+                    `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}:00Z`,
+                  );
+                  guess += wanted - shownWall;
+                }
+                return new Date(guess).toISOString().slice(0, 19) + "Z";
+              };
               const shown = new Set(
                 calendars
                   .filter(({ hidden, archivedAt }) => !hidden && !archivedAt)
@@ -1174,8 +1198,14 @@ export async function installIpcMock(page: Page) {
                     endDate: event.allDay ? span.end : null,
                     start: event.allDay ? null : span.start,
                     end: event.allDay ? null : span.end,
-                    startAt: event.repeatFreq ? null : event.startAt,
-                    endAt: event.repeatFreq ? null : event.endAt,
+                    startAt: event.allDay
+                      ? null
+                      : (!event.repeatFreq && event.startAt) ||
+                        toInstant(span.start, timeZone),
+                    endAt: event.allDay
+                      ? null
+                      : (!event.repeatFreq && event.endAt) ||
+                        toInstant(span.end, timeZone),
                     timeZone: event.timeZone,
                     localStart: event.allDay ? null : span.start,
                     localEnd: event.allDay ? null : span.end,

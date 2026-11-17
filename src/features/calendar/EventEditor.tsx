@@ -20,6 +20,7 @@ import {
 } from "../../database/events";
 import { swatchStyle } from "../labels/LabelParts";
 import { EventLinks } from "./EventLinks";
+import { useOverlapWarning } from "./useOverlapWarning";
 import {
   draftFromEvent,
   seriesInput,
@@ -88,6 +89,7 @@ export function EventEditor({
   const [notice, setNotice] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [zones] = useState(timeZones);
+  const overlapping = useOverlapWarning(draft, current?.id);
   const recurring = Boolean(current?.repeatFreq && occurrence);
   // One occurrence cannot change the series' rule, zone, or calendar.
   const single = recurring && scope === "this";
@@ -468,6 +470,11 @@ export function EventEditor({
           </details>
         )}
 
+        {overlapping.length > 0 && (
+          <p role="status" className="event-notice">
+            Overlaps {overlapping.join(", ")}. You can still save.
+          </p>
+        )}
         {error && <p role="alert">{error}</p>}
         <p role="status" className="event-notice">
           {notice}

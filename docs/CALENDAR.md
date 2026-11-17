@@ -237,6 +237,18 @@ An event can link to existing documents and projects, so meeting notes and proje
 - **Repeating events.** Links belong to the event, so every occurrence shares them. Duplicating or splitting a series does not copy links.
 - **Removing.** Unlinking deletes only the link row. Deleting an event, document, or project deletes its links and never the other record. A target that is gone simply no longer appears.
 
+### Conflicts and availability
+
+Overlaps are advice only. Nothing is blocked, and overlapping events stay editable and savable. The logic is in `src/features/calendar/intervals.ts`, shared by the timeline, the event editor, and Today.
+
+- **Half-open intervals.** A timed item is `[start, end)` in instants, from `startAt` and `endAt`. Two items overlap when each starts before the other ends. An item that ends when another starts is adjacent and is not a conflict. Instants, not wall-clock text, decide this, so daylight-saving days and items in other zones compare correctly.
+- **Which items.** Timed events and work blocks. Repeating occurrences count as the events they are. Items in hidden or archived calendars and of archived issues are never read, so they neither conflict nor block time. Deadlines have no time.
+- **All-day policy.** All-day events and deadlines do not conflict and do not reduce free time. They mark the day without occupying hours on it.
+- **Timeline.** Overlapping items are outlined with a dashed border, and their accessible names list what they overlap. Each working day's header shows **Free** time: the working-hours window minus the union of timed items, in real elapsed time.
+- **Working hours** come from the preferences. The window's ends are wall-clock times resolved in the viewer's zone. A time inside a spring-forward gap resolves to the first moment after the gap, and a repeated time to its first occurrence. A window across a daylight-saving change counts real elapsed hours.
+- **Event editor.** While a timed event is drafted, the editor lists the other items it overlaps ("Overlaps X. You can still save."), ignoring the event itself. **Warn when an event overlaps another** in the calendar preferences turns it off on this device.
+- Not included: team availability, booking pages, and automatic rescheduling.
+
 ### Calendar libraries
 
 The bundled FullCalendar packages were evaluated and not used. FullCalendar injects its styles at run time, which the production CSP (`style-src 'self'`) blocks, and its time grid does not match the keyboard and focus behavior above. The month grid and the timeline are built on the shared theme tokens instead, with offline layout code that has unit tests.

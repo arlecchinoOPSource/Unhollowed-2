@@ -385,7 +385,9 @@ test.describe("timeline views", () => {
     const wednesday = page.getByRole("group", {
       name: "Wednesday, November 18",
     });
-    const review = wednesday.getByRole("button", { name: /Design review/ });
+    const review = wednesday.getByRole("button", {
+      name: /^09:15–10:30\s*Design review/,
+    });
     await expect(review).toBeVisible();
     await expect(
       page
@@ -445,8 +447,12 @@ test.describe("timeline views", () => {
     page,
   }) => {
     await page.goto("/calendar?view=day&date=2026-11-18");
-    const standup = page.getByRole("button", { name: /Standup/ });
-    const review = page.getByRole("button", { name: /Design review/ });
+    const standup = page.getByRole("button", {
+      name: /^09:00–09:30\s*Standup/,
+    });
+    const review = page.getByRole("button", {
+      name: /^09:15–10:30\s*Design review/,
+    });
     const a = (await standup.boundingBox())!;
     const b = (await review.boundingBox())!;
     // Side by side: no horizontal overlap, and vertically overlapping.
@@ -752,4 +758,60 @@ test("links an event to documents and projects and unlinks without touching them
   await editor.getByText("Documents and projects").click();
   await editor.getByRole("link", { name: "Studio launch" }).click();
   await expect(page).toHaveURL(/\/projects\/project-1/);
+});
+
+test("marks overlaps, shows free time, and warns without blocking a save", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedEvents: [
+        {
+          title: "Planning",
+          startLocal: "2026-11-18T09:00",
+          endLocal: "2026-11-18T10:00",
+        },
+        {
+          title: "Design review",
+          startLocal: "2026-11-18T09:30",
+          endLocal: "2026-11-18T10:30",
+        },
+        // Starts when Design review ends, so it is adjacent, not a conflict.
+        {
+          title: "Lunch talk",
+          startLocal: "2026-11-18T10:30",
+          endLocal: "2026-11-18T11:00",
+        },
+      ],
+    }),
+  );
+  await page.goto("/calendar?view=day&date=2026-11-18");
+  const conflicts = page.locator('.timeline-item[data-conflict="true"]');
+  await expect(conflicts).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /Lunch talk/ })).toBeVisible();
+  await expect(
+    page.locator('.timeline-item[data-conflict="false"]'),
+  ).toHaveCount(1);
+  // 09:00-11:00 is busy in an 09:00-17:00 day.
+  await expect(page.getByText("Free 6 h")).toBeVisible();
+
+  await page.getByRole("button", { name: "New event" }).click();
+  const editor = page.getByRole("dialog", { name: "New event" });
+  await editor.getByLabel("Title").fill("Overlapping call");
+  await editor.getByLabel("Start time").fill("10:15");
+  await editor.getByLabel("End time").fill("10:45");
+  await expect(
+    editor.getByText("Overlaps Design review, Lunch talk. You can still save."),
+  ).toBeVisible();
+  await editor.getByLabel("Title").press("Enter");
+  await expect(page.getByRole("status").first()).toContainText(
+    "Created event Overlapping call.",
+  );
+  await expect(conflicts).toHaveCount(4);
+
+  // Back-to-back times raise no warning.
+  await page.getByRole("button", { name: "New event" }).click();
+  await editor.getByLabel("Start time").fill("11:00");
+  await editor.getByLabel("End time").fill("12:00");
+  await expect(editor.getByText(/Overlaps/)).toHaveCount(0);
 });

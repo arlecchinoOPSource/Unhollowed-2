@@ -10,10 +10,15 @@ import {
 } from "../../database/events";
 import { issueKey } from "../../database/issues";
 import { newDraft } from "../calendar/eventDraft";
-import { busySpan, freeSpans } from "../calendar/intervals";
+import {
+  availability,
+  busySpan,
+  clockAt,
+  workWindow,
+} from "../calendar/intervals";
 import { fullDate } from "../calendar/monthGrid";
 import { displayClock, useCalendarPreferences } from "../calendar/preferences";
-import { clock, minutesOf } from "../calendar/timeline";
+import { clock } from "../calendar/timeline";
 import { useDeviceZone } from "../calendar/useDeviceZone";
 import { useEventEditing } from "../calendar/useEventEditing";
 import { buildAgenda } from "./agenda";
@@ -90,19 +95,17 @@ export function TodaySchedule({ today }: { today: string }) {
   const workDay = settings.workDays.includes(parseLocalDate(today).getDay());
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const from = Math.max(minutesOf(settings.workStart), nowMinutes);
-  const free =
+  const { free, freeMs } =
     agenda && workDay
-      ? freeSpans(
-          agenda.timed.flatMap((item) => {
-            const span = busySpan(item, today);
-            return span ? [span] : [];
-          }),
-          from,
-          minutesOf(settings.workEnd),
-        ).filter(([start, end]) => end - start >= settings.increment)
-      : [];
-  const freeTotal = free.reduce((sum, [start, end]) => sum + end - start, 0);
+      ? availability(
+          agenda.timed,
+          workWindow(today, zone, settings.workStart, settings.workEnd),
+          now.getTime(),
+        )
+      : { free: [], freeMs: 0 };
+  const shown = free.filter(
+    ([start, end]) => end - start >= settings.increment * 60_000,
+  );
 
   function times(item: CalendarItem) {
     const span = busySpan(item, today);
@@ -192,12 +195,12 @@ export function TodaySchedule({ today }: { today: string }) {
           <p>
             {!workDay
               ? "Today is not a working day."
-              : free.length === 0
+              : shown.length === 0
                 ? "No free time left in working hours."
-                : `Free in working hours: ${minutesToHours(freeTotal)}, ${free
+                : `Free in working hours: ${minutesToHours(Math.round(freeMs / 60_000))}, ${shown
                     .map(
                       ([start, end]) =>
-                        `${displayClock(clock(start), settings.twelveHour)}–${displayClock(clock(end), settings.twelveHour)}`,
+                        `${displayClock(clockAt(start, zone), settings.twelveHour)}–${displayClock(clockAt(end, zone), settings.twelveHour)}`,
                     )
                     .join(", ")}.`}
           </p>

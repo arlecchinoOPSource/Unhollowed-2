@@ -186,3 +186,109 @@ describe("agenda", () => {
     expect(buildAgenda([block], today).timed.map((i) => i.id)).toEqual(["wb"]);
   });
 });
+
+import {
+  availability,
+  conflictsOf,
+  overlaps,
+  wallInstant,
+  workWindow,
+} from "../../src/features/calendar/intervals";
+
+const NY = "America/New_York";
+const HOUR = 3_600_000;
+function at(
+  id: string,
+  startAt: string,
+  endAt: string,
+  over: Partial<CalendarItem> = {},
+) {
+  return item({ id, title: id, startAt, endAt, ...over });
+}
+
+describe("conflicts", () => {
+  it("treats equal boundaries as adjacent, not overlapping", () => {
+    expect(overlaps([0, 10], [10, 20])).toBe(false);
+    expect(overlaps([0, 10], [9, 20])).toBe(true);
+    const found = conflictsOf([
+      at("a", "2026-11-16T09:00:00Z", "2026-11-16T10:00:00Z"),
+      at("b", "2026-11-16T10:00:00Z", "2026-11-16T11:00:00Z"),
+    ]);
+    expect(found.size).toBe(0);
+  });
+
+  it("finds partial and nested overlaps in both directions", () => {
+    const found = conflictsOf([
+      at("outer", "2026-11-16T09:00:00Z", "2026-11-16T12:00:00Z"),
+      at("inner", "2026-11-16T10:00:00Z", "2026-11-16T11:00:00Z"),
+      at("partial", "2026-11-16T11:30:00Z", "2026-11-16T13:00:00Z"),
+      at("alone", "2026-11-16T15:00:00Z", "2026-11-16T16:00:00Z"),
+    ]);
+    expect(found.get("outer")?.map((i) => i.id)).toEqual(["inner", "partial"]);
+    expect(found.get("inner")?.map((i) => i.id)).toEqual(["outer"]);
+    expect(found.get("partial")?.map((i) => i.id)).toEqual(["outer"]);
+    expect(found.has("alone")).toBe(false);
+  });
+
+  it("never counts all-day events as conflicts", () => {
+    const found = conflictsOf([
+      item({
+        id: "day",
+        allDay: true,
+        startDate: "2026-11-16",
+        endDate: "2026-11-17",
+      }),
+      at("a", "2026-11-16T09:00:00Z", "2026-11-16T10:00:00Z"),
+    ]);
+    expect(found.size).toBe(0);
+  });
+});
+
+describe("availability", () => {
+  const win = workWindow("2026-11-16", NY, "09:00", "17:00");
+
+  it("merges overlapping items and ignores all-day events", () => {
+    const { freeMs } = availability(
+      [
+        at("a", "2026-11-16T15:00:00Z", "2026-11-16T16:00:00Z"),
+        at("b", "2026-11-16T15:30:00Z", "2026-11-16T17:00:00Z"),
+        item({
+          id: "day",
+          allDay: true,
+          startDate: "2026-11-16",
+          endDate: "2026-11-17",
+        }),
+      ],
+      win,
+    );
+    // 09:00-17:00 New York is 8 h, and 10:00-12:00 there is busy.
+    expect(freeMs).toBe(6 * HOUR);
+  });
+
+  it("starts no earlier than now", () => {
+    const { free } = availability([], win, win[0] + 2 * HOUR);
+    expect(free).toEqual([[win[0] + 2 * HOUR, win[1]]]);
+  });
+
+  it("counts real elapsed time across a spring-forward night", () => {
+    const night = workWindow("2026-03-08", NY, "01:00", "05:00");
+    expect((night[1] - night[0]) / HOUR).toBe(3);
+    const { freeMs } = availability(
+      [at("m", "2026-03-08T07:00:00Z", "2026-03-08T08:00:00Z")],
+      night,
+    );
+    expect(freeMs).toBe(2 * HOUR);
+  });
+
+  it("counts real elapsed time across a fall-back night", () => {
+    const night = workWindow("2026-11-01", NY, "00:00", "04:00");
+    expect((night[1] - night[0]) / HOUR).toBe(5);
+  });
+
+  it("moves a time inside the spring-forward gap past it", () => {
+    // 02:30 does not exist; it resolves to 03:30 EDT.
+    expect(new Date(wallInstant("2026-03-08T02:30", NY)).toISOString()).toBe(
+      "2026-03-08T07:30:00.000Z",
+    );
+  });
+});
