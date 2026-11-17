@@ -291,3 +291,7 @@ Habits and their daily completions follow the [habit contract](HABITS.md), which
 | 0020      | `calendars`, `events`, and `work_blocks`, with same-workspace triggers ([calendar contract](CALENDAR.md)) |
 | 0021      | `scheduling_state`, the time-zone database release calendar instants were resolved with                   |
 | 0022      | Event repeat rules and `event_exceptions` for changed or canceled occurrences                             |
+| 0023      | Event links to documents and projects                                                                     |
+| 0024      | `event_reminders`, `reminder_settings`, and `reminder_deliveries`                                         |
+| 0025      | `events.ics_uid`, the iCalendar UID an event was imported with                                            |
+| 0026      | `habits` and `habit_completions`, with same-workspace triggers ([habit contract](HABITS.md))              |
