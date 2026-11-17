@@ -252,6 +252,8 @@ export async function installIpcMock(page: Page) {
       };
     }
 
+    let remindersOn = true;
+    const eventReminders = new Map<string, number>();
     const eventDocuments: [string, string][] = [];
     const eventProjects: [string, string][] = [];
     const issueDocuments: [string, string][] = [];
@@ -1352,6 +1354,38 @@ export async function installIpcMock(page: Page) {
               events.splice(events.indexOf(event), 1);
               return null;
             }
+            case "get_reminders_enabled":
+              return remindersOn;
+            case "set_reminders_enabled":
+              remindersOn = (args as unknown as { enabled: boolean }).enabled;
+              return remindersOn;
+            case "get_event_reminder":
+              findEvent(args.id ?? (args as { eventId?: string }).eventId);
+              return (
+                eventReminders.get(
+                  (args as unknown as { eventId: string }).eventId,
+                ) ?? null
+              );
+            case "set_event_reminder": {
+              const { eventId, minutesBefore } = args as unknown as {
+                eventId: string;
+                minutesBefore: number | null;
+              };
+              findEvent(eventId);
+              if (minutesBefore === null) eventReminders.delete(eventId);
+              else eventReminders.set(eventId, minutesBefore);
+              return minutesBefore;
+            }
+            case "claim_due_reminders":
+              return {
+                delivered: [],
+                failed: (window as unknown as { __reminderFailures?: number })
+                  .__reminderFailures
+                  ? 1
+                  : 0,
+              };
+            case "send_test_notification":
+              return null;
             case "get_event_links":
             case "link_event_document":
             case "unlink_event_document":

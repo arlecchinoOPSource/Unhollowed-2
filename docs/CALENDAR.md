@@ -88,6 +88,9 @@ Recurring timed events (U2-P3-04) repeat their wall-clock time in their own zone
 | `get_event_links`                                     | An event's linked documents and projects, by current name, with an `archived` flag                |
 | `link_event_document` / `unlink_event_document`       | Adds or removes a document link. Linking twice changes nothing                                    |
 | `link_event_project` / `unlink_event_project`         | The same for projects                                                                             |
+| `get_event_reminder` / `set_event_reminder`           | One reminder per timed event, 0 minutes to 1 week before the start, or none                       |
+| `get_reminders_enabled` / `set_reminders_enabled`     | The workspace's reminders switch. Reminders are on until turned off                               |
+| `claim_due_reminders` / `send_test_notification`      | Delivers reminders that are due, once each, and shows a test notification                         |
 | `update_issue_work_block`                             | Moves or resizes a session. Only its times and zone change                                        |
 | `list_issue_work_blocks`                              | An issue's sessions, earliest first, including those of closed and archived issues                |
 
@@ -248,6 +251,22 @@ Overlaps are advice only. Nothing is blocked, and overlapping events stay editab
 - **Working hours** come from the preferences. The window's ends are wall-clock times resolved in the viewer's zone. A time inside a spring-forward gap resolves to the first moment after the gap, and a repeated time to its first occurrence. A window across a daylight-saving change counts real elapsed hours.
 - **Event editor.** While a timed event is drafted, the editor lists the other items it overlaps ("Overlaps X. You can still save."), ignoring the event itself. **Warn when an event overlaps another** in the calendar preferences turns it off on this device.
 - Not included: team availability, booking pages, and automatic rescheduling.
+
+### Reminders
+
+A timed event can have one reminder, set under **Reminder** in the editor for a saved event. All-day events have none. Reminders are local: nothing leaves the device.
+
+- **Storage.** `event_reminders` holds an event ID and an offset. `reminder_settings` holds the switch. `reminder_deliveries` records each delivery under the event, the occurrence, the start reminded, and the offset. Deleting an event deletes its rows.
+- **When one fires.** The app asks Rust every 30 seconds and when the window regains focus. A reminder is due from `start − offset` until the start (half-open), and a delivery is recorded as it is claimed, so it shows once across repeated checks and restarts. Rust works from stored events, so an edit moves the reminder with the event. Changing the start gives a new delivery identity, so the new time is reminded once more, and a cancelled occurrence or deleted event has nothing due. Each occurrence of a repeating event is reminded separately.
+- **Time zones.** Starts are UTC instants resolved from the event's own zone, so reminders follow daylight-saving changes in that zone.
+- **Resume.** After sleep, a reminder that came due while the app was asleep still shows if the event has not started. Once it has started the reminder is dropped, and nothing is replayed. Old delivery records are pruned after 48 hours.
+- **Delivery.** Rust shows the notification through the Tauri notification plugin, so the webview holds no notification permission. The capabilities file is unchanged.
+- **App running required.** Reminders are shown only while Unhollowed 2 is running, including in the background. No background service, login item, or scheduled task is installed, so a closed app shows nothing, on macOS and on Windows.
+- **macOS.** Notifications go through Notification Center. macOS asks for permission on first use. If it was declined, allow the app in System Settings, then Notifications. An app run from a terminal can appear under the terminal's name.
+- **Windows.** Notifications appear as Windows toasts. They respect Do not disturb and Focus settings. An unpackaged development build may show under a different app name.
+- **Permission.** The notification plugin reports permission as granted on desktop, so the app cannot read the system setting. **Send a test notification** under Reminders on the calendar page is how to check. If the system refuses a reminder, a notice says so, and the reminder is not retried.
+- **Off.** Turning reminders off silences all of them and records nothing, so turning them on again shows reminders still ahead of their start.
+- Not included: cloud or push reminders, all-day reminders, several reminders per event, default reminders, and delivery while the app is closed.
 
 ### Calendar libraries
 

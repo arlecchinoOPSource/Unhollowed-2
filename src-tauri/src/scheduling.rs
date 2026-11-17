@@ -9,6 +9,7 @@ pub(crate) mod calendars;
 pub(crate) mod events;
 pub(crate) mod links;
 pub(crate) mod recurrence;
+pub(crate) mod reminders;
 pub(crate) mod search;
 pub(crate) mod time;
 
@@ -43,6 +44,10 @@ pub enum SchedulingError {
     DocumentNotFound,
     /// The project does not exist in the active workspace.
     ProjectNotFound,
+    /// A reminder is a whole number of minutes from 0 to a week.
+    InvalidReminder,
+    /// The system would not show a notification.
+    NotificationFailed,
     InvalidTitle,
     InvalidLocation,
     /// Only http and https addresses with a host are accepted.

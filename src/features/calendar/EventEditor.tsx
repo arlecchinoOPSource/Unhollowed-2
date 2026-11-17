@@ -20,6 +20,7 @@ import {
 } from "../../database/events";
 import { swatchStyle } from "../labels/LabelParts";
 import { EventLinks } from "./EventLinks";
+import { EventReminder } from "./EventReminder";
 import { useOverlapWarning } from "./useOverlapWarning";
 import {
   draftFromEvent,
@@ -462,6 +463,13 @@ export function EventEditor({
             />
           </label>
         </details>
+
+        {current && !current.allDay && (
+          <details className="event-details">
+            <summary>Reminder</summary>
+            <EventReminder eventId={current.id} />
+          </details>
+        )}
 
         {current && (
           <details className="event-details">

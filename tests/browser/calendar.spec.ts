@@ -815,3 +815,60 @@ test("marks overlaps, shows free time, and warns without blocking a save", async
   await editor.getByLabel("End time").fill("12:00");
   await expect(editor.getByText(/Overlaps/)).toHaveCount(0);
 });
+
+test("sets a reminder on a timed event, turns reminders off, and explains delivery", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __seedEvents: [
+        {
+          title: "Dentist",
+          startLocal: "2026-11-18T10:00",
+          endLocal: "2026-11-18T11:00",
+        },
+      ],
+    }),
+  );
+  await page.goto("/calendar?view=month");
+  await day(page, /November 18, 2026/).click();
+  await page.getByRole("button", { name: /10:00–11:00\s*Dentist/ }).click();
+  const editor = page.getByRole("dialog", { name: "Edit event" });
+  await editor.getByText("Reminder", { exact: true }).click();
+  await expect(editor.getByLabel("Reminder")).toHaveValue("");
+  await editor.getByLabel("Reminder").selectOption("15");
+  await expect(editor.getByLabel("Reminder")).toHaveValue("15");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+
+  // Reopening shows the saved reminder.
+  await page.getByRole("button", { name: /10:00–11:00\s*Dentist/ }).click();
+  await editor.getByText("Reminder", { exact: true }).click();
+  await expect(editor.getByLabel("Reminder")).toHaveValue("15");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+
+  const settings = page.locator("details", { hasText: "Show reminders" });
+  await settings.locator("summary").click();
+  await expect(
+    settings.getByText(/only while Unhollowed 2 is running/),
+  ).toBeVisible();
+  await settings.getByLabel("Show reminders for events").uncheck();
+  await expect(settings.getByRole("status")).toHaveText("Reminders are off.");
+  await settings
+    .getByRole("button", { name: "Send a test notification" })
+    .click();
+  await expect(settings.getByRole("status")).toContainText(
+    "Test notification sent",
+  );
+});
+
+test("says so when the system refuses a reminder", async ({ page }) => {
+  await page.addInitScript(() =>
+    Object.assign(window, { __reminderFailures: 1 }),
+  );
+  await page.goto("/calendar?view=month");
+  await expect(page.getByRole("alert")).toContainText(
+    "A reminder could not be shown as a notification.",
+  );
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});

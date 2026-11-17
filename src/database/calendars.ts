@@ -84,6 +84,10 @@ export function schedulingError(cause: unknown): string {
       return "That event is no longer available.";
     case "document_not_found":
       return "That document is no longer available.";
+    case "invalid_reminder":
+      return "Choose one of the reminder times.";
+    case "notification_failed":
+      return "The system would not show a notification. Check your notification settings.";
     case "project_not_found":
       return "That project is no longer available.";
     case "invalid_title":
