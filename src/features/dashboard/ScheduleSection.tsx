@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Period } from "./controls";
 import { Link } from "react-router";
 import {
   analyticsError,
@@ -10,7 +11,6 @@ import {
 import { useDataVersion } from "../../database/dataChanges";
 import { deviceZone } from "../../database/events";
 import { fullDate } from "../calendar/monthGrid";
-import { localDate } from "../today/dates";
 
 const W = 640;
 const H = 150;
@@ -86,12 +86,11 @@ function Chart({ buckets, unit }: { buckets: ScheduleBucket[]; unit: string }) {
  */
 export function ScheduleSection({
   project,
-  days,
+  period,
 }: {
   project: string | null;
-  days: number;
+  period: Period;
 }) {
-  const today = localDate(new Date());
   const [data, setData] = useState<ScheduleAnalytics | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -99,12 +98,7 @@ export function ScheduleSection({
 
   useEffect(() => {
     let live = true;
-    getScheduleAnalytics(
-      localDate(new Date(), 1 - days),
-      today,
-      project,
-      deviceZone(),
-    )
+    getScheduleAnalytics(period.from, period.to, project, deviceZone())
       .then((result) => {
         if (!live) return;
         setData(result);
@@ -118,7 +112,7 @@ export function ScheduleSection({
     return () => {
       live = false;
     };
-  }, [days, project, today, retry, changes]);
+  }, [period.from, period.to, project, retry, changes]);
 
   const buckets = data && (data.days.length > 92 ? data.weeks : data.days);
   const t = data?.totals;
@@ -126,7 +120,7 @@ export function ScheduleSection({
     <section aria-labelledby="schedule-title" className="dash-section">
       <div className="dash-head">
         <h2 id="schedule-title">Schedule</h2>
-        <Link to="/calendar">Open calendar</Link>
+        <Link to={`/calendar?view=month&date=${period.to}`}>Open calendar</Link>
       </div>
       {error && (
         <div role="alert">

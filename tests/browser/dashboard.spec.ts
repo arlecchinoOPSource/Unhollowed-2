@@ -153,6 +153,7 @@ test("each count links to the issue list with the matching project filter", asyn
   ).toHaveAttribute("href", "/issues");
   await page
     .locator(".dash-controls select")
+    .first()
     .selectOption({ label: "Studio launch" });
   await expect(section.locator("dl").getByRole("link").first()).toHaveAttribute(
     "href",
@@ -205,7 +206,7 @@ test("a failed load clears old numbers and can be retried", async ({
   const section = await open(page);
   await expect(section.locator("dl")).toContainText("Completion rate50%");
   await dispatch(page, "fail-command", "get_progress_analytics");
-  await page.getByRole("button", { name: "Last 90 days" }).click();
+  await page.getByRole("button", { name: "Last 7 days" }).click();
   const alert = page
     .getByRole("alert")
     .filter({ hasText: "Could not read local data" });
