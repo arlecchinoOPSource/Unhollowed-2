@@ -84,6 +84,10 @@ export function schedulingError(cause: unknown): string {
       return "That event is no longer available.";
     case "document_not_found":
       return "That document is no longer available.";
+    case "file_failed":
+      return "The calendar file could not be read or written.";
+    case "file_too_large":
+      return "That file is over 5 MiB, which is more than a calendar needs.";
     case "invalid_reminder":
       return "Choose one of the reminder times.";
     case "notification_failed":

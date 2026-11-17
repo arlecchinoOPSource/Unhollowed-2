@@ -7,6 +7,7 @@
 
 pub(crate) mod calendars;
 pub(crate) mod events;
+pub(crate) mod ics;
 pub(crate) mod links;
 pub(crate) mod recurrence;
 pub(crate) mod reminders;
@@ -48,6 +49,10 @@ pub enum SchedulingError {
     InvalidReminder,
     /// The system would not show a notification.
     NotificationFailed,
+    /// The calendar file could not be read or written.
+    FileFailed,
+    /// The calendar file is over the size limit.
+    FileTooLarge,
     InvalidTitle,
     InvalidLocation,
     /// Only http and https addresses with a host are accepted.
@@ -443,18 +448,30 @@ pub(crate) fn bind_timing<'q>(
 pub async fn create_event(
     pool: &SqlitePool,
     workspace: &str,
+    input: EventInput,
+) -> Result<Event, SchedulingError> {
+    let mut tx = pool.begin().await?;
+    let event = create_event_on(&mut tx, workspace, input).await?;
+    tx.commit().await?;
+    Ok(event)
+}
+
+/// Creates an event inside the caller's transaction, so a batch such as an
+/// import can apply or roll back as a whole.
+pub(crate) async fn create_event_on(
+    tx: &mut SqliteConnection,
+    workspace: &str,
     mut input: EventInput,
 ) -> Result<Event, SchedulingError> {
     clean_text(&mut input)?;
     let timing = event_timing(&input)?;
     let rule = recurrence::validate(&input.repeat, &timing)?;
-    let mut tx = pool.begin().await?;
     let calendar = match input.calendar_id.clone() {
         Some(id) => {
-            writable_calendar(&mut tx, workspace, &id).await?;
+            writable_calendar(&mut *tx, workspace, &id).await?;
             id
         }
-        None => ensure_default(&mut tx, workspace).await?,
+        None => ensure_default(&mut *tx, workspace).await?,
     };
     let query = sqlx::query(
         "INSERT INTO events (id, workspace_id, calendar_id, title, description, location, url,
@@ -479,9 +496,7 @@ pub async fn create_event(
         .bind(until)
         .execute(&mut *tx)
         .await?;
-    let event = get_event_on(&mut tx, workspace, &id).await?;
-    tx.commit().await?;
-    Ok(event)
+    get_event_on(&mut *tx, workspace, &id).await
 }
 
 pub(crate) async fn get_event_on(

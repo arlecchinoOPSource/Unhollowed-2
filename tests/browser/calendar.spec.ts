@@ -872,3 +872,77 @@ test("says so when the system refuses a reminder", async ({ page }) => {
   await page.getByRole("button", { name: "Dismiss" }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+test("previews an .ics import, imports it, and exports through native dialogs", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __icsFile: {
+        name: "team.ics",
+        content: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+      },
+    }),
+  );
+  await page.goto("/calendar?view=month");
+  const transfer = page.locator("details", { hasText: "Import and export" });
+  await transfer.locator("summary").click();
+  await transfer
+    .getByRole("button", { name: "Choose a file to import…" })
+    .click();
+  const preview = transfer.getByRole("region", {
+    name: "Import preview for team.ics",
+  });
+  await expect(
+    preview.getByText(/Ready to import 2 events of 4/),
+  ).toBeVisible();
+  await expect(
+    preview.getByText(/1 event already in your calendar is kept/),
+  ).toBeVisible();
+  await expect(
+    preview
+      .getByRole("list", { name: "Events to import" })
+      .getByText(/Standup \(repeats\), 2 changed/),
+  ).toBeVisible();
+  await expect(
+    preview
+      .getByRole("list", { name: "Events not imported" })
+      .getByText(/BYDAY/),
+  ).toBeVisible();
+  await expect(
+    preview.getByRole("list", { name: "Import notes" }),
+  ).toContainText("ATTENDEE");
+  await preview.getByRole("button", { name: "Import 2 events" }).click();
+  await expect(preview.getByText("Imported 2 events.").first()).toBeVisible();
+  await expect(preview.getByRole("button", { name: /^Import 2/ })).toHaveCount(
+    0,
+  );
+
+  await transfer.getByRole("button", { name: "Export calendar…" }).click();
+  await expect(transfer.getByRole("status")).toContainText(
+    "Saved 0 events to /Users/test/unhollowed-calendar.ics.",
+  );
+});
+
+test("explains a refused .ics file and a canceled export", async ({ page }) => {
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __icsCancel: true,
+      __icsFile: { name: "notes.ics", content: "hello" },
+    }),
+  );
+  await page.goto("/calendar?view=month");
+  const transfer = page.locator("details", { hasText: "Import and export" });
+  await transfer.locator("summary").click();
+  await transfer
+    .getByRole("button", { name: "Choose a file to import…" })
+    .click();
+  await expect(transfer.getByRole("alert")).toHaveText(
+    "This is not an iCalendar file.",
+  );
+  await expect(
+    transfer.getByRole("button", { name: /^Import \d/ }),
+  ).toHaveCount(0);
+  await transfer.getByRole("button", { name: "Export calendar…" }).click();
+  await expect(transfer.getByRole("status")).toHaveText("Export canceled.");
+});

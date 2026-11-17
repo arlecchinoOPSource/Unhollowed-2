@@ -153,6 +153,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0024_event_reminders.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 25,
+            description: "Remember the iCalendar UID of imported events",
+            sql: include_str!("../migrations/0025_event_ics_uid.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -91,6 +91,8 @@ Recurring timed events (U2-P3-04) repeat their wall-clock time in their own zone
 | `get_event_reminder` / `set_event_reminder`           | One reminder per timed event, 0 minutes to 1 week before the start, or none                       |
 | `get_reminders_enabled` / `set_reminders_enabled`     | The workspace's reminders switch. Reminders are on until turned off                               |
 | `claim_due_reminders` / `send_test_notification`      | Delivers reminders that are due, once each, and shows a test notification                         |
+| `pick_ics_file` / `export_calendar_ics`               | The native open and save dialogs for calendar files. Both return nothing when canceled            |
+| `preview_ics_import` / `import_ics`                   | Reports what a file would add, then adds it in one transaction                                    |
 | `update_issue_work_block`                             | Moves or resizes a session. Only its times and zone change                                        |
 | `list_issue_work_blocks`                              | An issue's sessions, earliest first, including those of closed and archived issues                |
 
@@ -267,6 +269,20 @@ A timed event can have one reminder, set under **Reminder** in the editor for a 
 - **Permission.** The notification plugin reports permission as granted on desktop, so the app cannot read the system setting. **Send a test notification** under Reminders on the calendar page is how to check. If the system refuses a reminder, a notice says so, and the reminder is not retried.
 - **Off.** Turning reminders off silences all of them and records nothing, so turning them on again shows reminders still ahead of their start.
 - Not included: cloud or push reminders, all-day reminders, several reminders per event, default reminders, and delivery while the app is closed.
+
+### Calendar files (.ics)
+
+**Import and export** on the calendar page reads and writes iCalendar (RFC 5545) files through the system's open and save dialogs. Everything stays on the device. Only events are exchanged: not deadlines, work blocks, calendars, links, or reminders.
+
+- **Export** writes every event of the workspace, hidden calendars included, as UTF-8 with CRLF line ends, folded at 75 octets, with `PRODID:-//Unhollowed 2//Calendar//EN`. Each event has `UID:{id}@unhollowed-2`, or the UID it was imported with. Timed events use `DTSTART;TZID=<IANA name>` in the event's own zone, UTC events use `Z`, and all-day events use `VALUE=DATE` with an exclusive `DTEND`. A repeating event has `RRULE` (`FREQ`, `INTERVAL`, `COUNT`, or `UNTIL`), cancelled occurrences are `EXDATE`, and a changed occurrence is a second `VEVENT` with the same UID and a `RECURRENCE-ID`. A timed series' `UNTIL` is the end of its last day in the event's zone, in UTC. No `VTIMEZONE` is written, so other apps must know the IANA names.
+- **Import** reads `SUMMARY`, `DESCRIPTION`, `LOCATION`, `URL`, `DTSTART`, `DTEND` or `DURATION`, `RRULE`, `EXDATE`, and `RECURRENCE-ID`. Folded lines, text escapes, a byte order mark, and LF line ends are accepted. Times are read with `TZID` (an IANA name), `Z` (UTC), or as floating times in the device's zone. Seconds are dropped, with a note.
+- **Preview first.** Choosing a file shows what will be added, what is a duplicate, what is skipped and why, and notes on what was ignored, before anything is stored. The preview runs the import code and rolls it back, so applying matches it. Events go into the calendar chosen in the dialog, or the default.
+- **Duplicates.** An event is a duplicate when its UID matches an imported UID or an event's ID in this workspace. A duplicate is skipped and the existing event is not changed, so importing a file twice, or importing this app's own export, adds nothing. There is no update-on-reimport. To change an event, edit it, or delete it and import again.
+- **Not imported, with a reason.** An event with no title or start, no end or duration, an end before its start, an unknown time zone, `STATUS:CANCELLED`, an `RRULE` with anything beyond `FREQ`, `INTERVAL`, `COUNT`, and `UNTIL` (such as `BYDAY`), a rule outside the app's limits, or an override whose series is not in the file. The event is skipped whole.
+- **Ignored with a note.** Other properties such as `ATTENDEE`, `ORGANIZER`, and `CATEGORIES`, components such as `VTIMEZONE`, `VALARM`, and `VTODO`, an `EXDATE` that is not an occurrence, and a `RANGE=THISANDFUTURE` override. Alarms are not turned into reminders.
+- **Atomic.** Events import in one transaction. An event that fails validation is skipped before it is written, and a storage failure rolls back the whole file, so the calendar is never left partly imported. A file over 5 MiB, with more than 2,000 events, or that is not a calendar is refused with a reason and nothing changes.
+- The UID of an imported event is kept in `events.ics_uid` (migration 0025), unique per workspace.
+- Not included: Google or Microsoft sync, invitations, subscriptions to calendar URLs, and updating events from a newer file.
 
 ### Calendar libraries
 

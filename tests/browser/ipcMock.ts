@@ -1354,6 +1354,65 @@ export async function installIpcMock(page: Page) {
               events.splice(events.indexOf(event), 1);
               return null;
             }
+            case "pick_ics_file":
+              return (
+                (window as unknown as { __icsFile?: object }).__icsFile ?? null
+              );
+            case "preview_ics_import":
+            case "import_ics": {
+              const content = (args as unknown as { content: string }).content;
+              if (!content.includes("BEGIN:VCALENDAR"))
+                return {
+                  fatal: "This is not an iCalendar file.",
+                  found: 0,
+                  imported: [],
+                  duplicates: [],
+                  skipped: [],
+                  warnings: [],
+                  applied: false,
+                };
+              return {
+                fatal: null,
+                found: 4,
+                imported: [
+                  {
+                    title: "Standup",
+                    uid: "a",
+                    recurring: true,
+                    exceptions: 2,
+                  },
+                  {
+                    title: "Holiday",
+                    uid: "b",
+                    recurring: false,
+                    exceptions: 0,
+                  },
+                ],
+                duplicates: [
+                  { title: "Old", uid: "c", recurring: false, exceptions: 0 },
+                ],
+                skipped: [
+                  {
+                    title: "Gym",
+                    uid: "d",
+                    message:
+                      "The repeat rule uses BYDAY, which is not supported.",
+                  },
+                ],
+                warnings: [
+                  "ATTENDEE is not supported and was ignored in 1 event(s).",
+                ],
+                applied: command === "import_ics",
+              };
+            }
+            case "export_calendar_ics":
+              return (window as unknown as { __icsCancel?: boolean })
+                .__icsCancel
+                ? null
+                : {
+                    path: "/Users/test/unhollowed-calendar.ics",
+                    events: events.length,
+                  };
             case "get_reminders_enabled":
               return remindersOn;
             case "set_reminders_enabled":
