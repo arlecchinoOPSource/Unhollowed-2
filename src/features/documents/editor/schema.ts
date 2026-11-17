@@ -1,3 +1,7 @@
+import { DocumentReference } from "./DocumentReferences";
+import { DocumentPageLayout, PageBreak } from "./pageLayout";
+import { TableKit } from "@tiptap/extension-table";
+import { DocumentImage } from "./DocumentImage";
 import { Extension, Mark, getSchema, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
@@ -97,6 +101,22 @@ const BlockStyle = Extension.create({
   },
 });
 
+const CellStyles = Extension.create({
+  name: "documentCellStyles",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["tableCell", "tableHeader"],
+        attributes: {
+          shade: stylingAttribute("shade", ["neutral", "accent"]),
+          alignment: stylingAttribute("alignment", ["left", "center", "right"]),
+          border: stylingAttribute("border", ["heavy"]),
+        },
+      },
+    ];
+  },
+});
+
 const InlineStyle = Mark.create({
   name: "documentInlineStyle",
   addAttributes() {
@@ -178,6 +198,12 @@ export const documentExtensions = [
   InlineStyle,
   superscript,
   subscript,
+  TableKit.configure({ table: { resizable: true } }),
+  CellStyles,
+  DocumentImage,
+  DocumentReference,
+  DocumentPageLayout,
+  PageBreak,
 ];
 
 const schema = getSchema(documentExtensions);

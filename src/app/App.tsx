@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { ProjectGoalsPage } from "../features/goals/ProjectGoals";
 import { Link, Route, Routes } from "react-router";
 import { Workspace } from "../components/layout/Workspace";
@@ -19,6 +20,8 @@ import { ProjectDetail } from "../features/projects/ProjectDetail";
 import { Settings } from "../features/settings/Settings";
 import { features } from "./pages";
 
+const Graph = lazy(() => import("../features/graph/Graph"));
+
 export function App() {
   return (
     <Routes>
@@ -27,6 +30,14 @@ export function App() {
         <Route path="/today" element={<TodayPage />} />
         <Route path="/today/upcoming" element={<UpcomingPage />} />
         <Route path="/calendar" element={<IssueCalendar />} />
+        <Route
+          path="/graph"
+          element={
+            <Suspense fallback={<p role="status">Loading graph…</p>}>
+              <Graph />
+            </Suspense>
+          }
+        />
         <Route path="/documents" element={<Documents />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectDetail />} />
@@ -47,6 +58,7 @@ export function App() {
                 "/projects",
                 "/issues",
                 "/calendar",
+                "/graph",
               ].includes(path),
           )
           .map(({ path, title, description }) => (

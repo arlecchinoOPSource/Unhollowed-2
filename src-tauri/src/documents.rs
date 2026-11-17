@@ -1,3 +1,9 @@
+pub(crate) mod assets;
+pub(crate) mod library;
+pub(crate) mod printing;
+pub(crate) mod references;
+pub(crate) mod revisions;
+
 use crate::database::{active_workspace, pool, DatabaseError};
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -39,6 +45,10 @@ pub enum DocumentError {
     InvalidTitle,
     InvalidContent,
     StorageFailed,
+    /// Paper, orientation, or margins outside what the editor allows.
+    InvalidPrintSettings,
+    /// The native print dialog could not be opened in this window.
+    PrintUnavailable,
 }
 
 impl From<DatabaseError> for DocumentError {
@@ -100,7 +110,7 @@ pub async fn list(
 ) -> Result<Vec<DocumentSummary>, DocumentError> {
     let rows: Vec<(String, String, String)> = sqlx::query_as(
         "SELECT id, title, updated_at FROM documents
-         WHERE workspace_id = ? ORDER BY updated_at DESC, id",
+         WHERE workspace_id = ? AND archived_at IS NULL ORDER BY updated_at DESC, id",
     )
     .bind(workspace_id)
     .fetch_all(pool)

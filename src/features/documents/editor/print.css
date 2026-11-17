@@ -1,0 +1,103 @@
+.document-page-surface[data-page-view="true"] {
+  max-width: var(--page-width);
+  min-height: var(--page-height);
+  margin-inline: auto;
+  padding: min(var(--page-margin), 5vw);
+  border: 1px solid var(--control-line);
+  background: var(--surface);
+}
+
+.document-page-surface[data-page-view="true"] .editor {
+  padding: 0;
+  border: 0;
+}
+
+.document-page-note {
+  padding-block: 8px;
+  font-size: 12px;
+}
+
+[data-document-break] {
+  margin-block: 16px;
+  border-block-start: 1px dashed var(--control-line);
+  color: var(--muted);
+  font: 12px var(--interface);
+  user-select: none;
+}
+
+.document-print-title {
+  display: none;
+}
+
+@media print {
+  body:has(.document-editor) {
+    color: #212121;
+    background: white;
+    --text: #212121;
+    --muted: #444;
+    --surface: white;
+    --sidebar: #eee;
+    --background: white;
+    --control-line: #888;
+    --selection: #eceeff;
+    --accent: #324298;
+  }
+
+  .workspace:has(.document-editor),
+  .documents:has(.document-editor) {
+    display: block;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .workspace:has(.document-editor) :is(#sidebar, .skip, header),
+  main:has(.documents) > :not(.documents),
+  .documents > :first-child,
+  .documents .document-usage,
+  .document-editor > :not(.document-page-surface, .document-print-title),
+  .document-page-note,
+  .word-image details {
+    display: none !important;
+  }
+
+  main:has(.document-editor),
+  .document-editor,
+  .document-editor .document-page-surface,
+  .document-editor .editor,
+  .document-editor .ProseMirror {
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+    max-width: none;
+    border: 0;
+  }
+
+  .document-print-title {
+    display: block;
+  }
+
+  .document-editor :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+  }
+
+  .document-editor p {
+    widows: 2;
+    orphans: 2;
+  }
+
+  .document-editor :is(figure, tr) {
+    break-inside: avoid;
+  }
+
+  .document-editor .tableWrapper {
+    overflow: visible;
+  }
+
+  [data-document-break] {
+    break-after: page;
+    height: 0;
+    margin: 0;
+    border: 0;
+    font-size: 0;
+  }
+}
