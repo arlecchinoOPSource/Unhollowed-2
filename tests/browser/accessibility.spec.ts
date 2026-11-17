@@ -53,7 +53,21 @@ function seed(page: Page) {
     archivedAt: index === 23 ? "2026-11-15T00:00:00Z" : null,
   }));
   return page.addInitScript((data) => {
-    Object.assign(window, { __seedIssues: data });
+    Object.assign(window, {
+      __seedIssues: data,
+      // An active and an archived habit, so the grid shows every cell state.
+      __seedHabits: {
+        today: "2026-11-16",
+        habits: [
+          { name: "Walk", startDate: "2026-11-05" },
+          { name: "Read", startDate: "2026-11-01", archivedOn: "2026-11-10" },
+        ],
+        completions: [
+          ["habit-1", "2026-11-06"],
+          ["habit-2", "2026-11-10"],
+        ],
+      },
+    });
   }, issues);
 }
 
