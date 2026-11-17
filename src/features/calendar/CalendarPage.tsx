@@ -5,6 +5,7 @@ import { isTauri } from "../../database/status";
 import { useLocalToday } from "../today/useLocalToday";
 import { CalendarSearch } from "./CalendarSearch";
 import { IssueCalendar } from "./IssueCalendar";
+import { CalendarShortcuts } from "./CalendarShortcuts";
 import { IcsTransfer } from "./IcsTransfer";
 import { OverdueIssues } from "./OverdueIssues";
 import { ReminderSettings } from "./ReminderSettings";
@@ -118,6 +119,7 @@ export function CalendarPage() {
         />
       )}
       <PreferenceControls current={settings} save={save} error={error} />
+      {isTauri() && <CalendarShortcuts />}
       {isTauri() && <ReminderSettings />}
       {isTauri() && (
         <IcsTransfer onChanged={() => setRevision((value) => value + 1)} />

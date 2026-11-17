@@ -258,6 +258,7 @@ export function DatePicker({ date, month }: { date: string; month?: boolean }) {
     <label>
       Go to date{" "}
       <input
+        id="calendar-go-to-date"
         type="date"
         value={date}
         onChange={(event) => {

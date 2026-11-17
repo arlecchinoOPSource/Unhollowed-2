@@ -1,4 +1,9 @@
-export function isIssueShortcut(event: KeyboardEvent, code: string) {
+/**
+ * Whether an Alt/Option+Shift shortcut may run: no other modifier, not while
+ * typing, and not behind a modal dialog. Every app shortcut shares this, so
+ * none can fire inside a field or over a dialog.
+ */
+export function shortcutAllowed(event: KeyboardEvent) {
   if (
     event.defaultPrevented ||
     event.isComposing ||
@@ -6,8 +11,7 @@ export function isIssueShortcut(event: KeyboardEvent, code: string) {
     !event.altKey ||
     !event.shiftKey ||
     event.metaKey ||
-    event.ctrlKey ||
-    event.code !== code
+    event.ctrlKey
   )
     return false;
   if (
@@ -20,4 +24,8 @@ export function isIssueShortcut(event: KeyboardEvent, code: string) {
       "input, textarea, select, [contenteditable], [role='textbox']",
     )
   );
+}
+
+export function isIssueShortcut(event: KeyboardEvent, code: string) {
+  return event.code === code && shortcutAllowed(event);
 }

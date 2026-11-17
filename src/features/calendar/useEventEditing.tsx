@@ -20,6 +20,8 @@ const messages: Record<EventChange, (title: string) => string> = {
 };
 
 interface Editing {
+  /** Tells one opening from the next, so a stale close cannot end a new one. */
+  id: number;
   event: CalendarEvent | null;
   occurrence?: { key: string; span: OccurrenceSpan };
   draft?: Draft;
@@ -66,11 +68,11 @@ export function useEventEditing({
     };
   }, [request]);
 
-  function open(next: Editing) {
+  function open(next: Omit<Editing, "id">) {
     latestOpen.current += 1;
     opener.current = document.activeElement as HTMLElement | null;
     setError("");
-    setEditing(next);
+    setEditing({ ...next, id: latestOpen.current });
   }
 
   async function openItem(item: CalendarItem, proposed?: OccurrenceSpan) {
@@ -101,12 +103,13 @@ export function useEventEditing({
 
   const editor = editing && (
     <EventEditor
+      key={editing.id}
       event={editing.event}
       occurrence={editing.occurrence}
       draft={editing.draft}
       calendars={calendars}
       onClose={() => {
-        setEditing(null);
+        setEditing((current) => (current === editing ? null : current));
         // The opener may have been replaced by a reload.
         requestAnimationFrame(() => {
           if (opener.current?.isConnected) opener.current.focus();

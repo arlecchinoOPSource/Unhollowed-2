@@ -1,4 +1,4 @@
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, Flag, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { schedulingError } from "../../database/calendars";
@@ -117,6 +117,7 @@ export function TodaySchedule({ today }: { today: string }) {
   function name(item: CalendarItem) {
     return item.kind === "workBlock" ? (
       <Link to={`/issues/${item.issueId}`}>
+        <Timer size={13} aria-hidden="true" />{" "}
         <span className="visually-hidden">Work block: </span>
         {issueKey({ number: item.issueNumber! })} {item.title}
       </Link>
@@ -214,6 +215,7 @@ export function TodaySchedule({ today }: { today: string }) {
                       {fullDate(item.startDate!)}
                     </span>{" "}
                     <Link to={`/issues/${item.issueId}`}>
+                      <Flag size={13} aria-hidden="true" />{" "}
                       <span className="visually-hidden">Deadline: </span>
                       {issueKey({ number: item.issueNumber! })} {item.title}
                     </Link>
