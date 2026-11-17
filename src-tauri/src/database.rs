@@ -159,6 +159,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0025_event_ics_uid.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 26,
+            description: "Add habits and daily completions",
+            sql: include_str!("../migrations/0026_habits.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

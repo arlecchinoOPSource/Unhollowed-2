@@ -7,6 +7,7 @@ mod database;
 mod document_links;
 mod documents;
 mod goals;
+mod habits;
 mod issues;
 mod labels;
 mod milestones;
