@@ -1,5 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(test)]
+mod acceptance_tests;
+
 mod database;
 mod document_links;
 mod documents;
