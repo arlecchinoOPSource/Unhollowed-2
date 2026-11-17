@@ -134,7 +134,7 @@ The board (`/issues/board` and `/projects/:id/board`) has no records of its own.
 
 ## Issue calendar
 
-`/calendar` shows issues on their due dates, read straight from issues through `query_issues`, with no calendar records. Due dates are local calendar dates, so an issue appears on the same day in any time zone and across daylight saving.
+Events, deadline projections, and work blocks follow the [calendar and scheduling contract](CALENDAR.md). `/calendar` shows issues on their due dates, read straight from issues through `query_issues`, with no calendar records. Due dates are local calendar dates, so an issue appears on the same day in any time zone and across daylight saving.
 
 - The month grid shows six weeks starting on the Monday on or before the 1st (`src/features/calendar/monthGrid.ts`). Undated issues are not shown. Closed issues are hidden unless **Show closed issues** is on, and the **Project** filter narrows to one project or the Inbox. `month`, `project`, and `closed` live in the URL.
 - One grid loads at most 1,000 issues in pages of 200, with a note when more exist.
@@ -260,19 +260,25 @@ Not included in version 1: documents and document links, saved views, repeat ser
 
 ## Current schema
 
-| Migration | Adds                                                                           |
-| --------- | ------------------------------------------------------------------------------ |
-| 0001      | `workspaces` and the seeded Personal workspace                                 |
-| 0002      | `app_state`, pointing at the Personal workspace for existing and new databases |
-| 0003      | `documents`, owned by a workspace, with Tiptap JSON content                    |
-| 0004      | `projects`, owned by a workspace, with status and optional dates               |
-| 0005      | `issues` and `issue_counters`, with per-workspace numbers and optional project |
-| 0006      | `issues.search_text` for literal, case-insensitive issue search                |
-| 0007      | `labels` and `issue_labels`, with unique links and archived-label rules        |
-| 0008      | `milestones` and `issues.milestone_id`, with project compatibility triggers    |
-| 0009      | Project missions, objectives, and objective-to-issue links                     |
-| 0010      | Workspace-scoped issue relationships                                           |
-| 0011      | `issue_recurrences` and occurrence identity on issues                          |
-| 0012      | `saved_views` with versioned filter configuration                              |
-| 0013      | `issue_documents` and `project_documents` links                                |
-| 0014      | `issues.archived_at`, separate from the issue lifecycle                        |
+| Migration | Adds                                                                                                      |
+| --------- | --------------------------------------------------------------------------------------------------------- |
+| 0001      | `workspaces` and the seeded Personal workspace                                                            |
+| 0002      | `app_state`, pointing at the Personal workspace for existing and new databases                            |
+| 0003      | `documents`, owned by a workspace, with Tiptap JSON content                                               |
+| 0004      | `projects`, owned by a workspace, with status and optional dates                                          |
+| 0005      | `issues` and `issue_counters`, with per-workspace numbers and optional project                            |
+| 0006      | `issues.search_text` for literal, case-insensitive issue search                                           |
+| 0007      | `labels` and `issue_labels`, with unique links and archived-label rules                                   |
+| 0008      | `milestones` and `issues.milestone_id`, with project compatibility triggers                               |
+| 0009      | Project missions, objectives, and objective-to-issue links                                                |
+| 0010      | Workspace-scoped issue relationships                                                                      |
+| 0011      | `issue_recurrences` and occurrence identity on issues                                                     |
+| 0012      | `saved_views` with versioned filter configuration                                                         |
+| 0013      | `issue_documents` and `project_documents` links                                                           |
+| 0014      | `issues.archived_at`, separate from the issue lifecycle                                                   |
+| 0015      | Local document revision checkpoints                                                                       |
+| 0016      | Private document image assets                                                                             |
+| 0017      | Document folders and library metadata                                                                     |
+| 0018      | Workspace document reference index                                                                        |
+| 0019      | Workspace document text index for local search                                                            |
+| 0020      | `calendars`, `events`, and `work_blocks`, with same-workspace triggers ([calendar contract](CALENDAR.md)) |

@@ -17,6 +17,7 @@ mod portability;
 mod projects;
 mod relationships;
 mod saved_views;
+mod scheduling;
 mod search;
 #[cfg(test)]
 mod test_support;
@@ -47,6 +48,12 @@ fn main() {
             documents::assets::get_document_image,
             documents::get_document,
             documents::printing::print_document,
+            scheduling::list_calendar_items,
+            scheduling::list_calendars,
+            scheduling::create_calendar_event,
+            scheduling::get_calendar_event,
+            scheduling::create_issue_work_block,
+            scheduling::delete_issue_work_block,
             documents::create_document,
             documents::update_document,
             documents::revisions::list_document_revisions,
