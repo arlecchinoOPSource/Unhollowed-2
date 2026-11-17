@@ -883,3 +883,81 @@ mod temporal {
         });
     }
 }
+
+#[test]
+fn rescheduling_closing_and_archiving_an_issue_only_moves_its_deadline() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let issue = add_issue(&pool, DEFAULT_WORKSPACE, None).await;
+        crate::issues::set_due_date(&pool, DEFAULT_WORKSPACE, &issue, Some("2026-11-10"))
+            .await
+            .unwrap();
+        create_event(
+            &pool,
+            DEFAULT_WORKSPACE,
+            all_day("Trip", "2026-11-17", "2026-11-20"),
+        )
+        .await
+        .unwrap();
+        create_work_block(
+            &pool,
+            DEFAULT_WORKSPACE,
+            WorkBlockInput {
+                issue_id: issue.clone(),
+                time_zone: "UTC".into(),
+                start: "2026-11-18T14:00".into(),
+                end: "2026-11-18T16:00".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let snapshot = || async {
+            sqlx::query_as::<_, (String,)>(
+                "SELECT (SELECT json_group_array(json_array(id, title, start_date, end_date, updated_at)) FROM events)
+                     || (SELECT json_group_array(json_array(id, start_at, end_at, updated_at)) FROM work_blocks)",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .0
+        };
+        let before = snapshot().await;
+        let deadlines = || async {
+            list_items(
+                &pool,
+                DEFAULT_WORKSPACE,
+                range("2026-11-01", "2026-12-01", "UTC"),
+            )
+            .await
+            .unwrap()
+            .items
+            .into_iter()
+            .filter(|item| item.kind == ItemKind::Deadline)
+            .collect::<Vec<_>>()
+        };
+        let early = deadlines().await;
+        assert_eq!(early[0].start_date.as_deref(), Some("2026-11-10"));
+
+        crate::issues::set_due_date(&pool, DEFAULT_WORKSPACE, &issue, Some("2026-11-25"))
+            .await
+            .unwrap();
+        let moved = deadlines().await;
+        assert_eq!(moved.len(), 1);
+        assert_eq!(moved[0].start_date.as_deref(), Some("2026-11-25"));
+        assert!(!moved[0].closed);
+
+        crate::issues::set_status(&pool, DEFAULT_WORKSPACE, &issue, "done")
+            .await
+            .unwrap();
+        assert!(deadlines().await[0].closed);
+
+        crate::issues::set_archived(&pool, DEFAULT_WORKSPACE, &issue, true)
+            .await
+            .unwrap();
+        assert!(deadlines().await.is_empty());
+
+        // No calendar row was written, copied, or changed along the way.
+        assert_eq!(snapshot().await, before);
+        assert_eq!(count(&pool, "events").await, 1);
+    });
+}

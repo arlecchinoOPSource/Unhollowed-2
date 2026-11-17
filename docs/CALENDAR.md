@@ -198,6 +198,16 @@ The calendar page (`src/features/calendar/CalendarSearch.tsx`) puts **Search cal
   - The hour grid can take focus, so it can be scrolled from the keyboard even when it is empty.
 - **Width.** At narrow window widths, the timeline scrolls sideways inside itself and the page does not.
 
+### Issue deadlines across views
+
+Deadlines come from `issues.due_date` in every view, and no view stores a copy.
+
+- **Overdue** means open and due before the viewer's local today. Closed issues are never overdue. Month chips, the Month day list, and the timeline all-day band mark overdue deadlines in text as well as style.
+- **Overdue list.** Every view shows an **Overdue** list above it with open issues due before today, longest overdue first, up to 50. The `project` filter applies. Each row links to the issue and has a date field that reschedules it.
+- **Closed issues.** The `closed=1` URL parameter and the **Show closed issues** checkbox include completed and canceled deadlines in Month and in the timeline views. Closed deadlines are drawn struck through.
+- **Rescheduling** from Month or the overdue list calls `set_issue_due_date` and changes nothing else. Events and work blocks are never touched. The other views reload afterward, and Issues, Today and Upcoming, and project overview read the same record.
+- Timeline deadlines are not filtered by project.
+
 ### Calendar libraries
 
 The bundled FullCalendar packages were evaluated and not used. FullCalendar injects its styles at run time, which the production CSP (`style-src 'self'`) blocks, and its time grid does not match the keyboard and focus behavior above. The month grid and the timeline are built on the shared theme tokens instead, with offline layout code that has unit tests.

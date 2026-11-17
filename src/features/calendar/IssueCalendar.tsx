@@ -27,7 +27,7 @@ import {
 import { isTauri } from "../../database/status";
 import { StatusBadge } from "../issues/IssueBadges";
 import { useIssueReferences } from "../issues/useIssueReferences";
-import { addDays } from "../today/dates";
+import { addDays, isOverdue } from "../today/dates";
 import { useLocalToday } from "../today/useLocalToday";
 import { DayEvents } from "./DayEvents";
 import { ViewSwitch } from "./ViewSwitch";
@@ -63,7 +63,14 @@ interface Loaded {
  * time zone. Days can be chosen with the mouse or the arrow keys; the chosen
  * day lists every issue due then and can reschedule them or add a new one.
  */
-export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
+export function IssueCalendar({
+  agenda = false,
+  onIssueChanged,
+}: {
+  agenda?: boolean;
+  /** Called after an issue is rescheduled or created here. */
+  onIssueChanged?: () => void;
+}) {
   const desktop = isTauri();
   const location = useLocation();
   const today = useLocalToday();
@@ -277,6 +284,7 @@ export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
         if (latestMove.current.get(issue.id) !== number) return;
         setDue(issue.id, saved.dueDate!);
         setMessage(`${issueKey(saved)} is now due ${fullDate(dueDate)}.`);
+        onIssueChanged?.();
       },
       (cause) => {
         if (latestMove.current.get(issue.id) !== number) return;
@@ -558,7 +566,7 @@ export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
                             {items.slice(0, CHIPS_PER_DAY).map((issue) => (
                               <li
                                 key={issue.id}
-                                className={`calendar-chip${issue.closed ? " calendar-closed" : ""}`}
+                                className={`calendar-chip${issue.closed ? " calendar-closed" : ""}${isOverdue(issue, today) ? " calendar-overdue" : ""}`}
                                 draggable
                                 onDragStart={(event) => {
                                   event.dataTransfer.setData(
@@ -578,6 +586,11 @@ export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
                                   draggable={false}
                                   tabIndex={-1}
                                 >
+                                  {isOverdue(issue, today) && (
+                                    <span className="visually-hidden">
+                                      Overdue:{" "}
+                                    </span>
+                                  )}
                                   {issue.title}
                                 </Link>
                               </li>
@@ -639,6 +652,7 @@ export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
                   key={issue.id}
                   issue={issue}
                   from={from}
+                  overdue={isOverdue(issue, today)}
                   onReschedule={(date) => reschedule(issue, date)}
                 />
               ))}
@@ -650,6 +664,7 @@ export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
             onCreated={(message) => {
               setMessage(message);
               setRequest((value) => value + 1);
+              onIssueChanged?.();
             }}
             onError={setError}
           />
@@ -659,13 +674,15 @@ export function IssueCalendar({ agenda = false }: { agenda?: boolean }) {
   );
 }
 
-function DayIssue({
+export function DayIssue({
   issue,
   from,
+  overdue = false,
   onReschedule,
 }: {
   issue: IssueSummary;
   from: string;
+  overdue?: boolean;
   onReschedule: (date: string) => void;
 }) {
   // Commit on Enter or when leaving the field, never while typing.
@@ -684,6 +701,7 @@ function DayIssue({
         {issue.title}
       </Link>
       <StatusBadge status={issue.status} />
+      {overdue && <span className="calendar-overdue-tag">Overdue</span>}
       <label>
         <span className="visually-hidden">Due date for {issueKey(issue)}</span>
         <input

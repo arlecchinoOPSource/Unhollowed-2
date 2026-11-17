@@ -333,3 +333,14 @@
 .timeline-day-name[data-drop-preview="true"] {
   box-shadow: inset 0 -2px var(--accent);
 }
+
+.timeline-band[data-overdue="true"] a {
+  border-left-style: solid;
+  font-weight: 600;
+}
+
+.timeline-band[data-closed="true"] a {
+  background: transparent;
+  color: var(--muted);
+  text-decoration: line-through;
+}
