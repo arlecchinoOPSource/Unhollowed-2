@@ -15,6 +15,7 @@ import {
 import type { Label } from "../../database/labels";
 import { fitsIssue, type Milestone } from "../../database/milestones";
 import type { Project } from "../../database/projects";
+import { fullDate } from "../calendar/monthGrid";
 import { LabelPicker } from "../labels/LabelParts";
 import {
   defaultDirection,
@@ -113,6 +114,14 @@ export function IssueFilterBar({
           : (projectNames.get(filters.project) ?? "Unavailable project")
       }`,
       clear: { project: "" },
+    });
+  if (filters.completedFrom)
+    active.push({
+      label:
+        filters.completedFrom === filters.completedTo
+          ? `Completed: ${fullDate(filters.completedFrom)}`
+          : `Completed: ${fullDate(filters.completedFrom)} to ${fullDate(filters.completedTo)}`,
+      clear: { completedFrom: "", completedTo: "" },
     });
   for (const id of filters.labels)
     active.push({

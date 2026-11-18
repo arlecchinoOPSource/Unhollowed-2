@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
+import { safeBack } from "../../app/links";
 import {
   completeIssue,
   createIssue,
@@ -308,8 +309,15 @@ export function IssueList({ projectId }: { projectId?: string }) {
   const empty = counts !== null && counts.all === 0;
   const loading = results !== null && results.key !== `${queryKey}#${request}`;
 
+  const returnTo = (location.state as { from?: unknown } | null)?.from;
+  const backToDashboard = safeBack(returnTo, "");
   return (
     <div className="issues">
+      {backToDashboard.startsWith("/dashboards") && (
+        <Link className="issue-back" to={backToDashboard}>
+          Back to the dashboard
+        </Link>
+      )}
       <details className="issue-shortcuts">
         <summary>Keyboard shortcuts</summary>
         <ul>

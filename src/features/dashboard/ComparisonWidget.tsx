@@ -1,4 +1,6 @@
-import { Chart, type Point } from "../../components/charts/Chart";
+import { useLocation, useNavigate } from "react-router";
+import { Chart, type Drill, type Point } from "../../components/charts/Chart";
+import { NOTES, completedIssues, habitDays, scheduledTime } from "./drilldown";
 import {
   analyticsError,
   getProgressAnalytics,
@@ -49,6 +51,9 @@ function Row({
   total,
   context,
   unavailable,
+  drill,
+  aggregate: aggregateNote,
+  onOpen,
 }: {
   title: string;
   note: string;
@@ -62,6 +67,10 @@ function Row({
   total?: string;
   context: WidgetContext;
   unavailable?: string;
+  drill?: (point: number) => Drill | null;
+  /** Said when the row's points have no records to open. */
+  aggregate?: string;
+  onOpen: (to: string) => void;
 }) {
   const unit = grain === "week" ? "weeks" : "months";
   if (unavailable || aligned?.problem)
@@ -90,6 +99,9 @@ function Row({
         format={format}
         max={max}
         series={[{ name: title, accent, points }]}
+        drill={drill && ((_, i) => drill(i))}
+        onOpen={onOpen}
+        aggregateNote={aggregateNote}
         state={aligned.covered === 0 ? "empty" : "ready"}
         message="No data in this period."
       />
@@ -119,6 +131,10 @@ export function ComparisonWidget({
   const today = localDate(new Date());
   const zone = deviceZone();
   const buckets = bucketsOf(period, grain);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const onOpen = (to: string) =>
+    navigate(to, { state: { from: `${location.pathname}${location.search}` } });
 
   const progress = useSharedQuery(
     queryKey("progress-analytics", period.from, period.to, project, zone),
@@ -237,6 +253,11 @@ export function ComparisonWidget({
         grain={grain}
         aligned={habitRows}
         context={context}
+        onOpen={onOpen}
+        aggregate={habit ? undefined : NOTES.habits}
+        drill={(i) =>
+          habitRows?.values[i] != null ? habitDays(buckets[i], habit) : null
+        }
         unavailable={project ? hidden : undefined}
         total={
           habits.data?.summary.percent == null
@@ -254,6 +275,11 @@ export function ComparisonWidget({
         grain={grain}
         aligned={issues}
         context={context}
+        onOpen={onOpen}
+        drill={(i) => {
+          const value = issues?.values[i];
+          return value ? completedIssues(buckets[i], value, project) : null;
+        }}
         total={issues ? `Total ${issues.total}.` : undefined}
       />
       <Row
@@ -266,6 +292,8 @@ export function ComparisonWidget({
         grain={grain}
         aligned={planned}
         context={context}
+        onOpen={onOpen}
+        drill={(i) => (planned?.values[i] ? scheduledTime(buckets[i]) : null)}
         total={
           planned ? `Total ${minutes(planned.total)} scheduled.` : undefined
         }
@@ -281,6 +309,8 @@ export function ComparisonWidget({
         grain={grain}
         aligned={moodRows}
         context={context}
+        onOpen={onOpen}
+        aggregate={NOTES.mood}
         unavailable={project ? hidden : undefined}
       />
     </section>

@@ -1,4 +1,7 @@
+import { useLocation, useNavigate } from "react-router";
+import { safeBack } from "../../app/links";
 import { Chart, type Point } from "../../components/charts/Chart";
+import { NOTES, completedIssues, habitDays, scheduledTime } from "./drilldown";
 import {
   analyticsError,
   getProgressAnalytics,
@@ -28,6 +31,18 @@ const label = (start: string, end: string) =>
   start === end ? fullDate(start) : `Week of ${fullDate(start)}`;
 
 type Kind = "bar" | "line";
+
+/** Opens a drilldown and remembers the dashboard to return to. */
+function useOpen() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (to: string) =>
+    navigate(to, {
+      state: {
+        from: safeBack(`${location.pathname}${location.search}`, "/dashboards"),
+      },
+    });
+}
 
 function Frame({
   title,
@@ -83,6 +98,8 @@ function IssuesCompleted({
       value: b.completed,
     })) ?? [];
   const empty = data !== null && points.every((p) => !p.value);
+  const open = useOpen();
+  const buckets = data?.trend.buckets ?? [];
   return (
     <Frame title="Issues completed" error={error} retry={retry}>
       {data === null ? (
@@ -95,6 +112,12 @@ function IssuesCompleted({
             range={range(context)}
             format={count}
             series={[{ name: "Completed", accent: "periwinkle", points }]}
+            drill={(_, i) =>
+              buckets[i] && buckets[i].completed > 0
+                ? completedIssues(buckets[i], buckets[i].completed, project)
+                : null
+            }
+            onOpen={open}
             state={empty ? "empty" : "ready"}
             message="No issues were completed in this period."
           />
@@ -137,6 +160,7 @@ function ScheduledTime({
       value: b.busyMinutes,
     })) ?? [];
   const empty = data !== null && points.every((p) => !p.value);
+  const open = useOpen();
   return (
     <Frame title="Scheduled time" error={error} retry={retry}>
       {data === null ? (
@@ -149,6 +173,12 @@ function ScheduledTime({
             range={range(context)}
             format={minutes}
             series={[{ name: "Busy time", accent: "green", points }]}
+            drill={(_, i) =>
+              buckets?.[i] && buckets[i].busyMinutes > 0
+                ? scheduledTime(buckets[i])
+                : null
+            }
+            onOpen={open}
             state={empty ? "empty" : "ready"}
             message="Nothing is scheduled in this period."
           />
@@ -182,6 +212,7 @@ function HabitCompletion({
       value: b.percent,
     })) ?? [];
   const empty = data !== null && points.every((p) => p.value === null);
+  const open = useOpen();
   return (
     <Frame title="Habit completion" error={error} retry={retry}>
       {project ? (
@@ -204,6 +235,13 @@ function HabitCompletion({
           format={percent}
           max={100}
           series={[{ name: "Completed", accent: "violet", points }]}
+          drill={(_, i) =>
+            buckets?.[i] && buckets[i].percent !== null
+              ? habitDays(buckets[i], habit)
+              : null
+          }
+          onOpen={open}
+          aggregateNote={habit ? undefined : NOTES.habits}
           state={empty ? "empty" : "ready"}
           message="No habits were due in this period."
         />

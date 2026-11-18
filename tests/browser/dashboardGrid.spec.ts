@@ -462,3 +462,52 @@ test("the comparison keeps each unit apart, shows coverage, and leaves out habit
     widget.locator('[data-chart-state="unavailable"]').first(),
   ).toContainText("not part of a project");
 });
+
+test("a chart point opens the issues it counted, and the way back returns to the dashboard", async ({
+  page,
+}) => {
+  await installIpcMock(page);
+  await page.clock.setFixedTime(new Date("2026-11-17T10:00:00+01:00"));
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __progress: {
+        trend: {
+          granularity: "day",
+          buckets: [
+            { start: "2026-11-09", end: "2026-11-09", completed: 3 },
+            { start: "2026-11-10", end: "2026-11-10", completed: 0 },
+          ],
+          doneTotal: 3,
+          withTime: 3,
+          withoutTime: 0,
+        },
+      },
+    }),
+  );
+  await page.goto("/dashboards");
+  await expect(
+    page.getByRole("heading", { name: "At a glance" }),
+  ).toBeVisible();
+  await arrange(page);
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Bar chart" }).click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+
+  const chart = page.locator('[data-cell="bar-chart-1"]');
+  await chart.getByText(/Show values/).click();
+  // Only the day with completions has records to open, reachable by keyboard.
+  const links = chart.getByRole("link", { name: /^Open / });
+  await expect(links).toHaveCount(1);
+  await links.focus();
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL(/\/issues\?/);
+  const url = new URL(page.url());
+  expect(url.searchParams.get("completedFrom")).toBe("2026-11-09");
+  expect(url.searchParams.get("completedTo")).toBe("2026-11-09");
+  expect(url.searchParams.get("status")).toBe("done");
+  await expect(page.getByText("Completed: ")).toBeVisible();
+
+  await page.getByRole("link", { name: "Back to the dashboard" }).click();
+  await expect(page).toHaveURL(/\/dashboards/);
+});
