@@ -1,9 +1,10 @@
 # CI and desktop packaging
 
-| Workflow          | Automatic runs                                                                              | Manual runs             |
-| ----------------- | ------------------------------------------------------------------------------------------- | ----------------------- |
-| Quick CI          | Every PR to `main` and push to `main`                                                       | Ubuntu checks           |
-| Desktop packaging | Windows x64 on relevant pushes to `main`. Windows x64 and Apple Silicon on `v*` tag pushes. | Windows, macOS, or both |
+| Workflow               | Automatic runs                                                                              | Manual runs                                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Quick CI               | Every PR to `main` and push to `main`                                                       | Ubuntu checks                                                                                                                                                         |
+| Windows installer test | None                                                                                        | Manual only: builds the unsigned Windows installers and installs, starts, upgrades, and uninstalls them on a real Windows runner ([Windows](WINDOWS_DISTRIBUTION.md)) |
+| Desktop packaging      | Windows x64 on relevant pushes to `main`. Windows x64 and Apple Silicon on `v*` tag pushes. | Windows, macOS, or both                                                                                                                                               |
 
 Quick CI runs lint, frontend unit tests, TypeScript plus the production web build, Rust formatting, and native Rust compilation and tests. Ubuntu installs the [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/) needed to compile. Desktop packaging produces workflow artifacts. See [GitHub-hosted runner labels](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) for the runner architectures.
 

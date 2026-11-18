@@ -4,8 +4,6 @@ name: Windows installer test
 # uninstalls them on a real Windows runner. Manual only. See docs/WINDOWS_DISTRIBUTION.md.
 on:
   workflow_dispatch:
-  push:
-    branches: [chore/U2-P6-18-windows-packaging]
 
 permissions:
   contents: read
