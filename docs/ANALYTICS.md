@@ -212,3 +212,17 @@ The dashboard's controls (period, project, habit) are the globals. Each widget r
 - **Visible.** A widget with its own period shows "Period: Last 7 days (7 days), date to date (this widget's own period)" with **Use dashboard period** to reset it. Widgets that follow the dashboard show nothing extra because the dashboard's period line already applies. A period is never silently mixed: two widgets with different periods each state theirs.
 - **Record filters are not stored.** Project and habit filters name records that can be deleted, so they stay transient (see "Dashboard controls"). They apply only to widgets whose type supports them; elsewhere the widget says "The project filter does not apply here" or "The habit filter does not apply here". Sources that do not apply to a filter keep their `not_applicable` meaning inside the widget.
 - **Stored vs transient.** The override lives in the widget's config in the saved layout and survives a restart. Filters reset on every visit.
+
+## Charts (U2-P5-10)
+
+`src/components/charts/Chart.tsx` is the one chart for the line and bar widgets. It draws values a query already computed and derives nothing.
+
+- **Widgets.** `line-chart` and `bar-chart` show one measure each, chosen in Settings: _Issues completed_ (progress trend), _Habit completion_ (habit statistics), or _Scheduled time_ (schedule buckets; bars only). Each reads the same shared query as the section for that measure, so the numbers agree. Periods over 92 days use weeks. Under a project filter the habit chart says habits are not part of a project.
+- **Range, labels, units.** Every chart names its title, its period, and its units ("5 issues", "1 h 30 min", "80%"). The scale starts at zero; percentages use 0 to 100. The drawing's accessible name gives the range and the highest value.
+- **Same values without the picture.** A **Show values** table lists every point for every series, with "No data" where a point has no data. Hover tooltips repeat the same text but nothing depends on hover or color.
+- **Missing is not zero.** A point with no data is left out of the drawing (a line breaks there) and says "No data" in the table.
+- **Not only color.** Series differ by shape (circle, square, diamond, triangle) and line dash for lines, and by a stripe pattern for bars, in addition to accent.
+- **Accents.** Periwinkle, green, amber, and violet tokens (`--series-*`, light and dark). A test checks each is at least 3:1 against the surface of its theme.
+- **Empty versus unavailable.** _Empty_ (the source answered and nothing matched) and _unavailable_ (the source does not apply) are different displays with different wording.
+- **Motion.** None. Reduced motion needs no override and the stylesheet keeps it that way.
+- **Narrow widths.** The drawing scales to its container; the table scrolls inside its own box.

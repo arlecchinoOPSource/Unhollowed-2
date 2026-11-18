@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import type { Period } from "./controls";
 import { GlanceSection } from "./GlanceSection";
 import { HabitsSection } from "./HabitsSection";
+import { ChartWidget } from "./ChartWidget";
 import { MoodSection } from "./MoodSection";
 import { ProgressSection } from "./ProgressSection";
 import { ScheduleSection } from "./ScheduleSection";
@@ -36,6 +37,20 @@ const renderers: Record<string, Renderer> = {
   ),
   "mood-trend": ({ project, period }) => (
     <MoodSection project={project} period={period} />
+  ),
+  "line-chart": (context, config) => (
+    <ChartWidget
+      kind="line"
+      metric={(config as { metric: string }).metric}
+      context={context}
+    />
+  ),
+  "bar-chart": (context, config) => (
+    <ChartWidget
+      kind="bar"
+      metric={(config as { metric: string }).metric}
+      context={context}
+    />
   ),
   notes: (_, config) => {
     const { text } = config as { text: string };

@@ -1,0 +1,130 @@
+/* Series accents. Every value is at least 3:1 against the surface it sits
+   on in its theme (tests/unit/charts.test.tsx checks the numbers). */
+:root {
+  --series-periwinkle: #4c5ecd;
+  --series-green: #1f7a4d;
+  --series-amber: #a45f00;
+  --series-violet: #7b3fb8;
+}
+
+:root[data-theme="dark"] {
+  --series-periwinkle: #aab4ff;
+  --series-green: #6fd09a;
+  --series-amber: #f0b14a;
+  --series-violet: #c9a0ff;
+}
+
+.chart {
+  margin: 12px 0;
+}
+
+.chart-range {
+  color: var(--muted);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-svg {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+}
+
+.chart-axes line {
+  stroke: var(--line);
+}
+
+.chart-axes text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.chart-periwinkle {
+  --series: var(--series-periwinkle);
+}
+.chart-green {
+  --series: var(--series-green);
+}
+.chart-amber {
+  --series: var(--series-amber);
+}
+.chart-violet {
+  --series: var(--series-violet);
+}
+
+.chart-series rect,
+.chart-series polygon,
+.chart-series circle {
+  fill: var(--series);
+}
+
+.chart-series line,
+.chart-line {
+  stroke: var(--series);
+  stroke-width: 2;
+}
+
+.chart-stripe {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.chart-table summary {
+  cursor: pointer;
+}
+
+.chart-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chart-table table {
+  border-collapse: collapse;
+}
+
+.chart-table :is(th, td) {
+  padding: 2px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.chart-state {
+  padding: 12px;
+  border: 1px dashed var(--control-line);
+  border-radius: 8px;
+}
+
+.chart-state[data-chart-state="unavailable"] {
+  border-style: solid;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The charts do not animate, so reduced motion needs no override; this keeps
+   it that way if a transition is added later. */
+@media (prefers-reduced-motion: reduce) {
+  .chart * {
+    transition: none;
+    animation: none;
+  }
+}
