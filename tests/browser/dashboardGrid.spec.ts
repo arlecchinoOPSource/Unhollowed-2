@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { installIpcMock } from "./ipcMock";
 
@@ -124,4 +125,105 @@ test("narrow windows show one column in reading order", async ({ page }) => {
   expect(new Set(boxes.map(([left]) => left)).size).toBe(1);
   const tops = boxes.map(([, top]) => top);
   expect(tops).toEqual([...tops].sort((a, b) => a - b));
+});
+
+test("add a note from the library, configure it, and keep it across a restart", async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  const add = page.getByRole("button", { name: "Add widget" });
+  await add.click();
+  const library = page.getByRole("dialog", { name: "Add a widget" });
+  await expect(library.getByText("Not available yet:")).toContainText(
+    "Line chart",
+  );
+  // Previews use the real widget.
+  await library.getByRole("button", { name: "Preview Notes" }).click();
+  await expect(library.locator('[data-preview="notes"]')).toContainText(
+    "Empty note",
+  );
+  await library.getByRole("button", { name: "Add Notes" }).click();
+  await expect(library).toHaveCount(0);
+  await expect(add).toBeFocused();
+
+  const settings = page.getByRole("button", { name: "Settings: Notes" });
+  await settings.click();
+  const dialog = page.getByRole("dialog", { name: "Settings: Notes" });
+  await dialog.getByLabel("Note").fill("Remember the review");
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  await expect(settings).toBeFocused();
+  await expect(page.locator('[data-cell="notes-1"]')).toContainText(
+    "Remember the review",
+  );
+  await page.getByRole("button", { name: "Save layout" }).click();
+  await page.reload();
+  await expect(page.locator('[data-cell="notes-1"]')).toContainText(
+    "Remember the review",
+  );
+});
+
+test("settings that would not survive a restart cannot be applied; reset restores defaults", async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Notes" }).click();
+  await page.getByRole("button", { name: "Settings: Notes" }).click();
+  const dialog = page.getByRole("dialog", { name: "Settings: Notes" });
+  await dialog.getByLabel("Note").fill("x".repeat(2001));
+  await expect(dialog.getByRole("alert")).toContainText("not valid");
+  await expect(dialog.getByRole("button", { name: "Apply" })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Reset to defaults" }).click();
+  await expect(dialog.getByLabel("Note")).toHaveValue("");
+  await expect(dialog.getByRole("button", { name: "Apply" })).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});
+
+test("shortcuts are chosen from places in the app; widgets can be removed", async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Shortcuts" }).click();
+  await page.getByRole("button", { name: "Settings: Shortcuts" }).click();
+  const dialog = page.getByRole("dialog", { name: "Settings: Shortcuts" });
+  await dialog.getByLabel("Habits").check();
+  await dialog.getByLabel("Calendar").check();
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  await expect(
+    page.locator('[data-cell="shortcuts-1"]').getByRole("link", {
+      name: "Habits",
+    }),
+  ).toHaveAttribute("href", "/habits");
+
+  await page
+    .getByRole("button", { name: "Remove: Mood, energy, and focus" })
+    .click();
+  await expect(page.locator('[data-cell="mood"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator('[data-cell="mood"]')).toHaveCount(1);
+  await expect(page.locator('[data-cell="shortcuts-1"]')).toHaveCount(0);
+});
+
+test("arrange mode and its dialogs pass automated accessibility checks", async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  const check = async () => {
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  };
+  await check();
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await check();
+  await page.getByRole("button", { name: "Add Notes" }).click();
+  await page.getByRole("button", { name: "Settings: Notes" }).click();
+  await check();
 });

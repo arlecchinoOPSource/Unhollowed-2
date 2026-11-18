@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import type { Period } from "./controls";
 import { GlanceSection } from "./GlanceSection";
 import { HabitsSection } from "./HabitsSection";
 import { MoodSection } from "./MoodSection";
 import { ProgressSection } from "./ProgressSection";
 import { ScheduleSection } from "./ScheduleSection";
-import { resolveWidget, type WidgetInstance } from "./widgets";
+import { resolveWidget, type Shortcut, type WidgetInstance } from "./widgets";
 
 export interface WidgetContext {
   project: string | null;
@@ -13,7 +14,7 @@ export interface WidgetContext {
   period: Period;
 }
 
-type Renderer = (context: WidgetContext) => ReactNode;
+type Renderer = (context: WidgetContext, config: object) => ReactNode;
 
 /**
  * Widgets that render today. They are the Phase 4 sections, unchanged and
@@ -36,7 +37,44 @@ const renderers: Record<string, Renderer> = {
   "mood-trend": ({ project, period }) => (
     <MoodSection project={project} period={period} />
   ),
+  notes: (_, config) => {
+    const { text } = config as { text: string };
+    return (
+      <section aria-label="Notes" className="dash-section">
+        <h2>Notes</h2>
+        {text ? (
+          <p className="dash-note">{text}</p>
+        ) : (
+          <p>
+            Empty note. Choose Arrange widgets, then Settings, to write one.
+          </p>
+        )}
+      </section>
+    );
+  },
+  shortcuts: (_, config) => {
+    const { links } = config as { links: Shortcut[] };
+    return (
+      <section aria-label="Shortcuts" className="dash-section">
+        <h2>Shortcuts</h2>
+        {links.length ? (
+          <ul className="dash-shortcuts">
+            {links.map((link) => (
+              <li key={link.to}>
+                <Link to={link.to}>{link.label}</Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No shortcuts yet. Choose Arrange widgets, then Settings.</p>
+        )}
+      </section>
+    );
+  },
 };
+
+/** Whether this build can show the type (the library offers only these). */
+export const hasRenderer = (type: string) => type in renderers;
 
 /** One widget: resolves the instance and shows it or a safe fallback. */
 export function WidgetHost({
@@ -71,7 +109,7 @@ export function WidgetHost({
           {resolved.definition.label}: {resolved.reason}
         </p>
       )}
-      {render(context)}
+      {render(context, resolved.config)}
     </>
   );
 }

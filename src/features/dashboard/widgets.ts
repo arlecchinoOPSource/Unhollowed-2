@@ -19,6 +19,27 @@ export interface WidgetSize {
   minH: number;
 }
 
+/**
+ * A setting the user can change, described once here so the settings form is
+ * generated from the contract and edits the same keys `parse` validates.
+ */
+export type FieldSpec =
+  | { kind: "textarea"; key: string; label: string; max: number }
+  | { kind: "destinations"; key: string; label: string; max: number };
+
+/** Places in the app a shortcut may open. */
+export const DESTINATIONS: readonly Shortcut[] = [
+  { label: "Home", to: "/" },
+  { label: "Today", to: "/today" },
+  { label: "Calendar", to: "/calendar" },
+  { label: "Issues", to: "/issues" },
+  { label: "Projects", to: "/projects" },
+  { label: "Documents", to: "/documents" },
+  { label: "Habits", to: "/habits" },
+  { label: "Mood", to: "/mood" },
+  { label: "Dashboards", to: "/dashboards" },
+];
+
 export interface WidgetDefinition<C extends object = object> {
   /** Stable type ID, stored in layouts. Never renamed or reused. */
   type: string;
@@ -31,6 +52,8 @@ export interface WidgetDefinition<C extends object = object> {
   /** The dashboard filters the widget honors. */
   filters: readonly WidgetFilter[];
   size: WidgetSize;
+  /** The settings it offers; none means it has nothing to configure. */
+  fields?: readonly FieldSpec[];
   /** What the widget says when its source has nothing to show. */
   empty: string;
   /** What the widget says when its source fails, beside a retry. */
@@ -185,6 +208,7 @@ const definitions: WidgetDefinition[] = [
     size: [6, 3, 3, 2],
     empty: "Write a note.",
     error: "This note could not be shown.",
+    fields: [{ kind: "textarea", key: "text", label: "Note", max: MAX_NOTE }],
     defaults: { text: "" },
     parse: (raw) =>
       record(raw) &&
@@ -205,6 +229,14 @@ const definitions: WidgetDefinition[] = [
     size: [6, 2, 3, 2],
     empty: "Add a shortcut.",
     error: "These shortcuts could not be shown.",
+    fields: [
+      {
+        kind: "destinations",
+        key: "links",
+        label: "Shortcuts",
+        max: MAX_SHORTCUTS,
+      },
+    ],
     defaults: { links: [] },
     parse: (raw) => {
       if (raw === undefined) return { links: [] };
