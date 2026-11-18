@@ -13,7 +13,6 @@ import {
   type DragEvent,
   type FormEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import {
@@ -67,13 +66,10 @@ interface Loaded {
 export function IssueCalendar({
   agenda = false,
   onIssueChanged,
-  tools,
 }: {
   agenda?: boolean;
   /** Called after an issue is rescheduled or created here. */
   onIssueChanged?: () => void;
-  /** Page tools shown under the title, such as search. */
-  tools?: ReactNode;
 }) {
   const desktop = isTauri();
   const location = useLocation();
@@ -344,12 +340,6 @@ export function IssueCalendar({
   return (
     <section className="calendar-view">
       <div className="issue-page-top">
-        <div>
-          <h1>Calendar</h1>
-          <Link className="calendar-manage" to="/calendar/calendars">
-            Manage calendars
-          </Link>
-        </div>
         <ViewSwitch date={day} />
         <div className="calendar-filters">
           <label>
@@ -383,7 +373,6 @@ export function IssueCalendar({
           </label>
         </div>
       </div>
-      {tools}
       <div className="calendar-nav">
         <button
           type="button"

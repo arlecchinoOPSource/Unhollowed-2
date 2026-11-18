@@ -626,7 +626,11 @@ test("drags out a range, resizes, and confirms a moved appointment", async ({
   await page.waitForFunction(
     () => (document.querySelector(".timeline-scroll")?.scrollTop ?? 0) > 0,
   );
-  await page.waitForTimeout(300);
+  // Raw pointer moves require the grid to be inside the browser viewport,
+  // even when the controls above it take up another row.
+  await page.locator(".timeline-scroll").evaluate((element) => {
+    element.scrollIntoView({ block: "center" });
+  });
   const second = (await tuesday.boundingBox())!;
   const hour = second.height / 24;
   async function drag(x: number, y: number, endX: number, endY: number) {

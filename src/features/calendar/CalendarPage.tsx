@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import type { CalendarItem } from "../../database/events";
 import { eventParam } from "../../app/links";
 import { isTauri } from "../../database/status";
@@ -101,40 +101,47 @@ export function CalendarPage() {
   const [revision, setRevision] = useState(0);
   // Issues changed in the view or the overdue list reload the other.
   const [issueRevision, setIssueRevision] = useState(0);
-  // Search and overdue work sit under the page title, above the grid.
-  const tools = isTauri() && (
-    <>
-      <SearchBar
-        view={view}
-        revision={revision}
-        onChanged={() => setRevision((value) => value + 1)}
-      />
-      <OverdueIssues
-        revision={issueRevision}
-        onChanged={() => {
-          setIssueRevision((value) => value + 1);
-          setRevision((value) => value + 1);
-        }}
-      />
-    </>
-  );
   return (
     <CalendarPreferences.Provider value={settings}>
-      {view === "month" || view === "agenda" ? (
-        <IssueCalendar
-          key={revision}
-          agenda={view === "agenda"}
-          onIssueChanged={() => setIssueRevision((value) => value + 1)}
-          tools={tools}
-        />
-      ) : (
-        <TimelineView
-          key={revision}
-          view={view}
-          setIncrement={(increment) => save({ ...settings, increment })}
-          tools={tools}
-        />
-      )}
+      <div className="calendar-view">
+        {isTauri() && (
+          <>
+            <div className="issue-page-top">
+              <div>
+                <h1>Calendar</h1>
+                <Link className="calendar-manage" to="/calendar/calendars">
+                  Manage calendars
+                </Link>
+              </div>
+            </div>
+            <SearchBar
+              view={view}
+              revision={revision}
+              onChanged={() => setRevision((value) => value + 1)}
+            />
+            <OverdueIssues
+              revision={issueRevision}
+              onChanged={() => {
+                setIssueRevision((value) => value + 1);
+                setRevision((value) => value + 1);
+              }}
+            />
+          </>
+        )}
+        {view === "month" || view === "agenda" ? (
+          <IssueCalendar
+            key={revision}
+            agenda={view === "agenda"}
+            onIssueChanged={() => setIssueRevision((value) => value + 1)}
+          />
+        ) : (
+          <TimelineView
+            key={revision}
+            view={view}
+            setIncrement={(increment) => save({ ...settings, increment })}
+          />
+        )}
+      </div>
       <PreferenceControls current={settings} save={save} error={error} />
       {isTauri() && <CalendarShortcuts />}
       {isTauri() && <ReminderSettings />}
