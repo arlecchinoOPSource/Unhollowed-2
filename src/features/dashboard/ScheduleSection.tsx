@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
 import type { Period } from "./controls";
+import { queryKey, useSharedQuery } from "../../database/sharedQuery";
 import { Link } from "react-router";
 import {
   analyticsError,
   getScheduleAnalytics,
-  type ScheduleAnalytics,
   type ScheduleBucket,
   type UpcomingItem,
 } from "../../database/analytics";
-import { useDataVersion } from "../../database/dataChanges";
 import { deviceZone } from "../../database/events";
 import { fullDate } from "../calendar/monthGrid";
+
+const SOURCES = ["calendar", "issues", "projects"] as const;
 
 const W = 640;
 const H = 150;
@@ -91,28 +91,22 @@ export function ScheduleSection({
   project: string | null;
   period: Period;
 }) {
-  const [data, setData] = useState<ScheduleAnalytics | null>(null);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  const changes = useDataVersion("calendar", "issues", "projects");
-
-  useEffect(() => {
-    let live = true;
-    getScheduleAnalytics(period.from, period.to, project, deviceZone())
-      .then((result) => {
-        if (!live) return;
-        setData(result);
-        setError("");
-      })
-      .catch((cause) => {
-        if (!live) return;
-        setData(null);
-        setError(analyticsError(cause));
-      });
-    return () => {
-      live = false;
-    };
-  }, [period.from, period.to, project, retry, changes]);
+  const {
+    data,
+    error,
+    retry: reload,
+  } = useSharedQuery(
+    queryKey(
+      "schedule-analytics",
+      period.from,
+      period.to,
+      project,
+      deviceZone(),
+    ),
+    SOURCES,
+    () => getScheduleAnalytics(period.from, period.to, project, deviceZone()),
+    analyticsError,
+  );
 
   const buckets = data && (data.days.length > 92 ? data.weeks : data.days);
   const t = data?.totals;
@@ -125,11 +119,7 @@ export function ScheduleSection({
       {error && (
         <div role="alert">
           <p>{error}</p>
-          <button
-            type="button"
-            className="action"
-            onClick={() => setRetry((n) => n + 1)}
-          >
+          <button type="button" className="action" onClick={() => reload()}>
             Retry
           </button>
         </div>

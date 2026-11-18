@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
 import type { Period } from "./controls";
+import { queryKey, useSharedQuery } from "../../database/sharedQuery";
 import { Link } from "react-router";
 import {
   analyticsError,
   getProgressAnalytics,
-  type ProgressAnalytics,
   type ProgressTotals,
   type TrendBucket,
 } from "../../database/analytics";
-import { useDataVersion } from "../../database/dataChanges";
 import { deviceZone } from "../../database/events";
 import { fullDate } from "../calendar/monthGrid";
+
+const SOURCES = ["issues", "projects", "milestones"] as const;
 
 const W = 640;
 const H = 150;
@@ -125,28 +125,22 @@ export function ProgressSection({
   project: string | null;
   period: Period;
 }) {
-  const [data, setData] = useState<ProgressAnalytics | null>(null);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  const changes = useDataVersion("issues", "projects", "milestones");
-
-  useEffect(() => {
-    let live = true;
-    getProgressAnalytics(period.from, period.to, project, deviceZone())
-      .then((result) => {
-        if (!live) return;
-        setData(result);
-        setError("");
-      })
-      .catch((cause) => {
-        if (!live) return;
-        setData(null);
-        setError(analyticsError(cause));
-      });
-    return () => {
-      live = false;
-    };
-  }, [period.from, period.to, project, retry, changes]);
+  const {
+    data,
+    error,
+    retry: reload,
+  } = useSharedQuery(
+    queryKey(
+      "progress-analytics",
+      period.from,
+      period.to,
+      project,
+      deviceZone(),
+    ),
+    SOURCES,
+    () => getProgressAnalytics(period.from, period.to, project, deviceZone()),
+    analyticsError,
+  );
 
   return (
     <section aria-labelledby="progress-title" className="dash-section">
@@ -158,11 +152,7 @@ export function ProgressSection({
       {error && (
         <div role="alert">
           <p>{error}</p>
-          <button
-            type="button"
-            className="action"
-            onClick={() => setRetry((n) => n + 1)}
-          >
+          <button type="button" className="action" onClick={() => reload()}>
             Retry
           </button>
         </div>

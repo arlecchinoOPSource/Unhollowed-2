@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
 import type { Period } from "./controls";
+import { queryKey, useSharedQuery } from "../../database/sharedQuery";
 import { Link } from "react-router";
 import {
   checkinError,
   getCheckinAnalytics,
-  type CheckinAnalytics,
   type CheckinMetric,
 } from "../../database/checkins";
-import { useDataVersion } from "../../database/dataChanges";
 import { fullDate } from "../calendar/monthGrid";
+
+const SOURCES = ["checkins"] as const;
 
 const metric = (m: CheckinMetric) =>
   m.average === null
@@ -28,29 +28,18 @@ export function MoodSection({
   project: string | null;
   period: Period;
 }) {
-  const [data, setData] = useState<CheckinAnalytics | null>(null);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  const changes = useDataVersion("checkins");
-
-  useEffect(() => {
-    if (project) return;
-    let live = true;
-    getCheckinAnalytics(period.from, period.to, false)
-      .then((result) => {
-        if (!live) return;
-        setData(result);
-        setError("");
-      })
-      .catch((cause) => {
-        if (!live) return;
-        setData(null);
-        setError(checkinError(cause));
-      });
-    return () => {
-      live = false;
-    };
-  }, [period.from, period.to, project, retry, changes]);
+  const {
+    data,
+    error,
+    retry: reload,
+  } = useSharedQuery(
+    project
+      ? null
+      : queryKey("checkin-analytics", period.from, period.to, false),
+    SOURCES,
+    () => getCheckinAnalytics(period.from, period.to, false),
+    checkinError,
+  );
 
   if (project) return null;
   if (!error && (!data || data.daysRecorded === 0)) return null;
@@ -63,11 +52,7 @@ export function MoodSection({
       {error && (
         <div role="alert">
           <p>{error}</p>
-          <button
-            type="button"
-            className="action"
-            onClick={() => setRetry((n) => n + 1)}
-          >
+          <button type="button" className="action" onClick={() => reload()}>
             Retry
           </button>
         </div>

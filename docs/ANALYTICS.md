@@ -144,3 +144,14 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Workspace scope.** A link carries only an ID. Lookups run in the active workspace, so an ID from another workspace is "not found", exactly like a deleted record.
 - **Event links** open the event over its day and then drop `event` from the URL, so closing it, going back, or reloading does not reopen it. For a repeating event, `date` is the occurrence's own date.
 - **Back links.** Pages reached from another screen keep that screen's path and filters in navigation state. `safeBack` accepts only in-app paths that start with a single `/`; anything else falls back to the list screen.
+
+## Shared reads (U2-P5-04)
+
+`src/database/sharedQuery.ts` lets several widgets ask the same question without repeating it. It is transient state only: nothing survives a settled read, there is no second store, and no polling.
+
+- **Key.** `queryKey(command, ...args)` sorts object keys and treats `undefined` as `null`, so workspace analytics for the same period, project filter, and time zone always share a key. A different period, project, habit, or zone has a different key and never shares.
+- **Sharing.** `sharedRead` joins an identical read already in flight. The entry is removed when the read settles, whether it succeeded or failed, so a retry always asks again and a failure is never replayed later.
+- **Invalidation.** A read remembers the versions of the sources it depends on. After a successful write to one of them (`dataChanges.ts`) a new read starts instead of joining the older one, so nobody receives an answer older than a change they just saw. A write to an unrelated source changes nothing.
+- **Stale answers.** `useSharedQuery` asks again when its key, its sources, or a retry change. An answer to an earlier question is ignored whenever it arrives. The previous numbers stay until the new answer, with `loading` true.
+- **Errors.** A failed read clears the numbers and exposes its message and a retry. Each widget shows its own error, so one failing source does not hide the others.
+- **Where it is used.** The five dashboard sections. Before, every widget issued its own read, so two widgets for one scope cost two requests; now they cost one (tested with two mounted widgets).
