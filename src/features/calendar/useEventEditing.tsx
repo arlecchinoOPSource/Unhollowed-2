@@ -44,6 +44,8 @@ export function useEventEditing({
   error: string;
   openNew: (draft: Draft) => void;
   openItem: (item: CalendarItem, proposed?: OccurrenceSpan) => Promise<void>;
+  /** Opens an event by ID; a missing event sets `error` and opens nothing. */
+  openEvent: (id: string) => Promise<void>;
   editor: ReactNode;
 } {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
@@ -101,6 +103,17 @@ export function useEventEditing({
     }
   }
 
+  async function openEvent(id: string) {
+    setError("");
+    const attempt = ++latestOpen.current;
+    try {
+      const event = await getEvent(id);
+      if (attempt === latestOpen.current) open({ event });
+    } catch (cause) {
+      if (attempt === latestOpen.current) setError(schedulingError(cause));
+    }
+  }
+
   const editor = editing && (
     <EventEditor
       key={editing.id}
@@ -133,6 +146,7 @@ export function useEventEditing({
     error,
     openNew: (draft) => open({ event: null, draft }),
     openItem,
+    openEvent,
     editor,
   };
 }

@@ -2,6 +2,7 @@ import { EditorContent } from "@tiptap/react";
 import { ArrowLeft, CircleCheck, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
+import { isRecordId, safeBack } from "../../app/links";
 import {
   FormattingToolbar,
   useRichTextEditor,
@@ -70,7 +71,7 @@ function IssueLoader({ id }: { id: string }) {
   const desktop = isTauri();
   const location = useLocation();
   const from = (location.state as { from?: unknown } | null)?.from;
-  const back = typeof from === "string" ? from : "/issues";
+  const back = safeBack(from, "/issues");
   const backLabel = back.endsWith("/goals")
     ? "Missions & objectives"
     : back.startsWith("/projects/")
@@ -82,11 +83,18 @@ function IssueLoader({ id }: { id: string }) {
     labels: Label[];
     milestones: Milestone[];
   }>();
-  const [error, setError] = useState<{ message: string; missing: boolean }>();
+  const [fetchError, setError] = useState<{
+    message: string;
+    missing: boolean;
+  }>();
+  const error = isRecordId(id)
+    ? fetchError
+    : { message: "This link does not name an issue.", missing: true };
   const [request, setRequest] = useState(0);
 
   useEffect(() => {
     if (!desktop) return;
+    if (!isRecordId(id)) return;
     let current = true;
     Promise.all([
       getIssue(id),

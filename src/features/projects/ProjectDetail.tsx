@@ -1,6 +1,7 @@
 import { ArrowLeft, Flag, ListTodo } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
+import { isRecordId } from "../../app/links";
 import {
   changeProjectStatus,
   getProject,
@@ -21,13 +22,17 @@ export function ProjectDetail() {
 
 function ProjectDetails({ id }: { id: string }) {
   const [project, setProject] = useState<Project>();
-  const [error, setError] = useState("");
+  const [fetchError, setError] = useState("");
+  const error = isRecordId(id)
+    ? fetchError
+    : "This link does not name a project.";
   const [request, setRequest] = useState(0);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (!isRecordId(id)) return;
     let current = true;
     getProject(id).then(
       (item) => {

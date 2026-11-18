@@ -126,3 +126,21 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Instances.** A placed widget is `{ id, type, version, config? }`. IDs match `^[a-z0-9][a-z0-9-]{0,63}$` and are unique in a layout.
 - **Safe fallback.** `resolveWidget` never throws. An unknown type becomes a placeholder and its record is kept. Missing, invalid, or older config falls back to the defaults and says so. Unknown config keys are invalid, so no stored data can smuggle in behavior. Shortcuts accept only in-app paths.
 - **Phase 4 sections** are the default layout: `glance` is a `stat-card`, `progress` a `project-progress`, `schedule` an `agenda-list`, `habits` a `heatmap`, and `mood` a `mood-trend`. The IDs equal the saved section keys, so stored preferences keep working. `WidgetHost` renders them with unchanged semantics. Types without a renderer yet show "not available yet".
+
+## Links to records (U2-P5-03)
+
+`src/app/links.ts` builds every in-app link to a source record, on the existing routes. Nothing is shareable outside this device.
+
+| Record              | Path                                           | If the target is gone                                                    |
+| ------------------- | ---------------------------------------------- | ------------------------------------------------------------------------ |
+| Issue               | `/issues/:id`                                  | "Issue unavailable"; archived issues open with their archived banner     |
+| Project             | `/projects/:id` (`/issues`, `/goals`)          | The project's own not-found message                                      |
+| Document            | `/documents?doc=:id`                           | The editor's own error; a malformed ID says it does not name a document  |
+| Habit and day       | `/habits?habit=:id&date=YYYY-MM-DD`            | The habit screen ignores an unknown habit                                |
+| Day                 | `/calendar?view=day&date=YYYY-MM-DD`           | Always shows the day                                                     |
+| Event or occurrence | `/calendar?view=day&date=YYYY-MM-DD&event=:id` | The day still shows, with the event's not-found message; no editor opens |
+
+- **IDs and dates are checked.** A record ID is a token of letters, digits, hyphens, and underscores (up to 64), so it cannot hold a path, query, or space. Builders throw on a malformed ID or an impossible date. Screens that read an ID from a URL show a plain message instead of calling storage.
+- **Workspace scope.** A link carries only an ID. Lookups run in the active workspace, so an ID from another workspace is "not found", exactly like a deleted record.
+- **Event links** open the event over its day and then drop `event` from the URL, so closing it, going back, or reloading does not reopen it. For a repeating event, `date` is the occurrence's own date.
+- **Back links.** Pages reached from another screen keep that screen's path and filters in navigation state. `safeBack` accepts only in-app paths that start with a single `/`; anything else falls back to the list screen.

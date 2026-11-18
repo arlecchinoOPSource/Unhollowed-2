@@ -1,6 +1,7 @@
 import { ArrowLeft, FilePlus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
+import { isRecordId, safeBack } from "../../app/links";
 import {
   getDocumentUsage,
   type DocumentUsage,
@@ -40,7 +41,8 @@ export function Documents() {
   // The open document lives in the URL, so issues and projects can link to
   // it and the browser history returns to them.
   const [params, setParams] = useSearchParams();
-  const activeId = params.get("doc");
+  const requested = params.get("doc");
+  const activeId = isRecordId(requested) ? requested : null;
   const location = useLocation();
   const origin = location.state as {
     from?: unknown;
@@ -142,7 +144,7 @@ export function Documents() {
     <>
       {typeof origin?.from === "string" &&
         typeof origin.fromLabel === "string" && (
-          <Link className="issue-back" to={origin.from}>
+          <Link className="issue-back" to={safeBack(origin.from, "/documents")}>
             <ArrowLeft size={16} aria-hidden="true" /> Back to{" "}
             {origin.fromLabel}
           </Link>
@@ -344,6 +346,8 @@ export function Documents() {
                 />
                 <DocumentUsagePanel key={`usage-${activeId}`} id={activeId} />
               </>
+            ) : requested ? (
+              <p role="alert">This link does not name a document.</p>
             ) : (
               <p>Select or create a document to start writing.</p>
             )}
