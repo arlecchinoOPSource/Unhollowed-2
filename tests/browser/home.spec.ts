@@ -275,3 +275,74 @@ test("resume: in-progress issues by last change, and documents and projects with
     projects.getByRole("link", { name: "Issues" }).first(),
   ).toHaveAttribute("href", /\/projects\/.+\/issues/);
 });
+
+test("the planning-to-completion journey keeps one issue, one document, and the way back", async ({
+  page,
+}) => {
+  await open(page, {
+    __seedIssues: [
+      { title: "Book venue", dueDate: "2026-11-17", priority: "high" },
+    ],
+    __seedDocuments: ["Venue notes"],
+  });
+
+  // Home deadline to the issue, with Home as the way back.
+  const due = section(page, "Due today");
+  await due.getByRole("link", { name: /Book venue/ }).click();
+  await expect(page).toHaveURL(/\/issues\/seed-1$/);
+  await expect(
+    page.getByRole("link", { name: "Home", exact: true }).last(),
+  ).toBeVisible();
+  const issueUrl = page.url();
+
+  // Schedule work on this issue.
+  await page.getByRole("button", { name: "Schedule work session" }).click();
+  const form = page.getByRole("form", { name: "New session" });
+  await form.getByLabel("Date").fill("2026-11-17");
+  await form.getByLabel("Start").fill("14:00");
+  await form.getByLabel("End").fill("15:00");
+  await form.getByRole("button", { name: "Add session" }).click();
+  await expect(page.getByText("Session added.")).toBeVisible();
+
+  // Link the document, open it, and return to the same issue.
+  const linked = page.getByRole("region", { name: "Linked documents" });
+  await linked
+    .getByLabel("Link a document")
+    .selectOption({ label: "Venue notes" });
+  await linked.getByRole("button", { name: "Link", exact: true }).click();
+  await linked.getByRole("link", { name: "Venue notes" }).click();
+  await expect(page).toHaveURL(/\/documents\?doc=/);
+  await page.getByLabel("Document title").fill("Venue notes v2");
+  await page
+    .getByRole("link", { name: /Back to/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(issueUrl);
+  await expect(linked.getByRole("link", { name: /Venue notes/ })).toBeVisible();
+  // The session is still the one planned.
+  await expect(
+    page.getByRole("region", { name: "Work sessions" }).getByRole("listitem"),
+  ).toHaveCount(1);
+
+  // Complete it; Home no longer lists it as due.
+  await page.getByRole("button", { name: "Mark complete" }).click();
+  await expect(page.getByText(/Completed/).first()).toBeVisible();
+  await page.getByRole("link", { name: "Home", exact: true }).first().click();
+  await expect(section(page, "Due today")).toContainText(
+    "Nothing is due today.",
+  );
+});
+
+test("a link to a removed document or issue explains itself and offers a way out", async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole("link", { name: "Issues", exact: true }).first().click();
+  await page.goto("/issues/issue-404");
+  await expect(
+    page.getByRole("heading", { name: "Issue unavailable" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "All issues" })).toBeVisible();
+  await page.goto("/documents?doc=gone");
+  await expect(page.getByRole("alert").first()).toBeVisible();
+});

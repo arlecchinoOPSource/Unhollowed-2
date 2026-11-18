@@ -76,7 +76,15 @@ function IssueLoader({ id }: { id: string }) {
     ? "Missions & objectives"
     : back.startsWith("/projects/")
       ? "Project issues"
-      : "All issues";
+      : back === "/"
+        ? "Home"
+        : back.startsWith("/dashboards")
+          ? "Dashboard"
+          : back.startsWith("/calendar")
+            ? "Calendar"
+            : back.startsWith("/today")
+              ? "Today"
+              : "All issues";
   const [loaded, setLoaded] = useState<{
     issue: Issue;
     projects: Project[];
