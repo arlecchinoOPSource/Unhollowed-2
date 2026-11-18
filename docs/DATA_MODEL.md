@@ -319,3 +319,4 @@ Habits and their daily completions follow the [habit contract](HABITS.md), which
 | 0026      | `habits` and `habit_completions`, with same-workspace triggers ([habit contract](HABITS.md))              |
 | 0027      | `daily_checkins`: optional 1 to 5 mood, energy, and focus and a note, one per workspace and day           |
 | 0028      | `habit_events`: links from habits to recurring events, with same-workspace and recurring-event triggers   |
+| 0029      | `dashboards`: workspace-owned name and versioned widget layout (see ANALYTICS.md)                         |

@@ -36,8 +36,8 @@ export interface Preferences {
   preset: Preset;
   /** Used only by the custom preset. */
   custom: Period;
-  /** Sections the user turned off. */
-  hidden: SectionKey[];
+  /** IDs of the widgets the user turned off. */
+  hidden: string[];
 }
 
 /** The longest period the analytics accept, in days. */

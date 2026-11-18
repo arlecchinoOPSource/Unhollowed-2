@@ -1,10 +1,7 @@
 import type { Period } from "./controls";
 import { queryKey, useSharedQuery } from "../../database/sharedQuery";
 import { Link } from "react-router";
-import {
-  getHabitStatistics,
-  habitError,
-} from "../../database/habits";
+import { getHabitStatistics, habitError } from "../../database/habits";
 import { fullDate } from "../calendar/monthGrid";
 import { Bars, Table } from "../habits/HabitDashboard";
 import "../habits/habits.css";

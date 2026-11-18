@@ -113,7 +113,7 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Period.** _Last 7 days_, _Last 30 days_ (the default), _This month_, or _Custom dates_. All are inclusive local days. Last 7 is today and the six days before it; last 30 is today and the 29 before. _This month_ is the whole calendar month (the analytics count through today only). Custom dates need a valid start on or before the end, at most 366 days; otherwise the page says why and keeps showing the last 30 days until the dates are valid. The period applies to every section, and the page states it in full, with its day count.
 - **Filters.** _Project_ narrows the issue, project, milestone, and schedule sources. _Habit_ narrows the Habits section to one habit and leaves the workspace-wide cards alone. Habits belong to no project, so choosing a project disables the habit filter. **Clear filters** removes both and returns the period to the default.
 - **Filters are not workspace facts.** They are navigation state and name records that can be deleted, so they start empty on every visit and are never saved. Counts keep their definitions; a filter only chooses which records a card reads.
-- **Remembered on this device.** The period (and custom dates) and which sections are shown, in `localStorage` under `unhollowed-2-dashboard` with a version. On read, every field is validated on its own: an unknown preset, an invalid or too-long custom range, an unknown or repeated section, or a different version is replaced by its default without an error.
+- **Remembered.** The period (and custom dates) and which sections are shown are part of the dashboard's saved layout in the workspace database (see "Dashboard layouts"). Phase 4 kept them in `localStorage` under `unhollowed-2-dashboard`; the first visit copies the supported choices into the saved layout and never reads that key again.
 - **Sections.** _Sections_ lists the five sections with a checkbox each; unchecked sections are not rendered or read. _Show all sections_ restores them.
 - **Links.** Issue links keep the project filter, and calendar links open the month containing the period's last day.
 
@@ -155,3 +155,16 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Stale answers.** `useSharedQuery` asks again when its key, its sources, or a retry change. An answer to an earlier question is ignored whenever it arrives. The previous numbers stay until the new answer, with `loading` true.
 - **Errors.** A failed read clears the numbers and exposes its message and a retry. Each widget shows its own error, so one failing source does not hide the others.
 - **Where it is used.** The five dashboard sections. Before, every widget issued its own read, so two widgets for one scope cost two requests; now they cost one (tested with two mounted widgets).
+
+## Dashboard layouts (U2-P5-05)
+
+A dashboard is a name and a versioned layout, stored in the `dashboards` table (migration `0029_dashboards.sql`) and read and written only through `list_dashboards`, `save_dashboard`, and `delete_dashboard` (`src-tauri/src/dashboards.rs`). It stores no analytics values.
+
+- **Why the database.** Browser storage is per device, not per workspace, and cannot update a layout and its name in one step. A row belongs to one workspace, names are unique per workspace (case-insensitive), and each save is one statement. At most 20 dashboards per workspace.
+- **Layout version 1.** `{ version, preferences: { preset, custom: { from, to } }, widgets: [{ id, type, version, config, hidden, x, y, w, h }] }`. IDs and types are lowercase tokens (up to 64), IDs unique. The grid has 12 columns: `1 ≤ w ≤ 12`, `x + w ≤ 12`, `1 ≤ h ≤ 40`, `0 ≤ y ≤ 999`. Config is an object of at most 8 KB. Up to 60 widgets.
+- **Writes are strict.** Rust rejects an unknown field, a bad size, a repeated ID, an invalid date or period, or a version other than 1, and stores nothing. Widgets of types this build does not know are accepted and kept.
+- **Reads are forgiving.** The stored layout comes back untouched and `readLayout` repairs it: bad period values take their defaults, sizes are clamped to the grid, widgets with unusable or repeated IDs are dropped, and unknown widget types stay as they are. An unreadable record shows the default layout with a note.
+- **Newer layouts.** A record with `layout_version` above 1 is returned as written. The page shows the default layout with a note and does not save; Rust also refuses to overwrite it (`newer_layout`), so a downgrade cannot destroy data a newer release wrote.
+- **Saving.** Changes apply at once and save one after another, so the last change wins. A failed save keeps the change on screen and says it was not saved.
+- **First visit.** With no dashboard, one named "Dashboard" is created from the Phase 4 `localStorage` choices (period and hidden sections, only supported values) or the defaults. The old key is left in place and not read again.
+- **Upgrades.** The migration is forward-only and adds one table; a test upgrades a version 28 database and checks existing data is untouched.
