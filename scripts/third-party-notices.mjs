@@ -17,6 +17,10 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "THIRD_PARTY_NOTICES.md");
 const check = process.argv.includes("--check");
+const noticeSources = join(root, "scripts", "notice-sources");
+const upstream = JSON.parse(
+  readFileSync(join(noticeSources, "sources.json"), "utf8"),
+);
 
 const licenseFile = (dir) =>
   readdirSync(dir)
@@ -42,12 +46,18 @@ function add(name, version, license, source, dir) {
       // A directory with a license-like name is skipped.
     }
   }
+  const upstreamNotice = texts.length === 0 ? upstream[key] : undefined;
+  if (upstreamNotice)
+    texts.push(
+      readFileSync(join(noticeSources, upstreamNotice.file), "utf8").trim(),
+    );
   entries.set(key, {
     name,
     version,
     license: license || "UNKNOWN",
     source,
     texts,
+    upstreamNotice: upstreamNotice?.source,
   });
 }
 
@@ -139,7 +149,7 @@ const lines = [
   "",
   "## License texts",
   "",
-  "Packages that ship identical license text share one entry.",
+  "Packages with identical license text share one entry. For packages whose archives omit a license file, see the pinned upstream references below.",
   "",
 ];
 for (const [id, group] of [...groups.entries()].sort((a, b) =>
@@ -158,6 +168,27 @@ for (const [id, group] of [...groups.entries()].sort((a, b) =>
     "",
   );
 }
+lines.push(
+  "## Upstream notices for packages without a bundled license file",
+  "",
+  ...sorted
+    .filter((entry) => entry.upstreamNotice)
+    .map(
+      (entry) => `- [${entry.name} ${entry.version}](${entry.upstreamNotice})`,
+    ),
+  "",
+  "## Source for MPL-2.0 packages",
+  "",
+  ...sorted
+    .filter(
+      (entry) => entry.source === "crates.io" && entry.license === "MPL-2.0",
+    )
+    .map(
+      (entry) =>
+        `- [${entry.name} ${entry.version}](https://crates.io/api/v1/crates/${entry.name}/${entry.version}/download)`,
+    ),
+  "",
+);
 if (noText.length) {
   lines.push(
     "## Packages with no license file in their source",

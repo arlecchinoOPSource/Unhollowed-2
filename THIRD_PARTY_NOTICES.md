@@ -480,7 +480,7 @@ Unhollowed 2 includes the open-source packages below. Each remains under its own
 
 ## License texts
 
-Packages that ship identical license text share one entry.
+Packages with identical license text share one entry. For packages whose archives omit a license file, see the pinned upstream references below.
 
 ### @floating-ui/core 1.8.0 and 2 more (text 6c1117dc530c)
 
@@ -910,9 +910,9 @@ Apache License
    END OF TERMS AND CONDITIONS
 ```
 
-### @tauri-apps/api 2.12.4 and 12 more (text 89ff9689dcf9)
+### @tauri-apps/api 2.12.4 and 13 more (text 89ff9689dcf9)
 
-Applies to: @tauri-apps/api 2.12.4, tauri 2.12.5, tauri-build 2.7.4, tauri-codegen 2.7.4, tauri-macros 2.7.4, tauri-plugin-dialog 2.8.4, tauri-plugin-fs 2.7.1, tauri-plugin-notification 2.8.1, tauri-plugin-sql 2.6.0, tauri-runtime 2.12.2, tauri-runtime-wry 2.12.3, tauri-utils 2.10.2, tauri-winrt-notification 0.8.1
+Applies to: @tauri-apps/api 2.12.4, tauri 2.12.5, tauri-build 2.7.4, tauri-codegen 2.7.4, tauri-macros 2.7.4, tauri-plugin 2.7.2, tauri-plugin-dialog 2.8.4, tauri-plugin-fs 2.7.1, tauri-plugin-notification 2.8.1, tauri-plugin-sql 2.6.0, tauri-runtime 2.12.2, tauri-runtime-wry 2.12.3, tauri-utils 2.10.2, tauri-winrt-notification 0.8.1
 
 ```text
 MIT License
@@ -1362,9 +1362,9 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>
 ```
 
-### alloc-no-stdlib 3.0.0 and 2 more (text 6c91ec82929f)
+### alloc-no-stdlib 3.0.0 and 3 more (text 6c91ec82929f)
 
-Applies to: alloc-no-stdlib 3.0.0, brotli 9.1.1, brotli-decompressor 6.3.1
+Applies to: alloc-no-stdlib 3.0.0, alloc-stdlib 0.3.0, brotli 9.1.1, brotli-decompressor 6.3.1
 
 ```text
 Copyright (c) 2016 Dropbox, Inc.
@@ -2545,6 +2545,67 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+```
+
+### block2 0.6.2 and 11 more (text 9402cf1ad894)
+
+Applies to: block2 0.6.2, dispatch2 0.3.1, objc2 0.6.5, objc2-app-kit 0.3.2, objc2-core-foundation 0.3.2, objc2-core-graphics 0.3.2, objc2-encode 4.1.0, objc2-exception-helper 0.1.1, objc2-foundation 0.3.2, objc2-io-surface 0.3.2, objc2-quartz-core 0.3.2, objc2-web-kit 0.3.2
+
+```text
+# License
+
+The licensing of these crates is a bit complicated:
+- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are
+  [currently][#23] licensed under [the MIT license][MIT].
+- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]
+  license, at your option.
+
+Furthermore, the crates are (usually automatically) derived from Apple SDKs,
+and that may have implications for licensing, see below for details.
+
+[#23]: https://github.com/madsmtm/objc2/issues/23
+[MIT]: https://opensource.org/license/MIT
+[Zlib]: https://zlib.net/zlib_license.html
+[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0
+
+
+## Apple SDKs
+
+These crates are derived from Apple SDKs shipped with Xcode. You can obtain a
+copy of the Xcode license at:
+
+https://www.apple.com/legal/sla/docs/xcode.pdf
+
+Or by typing `xcodebuild -license` in your terminal.
+
+From reading the license, it is unclear whether distributing derived works
+such as these crates are allowed?
+
+But in any case, to practically use these crates, you will have to link, and
+that only works when you have the correct Xcode SDK available to provide the
+required `.tbd` files, which is why we choose to still use the normal SPDX
+identifiers in the crates (Xcode is required to use the crates, and when using
+Xcode you have already agreed to the Xcode license).
+
+MIT permission and warranty terms (the upstream notice above does not state a copyright line):
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ### borsh 1.8.1 and 1 more (text 628e23a221a6)
@@ -4070,6 +4131,34 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### crc-catalog 2.5.0 (text e40488cf301b)
+
+Applies to: crc-catalog 2.5.0
+
+```text
+MIT License
+
+Copyright (c) 2019 Akhil Velagapudi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### crc32fast 1.5.5 and 10 more (text 6dc0e068dcf3)
 
 Applies to: crc32fast 1.5.5, ctor 1.0.13, dpi 0.1.2, foreign-types 0.5.0, foreign-types-macros 0.2.4, foreign-types-shared 0.3.1, hex 0.4.3, json-patch 4.2.0, notify-rust 4.19.0, stringprep 0.1.5, tao 0.37.2
@@ -4972,9 +5061,9 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### cssparser 0.37.0 and 1 more (text c76f740d1521)
+### cssparser 0.37.0 and 2 more (text c76f740d1521)
 
-Applies to: cssparser 0.37.0, cssparser-macros 0.7.1
+Applies to: cssparser 0.37.0, cssparser-macros 0.7.1, selectors 0.38.0
 
 ```text
 Mozilla Public License Version 2.0
@@ -9106,6 +9195,34 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
+### isarray 1.0.0 (text 74f2d45ae78f)
+
+Applies to: isarray 1.0.0
+
+```text
+(MIT)
+
+Copyright (c) 2013 Julian Gruber <julian@juliangruber.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### json-patch 4.2.0 (text 19328c46c44f)
 
 Applies to: json-patch 4.2.0
@@ -10508,6 +10625,34 @@ airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circl
 The MIT License (MIT) (for the icons listed above)
 
 Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### mac-notification-sys 0.6.15 (text aaa8adb05e25)
+
+Applies to: mac-notification-sys 0.6.15
+
+```text
+MIT License
+
+Copyright (c) 2017 Felix Döring
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -15752,6 +15897,34 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### webview2-com 0.39.1 and 2 more (text 008f1b11c6d1)
+
+Applies to: webview2-com 0.39.1, webview2-com-macros 0.8.1, webview2-com-sys 0.39.1
+
+```text
+MIT License
+
+Copyright (c) 2021 Bill Avery
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### window-vibrancy 0.8.1 (text b46700117441)
 
 Applies to: window-vibrancy 0.8.1
@@ -16505,28 +16678,34 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Packages with no license file in their source
+## Upstream notices for packages without a bundled license file
 
-These declare a license in their metadata but ship no license file. The declared license applies; add the text from the project's repository if the license requires it to accompany distributions.
+- [alloc-stdlib 0.3.0](https://github.com/dropbox/rust-alloc-no-stdlib/blob/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE)
+- [block2 0.6.2](https://github.com/madsmtm/objc2/blob/b4167b582b2f75f9a1be75495c41b765344fd03c/LICENSE.md)
+- [crc-catalog 2.5.0](https://github.com/akhilles/crc-catalog/blob/ed4ad631f22b05055c21a3a4127eb7cf6d75bb62/LICENSES/MIT.txt)
+- [dispatch2 0.3.1](https://github.com/madsmtm/objc2/blob/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md)
+- [isarray 1.0.0](https://github.com/juliangruber/isarray/blob/2a23a281f369e9ae06394c0fb4d2381355a6ba33/README.md#license)
+- [mac-notification-sys 0.6.15](https://github.com/h4llow3En/mac-notification-sys/blob/deb559683962d314a7693478476bf8d052efa84e/LICENSE-MIT)
+- [objc2 0.6.5](https://github.com/madsmtm/objc2/blob/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md)
+- [objc2-app-kit 0.3.2](https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md)
+- [objc2-core-foundation 0.3.2](https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md)
+- [objc2-core-graphics 0.3.2](https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md)
+- [objc2-encode 4.1.0](https://github.com/madsmtm/objc2/blob/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md)
+- [objc2-exception-helper 0.1.1](https://github.com/madsmtm/objc2/blob/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md)
+- [objc2-foundation 0.3.2](https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md)
+- [objc2-io-surface 0.3.2](https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md)
+- [objc2-quartz-core 0.3.2](https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md)
+- [objc2-web-kit 0.3.2](https://github.com/madsmtm/objc2/blob/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md)
+- [selectors 0.38.0](https://github.com/servo/stylo/blob/572ecba2d1600e7c3d490586692a209faf703baa/selectors/lib.rs)
+- [tauri-plugin 2.7.2](https://github.com/tauri-apps/tauri/blob/59b63ab500da9859f12d8888c3298bc29bba0b92/LICENSE-MIT)
+- [webview2-com 0.39.1](https://github.com/wravery/webview2-rs/blob/edc2caf886175ccaebe86078c9cfe1ae2a187328/LICENSE)
+- [webview2-com-macros 0.8.1](https://github.com/wravery/webview2-rs/blob/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE)
+- [webview2-com-sys 0.39.1](https://github.com/wravery/webview2-rs/blob/edc2caf886175ccaebe86078c9cfe1ae2a187328/LICENSE)
 
-- alloc-stdlib 0.3.0: BSD-3-Clause
-- block2 0.6.2: MIT
-- crc-catalog 2.5.0: MIT OR Apache-2.0
-- dispatch2 0.3.1: Zlib OR Apache-2.0 OR MIT
-- isarray 1.0.0: MIT
-- mac-notification-sys 0.6.15: MIT/Apache-2.0
-- objc2 0.6.5: MIT
-- objc2-app-kit 0.3.2: Zlib OR Apache-2.0 OR MIT
-- objc2-core-foundation 0.3.2: Zlib OR Apache-2.0 OR MIT
-- objc2-core-graphics 0.3.2: Zlib OR Apache-2.0 OR MIT
-- objc2-encode 4.1.0: MIT
-- objc2-exception-helper 0.1.1: Zlib OR Apache-2.0 OR MIT
-- objc2-foundation 0.3.2: MIT
-- objc2-io-surface 0.3.2: Zlib OR Apache-2.0 OR MIT
-- objc2-quartz-core 0.3.2: Zlib OR Apache-2.0 OR MIT
-- objc2-web-kit 0.3.2: Zlib OR Apache-2.0 OR MIT
-- selectors 0.38.0: MPL-2.0
-- tauri-plugin 2.7.2: Apache-2.0 OR MIT
-- webview2-com 0.39.1: MIT
-- webview2-com-macros 0.8.1: MIT
-- webview2-com-sys 0.39.1: MIT
+## Source for MPL-2.0 packages
+
+- [cssparser 0.37.0](https://crates.io/api/v1/crates/cssparser/0.37.0/download)
+- [cssparser-macros 0.7.1](https://crates.io/api/v1/crates/cssparser-macros/0.7.1/download)
+- [dtoa-short 0.3.5](https://crates.io/api/v1/crates/dtoa-short/0.3.5/download)
+- [option-ext 0.2.0](https://crates.io/api/v1/crates/option-ext/0.2.0/download)
+- [selectors 0.38.0](https://crates.io/api/v1/crates/selectors/0.38.0/download)

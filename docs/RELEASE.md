@@ -6,7 +6,7 @@ The version, increment rules, and a Windows MSI constraint are in [Versioning](V
 
 Use SemVer and version tags such as `v1.0.0-beta.1`. Update the npm manifest and lockfile, Rust manifest and lockfile, Tauri configuration, and changelog in one release PR. For Windows MSI, confirm that the numeric version fits Windows Installer constraints and increases across installer upgrades.
 
-0. Choose the license ([Legal](LEGAL.md)) and run `npm run notices -- --check` (after `cargo fetch --locked --target x86_64-pc-windows-msvc`); regenerate if it fails.
+0. Verify the MIT license and Arlecchino publisher metadata ([Legal](LEGAL.md)), then run `npm run notices -- --check` (after `cargo fetch --locked --target x86_64-pc-windows-msvc`); regenerate if it fails.
 1. Review the release PR and verify Quick CI and local macOS full checks.
 2. Validate the candidate from a reviewed ref using **Desktop packaging → both**. When authorized, push the version tag from the reviewed commit to build both platform packages again.
 3. Download the artifacts for that exact commit. Install the Windows x64 NSIS and MSI packages on clean Windows test machines and verify WebView2 startup, local storage, upgrades, and uninstall. On Apple Silicon, mount the DMG, install the app, and check startup, local storage, and upgrades.

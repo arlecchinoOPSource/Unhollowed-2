@@ -55,7 +55,7 @@ See [Phase 0 verification](docs/phase-0.md) for resolved versions and checks.
 
 ## Beta status and license
 
-Unhollowed 2 is beta software, provided as is, without warranty. Keep your own copies of anything important. Supported beta targets are macOS on Apple Silicon and Windows x64; see [license, redistribution, and platforms](docs/LEGAL.md). **No open-source license has been chosen yet**, so the code is all rights reserved until the owner selects one. Dependency licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and what the app stores and sends is in the [privacy statement](docs/PRIVACY_STATEMENT.md).
+Unhollowed 2 is beta software, provided as is, without warranty. Keep your own copies of anything important. Supported beta targets are macOS on Apple Silicon and Windows x64; see [license, redistribution, and platforms](docs/LEGAL.md). Unhollowed 2 is released under the [MIT License](LICENSE), copyright © 2026 Arlecchino. Dependency licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and what the app stores and sends is in the [privacy statement](docs/PRIVACY_STATEMENT.md).
 
 ## Project documentation
 
