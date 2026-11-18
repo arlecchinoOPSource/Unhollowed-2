@@ -113,3 +113,44 @@ test("size limits come from the type", () => {
   expect(sizeProblem("heatmap", { w: 6.5, h: 4 })).not.toBeNull();
   expect(sizeProblem("nope", { w: 6, h: 4 })).toMatch(/Unknown/);
 });
+
+test("period overrides are validated like the dashboard's own period", async () => {
+  const { parsePeriodConfig } =
+    await import("../../src/features/dashboard/widgets");
+  expect(parsePeriodConfig(undefined)).toEqual({});
+  expect(parsePeriodConfig({})).toEqual({});
+  expect(parsePeriodConfig({ period: { preset: "last7" } })).toEqual({
+    period: { preset: "last7" },
+  });
+  const custom = { from: "2026-11-01", to: "2026-11-10" };
+  expect(parsePeriodConfig({ period: { preset: "custom", custom } })).toEqual({
+    period: { preset: "custom", custom },
+  });
+  for (const bad of [
+    { period: { preset: "last3650" } },
+    { period: { preset: "custom" } },
+    { period: { preset: "last7", custom } },
+    {
+      period: {
+        preset: "custom",
+        custom: { from: "2026-11-10", to: "2026-11-01" },
+      },
+    },
+    {
+      period: {
+        preset: "custom",
+        custom: { from: "2026-02-30", to: "2026-03-01" },
+      },
+    },
+    {
+      period: {
+        preset: "custom",
+        custom: { from: "2020-01-01", to: "2026-11-01" },
+      },
+    },
+    { period: { preset: "last7" }, extra: 1 },
+    { period: "last7" },
+    [],
+  ])
+    expect(parsePeriodConfig(bad)).toBeNull();
+});

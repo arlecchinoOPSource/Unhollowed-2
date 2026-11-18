@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { presets, type Period, type Preset } from "./controls";
 import { GRID, newWidgetId } from "./layout";
 import type { PlacedWidget } from "./layout";
 
@@ -10,6 +11,7 @@ import {
   widgetDefinition,
   widgetTypes,
   type FieldSpec,
+  type PeriodOverride,
   type Shortcut,
   type WidgetDefinition,
 } from "./widgets";
@@ -140,10 +142,13 @@ type Draft = Record<string, unknown>;
 function Field({
   spec,
   value,
+  fallback,
   onChange,
 }: {
   spec: FieldSpec;
   value: unknown;
+  /** Dates offered when a custom period is first chosen. */
+  fallback: Period;
   onChange: (value: unknown) => void;
 }) {
   if (spec.kind === "textarea") {
@@ -160,6 +165,58 @@ function Field({
           {text.length} of {spec.max} characters
         </span>
       </label>
+    );
+  }
+  if (spec.kind === "period") {
+    const own = (value as PeriodOverride | undefined) ?? undefined;
+    const choice = own?.preset ?? "";
+    return (
+      <fieldset className="dash-field">
+        <legend>{spec.label}</legend>
+        <label>
+          Period for this widget
+          <select
+            value={choice}
+            onChange={(event) => {
+              const preset = event.target.value as Preset | "";
+              onChange(
+                preset === ""
+                  ? undefined
+                  : preset === "custom"
+                    ? { preset, custom: own?.custom ?? fallback }
+                    : { preset },
+              );
+            }}
+          >
+            <option value="">Same as the dashboard</option>
+            {presets.map(({ value: preset, label }) => (
+              <option key={preset} value={preset}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {own?.preset === "custom" &&
+          (["from", "to"] as const).map((edge) => (
+            <label key={edge}>
+              {edge === "from" ? "From" : "To"}
+              <input
+                type="date"
+                min="1900-01-01"
+                value={own.custom?.[edge] ?? ""}
+                onChange={(event) =>
+                  onChange({
+                    preset: "custom",
+                    custom: {
+                      ...(own.custom ?? fallback),
+                      [edge]: event.target.value,
+                    },
+                  })
+                }
+              />
+            </label>
+          ))}
+      </fieldset>
     );
   }
   const links = Array.isArray(value) ? (value as Shortcut[]) : [];
@@ -196,10 +253,13 @@ function Field({
  */
 export function WidgetSettings({
   widget,
+  period,
   onApply,
   onClose,
 }: {
   widget: PlacedWidget;
+  /** The dashboard's period, used to start a custom one. */
+  period: Period;
   onApply: (config: object) => void;
   onClose: () => void;
 }) {
@@ -231,7 +291,12 @@ export function WidgetSettings({
             key={spec.key}
             spec={spec}
             value={draft[spec.key]}
-            onChange={(value) => setDraft({ ...draft, [spec.key]: value })}
+            fallback={period}
+            onChange={(value) => {
+              const next = { ...draft, [spec.key]: value };
+              if (value === undefined) delete next[spec.key];
+              setDraft(next);
+            }}
           />
         ))}
         {!valid && (

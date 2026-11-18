@@ -319,3 +319,55 @@ test("legacy browser preferences move into the saved dashboard once", async ({
     stored.widgets.find((w: { id: string }) => w.id === "mood").hidden,
   ).toBe(true);
 });
+
+test("a widget can keep its own period; the others follow the dashboard; it can be reset", async ({
+  page,
+}) => {
+  await open(page);
+  await expect(page.locator("[data-scope]")).toHaveCount(0);
+  await page.getByText("Manage dashboards").click();
+  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await page.getByRole("button", { name: "Settings: At a glance" }).click();
+  const dialog = page.getByRole("dialog", { name: /Settings/ });
+  await dialog.getByLabel("Period for this widget").selectOption("last7");
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+
+  const scope = page.locator('[data-scope="glance"]');
+  await expect(scope).toContainText("Last 7 days (7 days)");
+  await expect(scope).toContainText("this widget's own period");
+  expect(await range(page, "get_workspace_analytics")).toBe(
+    "2026-11-11..2026-11-17",
+  );
+  // The other sections still use the dashboard's 30 days.
+  expect(await range(page, "get_progress_analytics")).toBe(
+    "2026-10-19..2026-11-17",
+  );
+  await expect(period(page)).toContainText("30 days");
+
+  // It is a stored display choice: it survives a restart.
+  await page.reload();
+  await expect(page.locator('[data-scope="glance"]')).toContainText(
+    "Last 7 days",
+  );
+
+  await page
+    .getByRole("button", { name: "Use the dashboard period: At a glance" })
+    .click();
+  await expect(page.locator("[data-scope]")).toHaveCount(0);
+  expect(await range(page, "get_workspace_analytics")).toBe(
+    "2026-10-19..2026-11-17",
+  );
+});
+
+test("a record filter says where it does not apply", async ({ page }) => {
+  await open(page);
+  await page
+    .locator(".dash-controls select")
+    .first()
+    .selectOption({ label: "Studio launch" });
+  await expect(page.locator('[data-scope="habits"]')).toContainText(
+    "project filter does not apply",
+  );
+  await expect(page.locator('[data-scope="glance"]')).toHaveCount(0);
+});

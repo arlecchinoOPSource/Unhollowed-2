@@ -1,4 +1,5 @@
 import type { DataSource } from "../../database/dataChanges";
+import { periodProblem, presets, type Period, type Preset } from "./controls";
 
 /**
  * The dashboard widget registry: one typed table that says which widgets
@@ -25,7 +26,9 @@ export interface WidgetSize {
  */
 export type FieldSpec =
   | { kind: "textarea"; key: string; label: string; max: number }
-  | { kind: "destinations"; key: string; label: string; max: number };
+  | { kind: "destinations"; key: string; label: string; max: number }
+  /** The widget's own period, or none to follow the dashboard's. */
+  | { kind: "period"; key: string; label: string };
 
 /** Places in the app a shortcut may open. */
 export const DESTINATIONS: readonly Shortcut[] = [
@@ -72,6 +75,46 @@ const noOptions = (raw: unknown): Record<string, never> | null =>
     ? {}
     : null;
 
+/** A period a widget keeps for itself instead of the dashboard's. */
+export interface PeriodOverride {
+  preset: Preset;
+  /** Required for, and only for, the custom preset. */
+  custom?: Period;
+}
+export interface PeriodConfig {
+  period?: PeriodOverride;
+}
+
+/** Config for widgets that follow the dashboard period unless told otherwise. */
+export function parsePeriodConfig(raw: unknown): PeriodConfig | null {
+  if (raw === undefined || raw === null) return {};
+  if (!record(raw) || !Object.keys(raw).every((key) => key === "period"))
+    return null;
+  if (raw.period === undefined) return {};
+  const value = raw.period;
+  if (
+    !record(value) ||
+    !Object.keys(value).every((key) => key === "preset" || key === "custom") ||
+    !presets.some(({ value: preset }) => preset === value.preset)
+  )
+    return null;
+  if (value.preset !== "custom")
+    return value.custom === undefined
+      ? { period: { preset: value.preset as Preset } }
+      : null;
+  const custom = value.custom;
+  if (
+    !record(custom) ||
+    typeof custom.from !== "string" ||
+    typeof custom.to !== "string" ||
+    periodProblem({ from: custom.from, to: custom.to }) !== null
+  )
+    return null;
+  return {
+    period: { preset: "custom", custom: { from: custom.from, to: custom.to } },
+  };
+}
+
 export const MAX_NOTE = 2000;
 export const MAX_SHORTCUTS = 12;
 
@@ -114,7 +157,12 @@ const none = (
     empty,
     error: "This widget could not read its data.",
     defaults: {},
-    parse: noOptions,
+    fields: filters.includes("period")
+      ? [{ kind: "period", key: "period", label: "Period" }]
+      : undefined,
+    parse: (filters.includes("period") ? parsePeriodConfig : noOptions) as (
+      raw: unknown,
+    ) => object | null,
   });
 
 const definitions: WidgetDefinition[] = [
