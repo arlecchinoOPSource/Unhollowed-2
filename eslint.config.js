@@ -19,5 +19,9 @@ export default tseslint.config(
     files: ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
     languageOptions: { globals: globals.browser },
   },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: globals.node },
+  },
   hooks.configs.flat.recommended,
 );

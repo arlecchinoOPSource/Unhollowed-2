@@ -6,3 +6,4 @@ test-results/
 .DS_Store
 
 src-tauri/gen/
+THIRD_PARTY_NOTICES.md

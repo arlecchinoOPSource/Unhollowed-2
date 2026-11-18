@@ -51,9 +51,14 @@ The workspace uses a stable UUID stored as text, and `app_state` records which w
 
 See [Phase 0 verification](docs/phase-0.md) for resolved versions and checks.
 
+## Beta status, platforms, and license
+
+Unhollowed 2 is beta software, provided as is, without warranty. Keep your own copies of anything important. Supported beta targets are macOS on Apple Silicon and Windows x64; see [license, redistribution, and platforms](docs/LEGAL.md). **No open-source license has been chosen yet**, so the code is all rights reserved until the owner selects one. Dependency licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and what the app stores and sends is in the [privacy statement](docs/PRIVACY_STATEMENT.md).
+
 ## Project documentation
 
 - [Product](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [data model](docs/DATA_MODEL.md)
 - [Development](docs/DEVELOPMENT.md) and [local macOS testing](docs/MACOS_TESTING.md)
 - [CI and packaging](docs/CI_CD.md) and [release preparation](docs/RELEASE.md)
+- [Privacy statement](docs/PRIVACY_STATEMENT.md), [security audit](docs/SECURITY.md), and [legal readiness](docs/LEGAL.md)
 - [Contributing](docs/CONTRIBUTING.md), [decisions](docs/DECISIONS.md), and [changelog](CHANGELOG.md)
