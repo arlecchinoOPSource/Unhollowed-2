@@ -240,6 +240,40 @@ The first run (1.07 s) was the first launch of a new build and includes the syst
 | PERF-1 | Info     | No resource problem found at this scale: window in about 0.2 s, idle CPU about 0%, main-process memory about 100 MB.                                              | None needed.                                                                       |
 | PERF-2 | Open     | Not measured: first paint of page content, total memory including WebKit helpers, packaged-app interaction with a large populated workspace, and any Windows run. | Measure on the packaged builds with a populated workspace (U2-P6-17 and U2-P6-18). |
 
+## Beta accessibility and consistency audit (U2-P6-14)
+
+Run on 2026-11-18 on `main` after #240 plus this change (after the brand and UI overhaul), Chromium on macOS arm64. All suites below were rerun in full: 25 existing tests passed unchanged, then the new document editor spec was added. Command: `npx playwright test accessibility dashboardAccessibility trackingAccessibility documentAccessibility`.
+
+| Scope item                       | How it was checked                                                                                                                                                                                                      | Result                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Keyboard navigation              | Every page's focusable controls reached by Tab (`accessibility.spec.ts`); dashboard operated by keyboard alone; habit grid, check-ins, calendar keyboard tests; the document editor reached backward from the text area | Pass                                                                         |
+| Focus indicators                 | Every stop on 8 pages, dashboard view and arrange mode, tracking pages, and the editor needs an outline of at least 2 px or a focus shadow                                                                              | Pass                                                                         |
+| Screen-reader semantics          | axe rules for roles, names, landmarks, and listbox ownership on all 27 routes plus open panels; charts have names, legends, and a **Show values** table                                                                 | Pass by automated rules. Not tested with a real screen reader (see below)    |
+| Color contrast                   | axe `color-contrast` in both themes on every route and panel; chart series at least 3:1; form borders at least 3:1                                                                                                      | Pass                                                                         |
+| Form labels                      | axe label rules on every form, dialog, and filter; **new**: label-in-name on the editor toolbar                                                                                                                         | Pass after 1 fix                                                             |
+| Accessible dialogs               | Search, project, issue, calendar, dashboard (New, Rename, Delete, Reset), and tracking dialogs scanned open; Escape and focus return covered in feature specs                                                           | Pass                                                                         |
+| Chart descriptions               | Dashboard charts: accessible name with title, range, series, highest value; text table; distinct empty and unavailable states                                                                                           | Pass                                                                         |
+| Reduced motion                   | All accessibility suites run with `prefers-reduced-motion: reduce`; the app stylesheet clamps animations                                                                                                                | Pass                                                                         |
+| Light and dark themes            | Every scan above runs in both                                                                                                                                                                                           | Pass                                                                         |
+| Responsive layout, minimum width | No sideways scroll at 620 px (the window's minimum width) on every route, the dashboard with every widget at 620 and 375 px, tracking pages, and the editor                                                             | Pass                                                                         |
+| Consistent interaction           | Shared layout, dialog, button, and field styles; checked by the same scans                                                                                                                                              | Reviewed only by the automated scans; no separate consistency measure exists |
+
+### Defects found and fixed
+
+The existing suites reached only the document library, not an open document. A new scan of the open editor with every toolbar panel expanded (`tests/browser/documentAccessibility.spec.ts`) found two problems, both fixed without changing the visual design:
+
+| Defect                                                                                                                                                                          | Fix                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| The Superscript and Subscript buttons showed "x²" and "x₂" but were named only "Superscript" and "Subscript", so voice control saying what is on screen would miss (WCAG 2.5.3) | The accessible name now contains the glyph ("x² Superscript"). |
+| The **Open local graph** link in the document links panel was shorter than 24 px (WCAG 2.5.8)                                                                                   | A 24 px minimum height for that link.                          |
+
+### Not covered and remaining limitations
+
+- No session with VoiceOver, NVDA, or JAWS was run. Automated rules do not prove a good screen-reader experience.
+- Not tested: Windows high-contrast or forced-colors mode, browser zoom of 200% or more, user text-spacing overrides, and the minimum window height (460 px). Reflow was checked by width only.
+- Windows WebView2 and macOS WKWebView were not used; the scans ran in Chromium.
+- Rich-text content typed by a user (for example heading order inside a document) is not checked by these rules.
+
 ## Gaps
 
 - **Relationship picker at large sizes.** Adding a relationship loads every issue and renders one `<select>` option per issue: 42 ms backend and 80 ms rendering at 2,000 to 5,000 issues, and slow to scan by keyboard. It meets the target at the representative size. A searchable picker backed by `query_issues` would remove the full load. This is tracked in #52 rather than built speculatively here.

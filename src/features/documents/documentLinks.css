@@ -97,3 +97,10 @@
   padding: 0;
   list-style: none;
 }
+
+/* WCAG 2.5.8: a pointer target is at least 24 px tall. */
+.document-graph-link {
+  display: inline-block;
+  min-height: 24px;
+  padding-block: 2px;
+}

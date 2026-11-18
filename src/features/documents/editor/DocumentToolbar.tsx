@@ -107,7 +107,9 @@ export function DocumentToolbar({ editor }: { editor: Editor }) {
           <button
             key={name}
             type="button"
-            aria-label={label}
+            // WCAG 2.5.3: the name contains the visible glyph, so voice
+            // control can say what it sees ("x²").
+            aria-label={glyph.length > 1 ? `${glyph} ${label}` : label}
             title={label}
             aria-pressed={active.marks[index]}
             onClick={() => editor.chain().focus().toggleMark(name).run()}
