@@ -27,6 +27,8 @@ mod phase5_acceptance;
 mod phase5_journey;
 mod portability;
 mod projects;
+#[cfg(test)]
+mod recovery_tests;
 mod relationships;
 mod saved_views;
 mod scheduling;
