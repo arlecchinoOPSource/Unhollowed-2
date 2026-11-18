@@ -1,15 +1,15 @@
-import { useEffect, useState } from "react";
 import type { Period } from "./controls";
+import { queryKey, useSharedQuery } from "../../database/sharedQuery";
 import { Link } from "react-router";
-import { useDataVersion } from "../../database/dataChanges";
 import {
   getHabitStatistics,
   habitError,
-  type HabitStatistics,
 } from "../../database/habits";
 import { fullDate } from "../calendar/monthGrid";
 import { Bars, Table } from "../habits/HabitDashboard";
 import "../habits/habits.css";
+
+const SOURCES = ["habits"] as const;
 
 const plural = (count: number, one: string) =>
   `${count} ${count === 1 ? one : `${one}s`}`;
@@ -28,29 +28,18 @@ export function HabitsSection({
   habit: string | null;
   period: Period;
 }) {
-  const [data, setData] = useState<HabitStatistics | null>(null);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  const changes = useDataVersion("habits");
-
-  useEffect(() => {
-    if (project) return;
-    let live = true;
-    getHabitStatistics(period.from, period.to, habit ? [habit] : null)
-      .then((result) => {
-        if (!live) return;
-        setData(result);
-        setError("");
-      })
-      .catch((cause) => {
-        if (!live) return;
-        setData(null);
-        setError(habitError(cause));
-      });
-    return () => {
-      live = false;
-    };
-  }, [period.from, period.to, project, habit, retry, changes]);
+  const {
+    data,
+    error,
+    retry: reload,
+  } = useSharedQuery(
+    project
+      ? null
+      : queryKey("habit-statistics", period.from, period.to, habit),
+    SOURCES,
+    () => getHabitStatistics(period.from, period.to, habit ? [habit] : null),
+    habitError,
+  );
 
   return (
     <section aria-labelledby="dash-habits-title" className="dash-section">
@@ -67,11 +56,7 @@ export function HabitsSection({
       {!project && error && (
         <div role="alert">
           <p>{error}</p>
-          <button
-            type="button"
-            className="action"
-            onClick={() => setRetry((n) => n + 1)}
-          >
+          <button type="button" className="action" onClick={() => reload()}>
             Retry
           </button>
         </div>

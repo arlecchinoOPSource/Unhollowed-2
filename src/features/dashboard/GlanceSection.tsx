@@ -1,13 +1,19 @@
-import { useEffect, useState } from "react";
 import type { Period } from "./controls";
+import { queryKey, useSharedQuery } from "../../database/sharedQuery";
 import { Link } from "react-router";
 import {
   analyticsError,
   getWorkspaceAnalytics,
-  type WorkspaceAnalytics,
 } from "../../database/analytics";
-import { useDataVersion } from "../../database/dataChanges";
 import { deviceZone } from "../../database/events";
+
+const SOURCES = [
+  "issues",
+  "projects",
+  "milestones",
+  "calendar",
+  "habits",
+] as const;
 
 function span(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -40,34 +46,22 @@ export function GlanceSection({
   project: string | null;
   period: Period;
 }) {
-  const [data, setData] = useState<WorkspaceAnalytics | null>(null);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  const changes = useDataVersion(
-    "issues",
-    "projects",
-    "milestones",
-    "calendar",
-    "habits",
+  const {
+    data,
+    error,
+    retry: reload,
+  } = useSharedQuery(
+    queryKey(
+      "workspace-analytics",
+      period.from,
+      period.to,
+      project,
+      deviceZone(),
+    ),
+    SOURCES,
+    () => getWorkspaceAnalytics(period.from, period.to, project, deviceZone()),
+    analyticsError,
   );
-
-  useEffect(() => {
-    let live = true;
-    getWorkspaceAnalytics(period.from, period.to, project, deviceZone())
-      .then((result) => {
-        if (!live) return;
-        setData(result);
-        setError("");
-      })
-      .catch((cause) => {
-        if (!live) return;
-        setData(null);
-        setError(analyticsError(cause));
-      });
-    return () => {
-      live = false;
-    };
-  }, [period.from, period.to, project, retry, changes]);
 
   const issues = data?.issues.data;
   const habits = data?.habits;
@@ -78,11 +72,7 @@ export function GlanceSection({
       {error && (
         <div role="alert">
           <p>{error}</p>
-          <button
-            type="button"
-            className="action"
-            onClick={() => setRetry((n) => n + 1)}
-          >
+          <button type="button" className="action" onClick={() => reload()}>
             Retry
           </button>
         </div>
