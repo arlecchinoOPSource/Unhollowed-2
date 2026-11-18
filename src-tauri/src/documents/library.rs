@@ -406,4 +406,45 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn opening_records_one_timestamp_in_its_workspace_and_leaves_other_state_alone() {
+        tauri::async_runtime::block_on(async {
+            let db = migrated_pool().await;
+            add_workspace(&db, OTHER_WORKSPACE, "Other").await;
+            let doc = create_from_file(&db, DEFAULT_WORKSPACE, "Notes", None, None, HashMap::new())
+                .await
+                .unwrap();
+            // Creating a document counts as opening it.
+            assert!(doc.opened_at.is_some());
+
+            // Another workspace cannot mark it opened.
+            assert!(matches!(
+                change(&db, OTHER_WORKSPACE, &doc.id, LibraryChange::Open).await,
+                Err(DocumentError::NotFound)
+            ));
+            let still = super::super::get(&db, DEFAULT_WORKSPACE, &doc.id)
+                .await
+                .unwrap();
+            assert_eq!(still.title, "Notes");
+
+            let opened = change(&db, DEFAULT_WORKSPACE, &doc.id, LibraryChange::Open)
+                .await
+                .unwrap();
+            let stamp = opened.opened_at.clone().expect("opening records the time");
+            // Archiving keeps the record, and the library still reports it.
+            let archived = change(&db, DEFAULT_WORKSPACE, &doc.id, LibraryChange::Archive)
+                .await
+                .unwrap();
+            assert_eq!(archived.opened_at.as_deref(), Some(stamp.as_str()));
+            assert!(archived.archived_at.is_some());
+            let (stored,): (Option<String>,) =
+                sqlx::query_as("SELECT opened_at FROM documents WHERE id = ?")
+                    .bind(&doc.id)
+                    .fetch_one(&db)
+                    .await
+                    .unwrap();
+            assert_eq!(stored.as_deref(), Some(stamp.as_str()));
+        });
+    }
 }
