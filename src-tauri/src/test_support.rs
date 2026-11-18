@@ -67,7 +67,17 @@ impl TempDatabase {
         database
     }
 
+    /// Opens the file the way the app does. tauri-plugin-sql creates a new
+    /// database with `sqlx::Sqlite::create_database`, which switches it to
+    /// write-ahead logging (a setting stored in the file), so a test database
+    /// is created the same way and has the same journal mode as a real one.
     pub async fn open(&self) -> SqlitePool {
+        use sqlx::migrate::MigrateDatabase;
+        if !self.0.exists() {
+            sqlx::Sqlite::create_database(&format!("sqlite:{}", self.0.display()))
+                .await
+                .unwrap();
+        }
         SqlitePool::connect_with(
             SqliteConnectOptions::new()
                 .filename(&self.0)

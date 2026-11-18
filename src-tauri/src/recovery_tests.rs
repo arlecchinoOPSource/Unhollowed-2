@@ -104,7 +104,7 @@ fn a_dropped_transaction_changes_nothing() {
 }
 
 #[test]
-fn the_database_commits_with_a_rollback_journal_and_full_sync() {
+fn a_database_created_like_the_app_uses_write_ahead_logging_with_full_sync() {
     tauri::async_runtime::block_on(async {
         let database = TempDatabase::new("recovery-durability");
         let pool = database.open().await;
@@ -116,10 +116,9 @@ fn the_database_commits_with_a_rollback_journal_and_full_sync() {
             .fetch_one(&pool)
             .await
             .unwrap();
-        // tauri-plugin-sql opens the file with sqlx defaults, which leave the
-        // journal mode alone (rollback journal) and keep synchronous FULL, so
-        // a commit is on disk before it returns.
-        assert_eq!((mode.as_str(), sync), ("delete", 2));
+        // tauri-plugin-sql creates the file with `create_database`, which
+        // turns on write-ahead logging, and sqlx keeps synchronous FULL.
+        assert_eq!((mode.as_str(), sync), ("wal", 2));
     });
 }
 

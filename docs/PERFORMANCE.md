@@ -196,6 +196,50 @@ Color is never the only signal: the grid, history, and charts also use symbols, 
 | Delete button's fallback red failed contrast in dark mode                       | Habit deletion review    | The danger style uses the text color with a heavier border |
 | A details panel nested inside another details panel failed the target-size rule | Dashboard Habits section | The data table is one details panel, not two               |
 
+## Packaged app and resource audit (U2-P6-13)
+
+Measured on 2026-11-18 at commit `8d83a26`: a release build of the packaged macOS app (`npx tauri build --bundles app`, 25.06 MiB bundle). Hardware: Apple M5, 10 cores, 16 GiB memory, macOS 26.5.1. Windows was not measured.
+
+### Method
+
+The app binary was launched from a script with `HOME` pointed at an empty throwaway folder, so it created its own new workspace and never opened a real one. Each run:
+
+- **Startup**: time from launch until the main window (wider than 300 px) is on screen, polled every 5 ms. This is window creation, **not** first paint of the page content, which the app does not expose and was not measured.
+- **Memory**: resident memory of the main process 10 seconds after launch. The operating system's WebKit helper processes (page rendering) are separate and were **not** included, so this understates total use.
+- **Idle CPU**: the main process's CPU over three 3-second samples (`top`), after the 10 seconds, with the app untouched.
+- **Cold**: first launch with no data folder, so the app creates the database and applies all 29 migrations. The operating system's file cache was not purged, so only the first run after the build had a truly cold cache. **Warm**: relaunch with the data folder in place.
+
+| Run    | Window on screen | Main process memory | Idle CPU |
+| ------ | ---------------: | ------------------: | -------: |
+| Cold 1 |         1,074 ms |              108 MB |     0.0% |
+| Cold 2 |           221 ms |              111 MB |     0.1% |
+| Cold 3 |           209 ms |               96 MB |     0.0% |
+| Warm 1 |           235 ms |              110 MB |     0.0% |
+| Warm 2 |           213 ms |              108 MB |     0.1% |
+| Warm 3 |           215 ms |              105 MB |     0.1% |
+| Warm 4 |           194 ms |              109 MB |     0.1% |
+| Warm 5 |           193 ms |              104 MB |     0.1% |
+
+The first run (1.07 s) was the first launch of a new build and includes the system loading it. Later runs, new or existing data folder, put a window up in about 0.2 s. Idle CPU is effectively zero. In a separate run the app's new database held all 29 migrations and was in write-ahead logging mode, so the Rust side was working, but no run looked at the rendered page.
+
+### Editing, lists, calendar, habits, dashboard, graph, size
+
+| Area                     | Result                                                                                                                                                                                                                                                                                                              | Source                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Document editing         | Typing one character into a 1,000, 5,000, and 20,000-word document: median 0.1 ms, 95th percentile 0.2 to 0.3 ms, worst 3 to 12 ms; opening the largest takes 17 ms and serializing it under 1 ms. This runs the app's own editor schema in Chromium **without** the React page, toolbar, or page layout around it. | `tests/browser/documentPerformance.spec.ts` (`PERF=1`) |
+| Large issue list         | First page 0.57 ms at 500 and 2.13 ms at 5,000 issues; the page shows content in about 80 ms at 500 and 2,000 issues                                                                                                                                                                                                | Sections above                                         |
+| Calendar rendering       | Month view 1.86 ms at 500 events and 20.31 ms at 5,000; page 76 ms at 500 and 141 ms at 2,000 issues                                                                                                                                                                                                                | Calendar section                                       |
+| Habit history, dashboard | Measured in the section below with their own fixtures                                                                                                                                                                                                                                                               | Habits section                                         |
+| Knowledge graph          | The 500-note global graph renders and filters in a test that takes about 2 s in total, including seeding and navigation. Draw time alone was not measured.                                                                                                                                                          | `documents.spec.ts`                                    |
+| Database size and growth | After a full checkpoint: a new workspace 536 KiB (all tables and indexes empty), 500 issues 1,116 KiB, 5,000 issues 6,724 KiB. That is about 1.2 KiB per issue with its fixture links. A new packaged workspace also has a `-wal` file of about 1.3 MB until the app checkpoints on a clean quit.                   | `perf_tests::measure_database_size` (`--ignored`)      |
+
+### Findings
+
+| ID     | Severity | Finding                                                                                                                                                           | Status                                                                             |
+| ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| PERF-1 | Info     | No resource problem found at this scale: window in about 0.2 s, idle CPU about 0%, main-process memory about 100 MB.                                              | None needed.                                                                       |
+| PERF-2 | Open     | Not measured: first paint of page content, total memory including WebKit helpers, packaged-app interaction with a large populated workspace, and any Windows run. | Measure on the packaged builds with a populated workspace (U2-P6-17 and U2-P6-18). |
+
 ## Gaps
 
 - **Relationship picker at large sizes.** Adding a relationship loads every issue and renders one `<select>` option per issue: 42 ms backend and 80 ms rendering at 2,000 to 5,000 issues, and slow to scan by keyboard. It meets the target at the representative size. A searchable picker backed by `query_issues` would remove the full load. This is tracked in #52 rather than built speculatively here.

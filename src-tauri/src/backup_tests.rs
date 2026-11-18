@@ -267,3 +267,88 @@ fn an_older_app_refuses_a_newer_database_without_touching_it() {
         assert_eq!(integrity, "ok");
     });
 }
+
+const CRASH_CHILD: &str = "U2_BACKUP_CRASH_CHILD_DB";
+
+/// Runs only in the child process of the test below: commits one issue and
+/// dies without closing the database, as a crash or forced quit would.
+#[test]
+fn child_commits_then_dies_without_closing() {
+    let Ok(path) = std::env::var(CRASH_CHILD) else {
+        return;
+    };
+    tauri::async_runtime::block_on(async {
+        let pool = sqlx::SqlitePool::connect(&format!("sqlite:{path}"))
+            .await
+            .unwrap();
+        add_issue(&pool, DEFAULT_WORKSPACE, None).await;
+        std::process::abort();
+    });
+}
+
+/// The database is in write-ahead logging mode, so after a crash the newest
+/// committed work can sit in the `-wal` file next to the main file. A backup
+/// of the main file alone would miss it.
+#[test]
+fn after_a_crash_only_a_copy_of_all_database_files_keeps_the_last_commits() {
+    tauri::async_runtime::block_on(async {
+        let live = TempDatabase::new("backup-crash");
+        let db = live.open().await;
+        migrator(i64::MAX).await.run(&db).await.unwrap();
+        let path = db.connect_options().get_filename().to_path_buf();
+        db.close().await;
+
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "backup_tests::child_commits_then_dies_without_closing",
+            ])
+            .env(CRASH_CHILD, &path)
+            .status()
+            .unwrap();
+        assert!(!status.success(), "the child must die by abort");
+        let wal = {
+            let mut name = path.clone().into_os_string();
+            name.push("-wal");
+            std::path::PathBuf::from(name)
+        };
+        assert!(
+            wal.metadata().unwrap().len() > 0,
+            "the commit is in the -wal file"
+        );
+
+        let copies = std::env::temp_dir().join(format!("u2-crash-copy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&copies);
+        std::fs::create_dir_all(&copies).unwrap();
+        let count = |dir: &std::path::Path| {
+            let file = dir.join("workspace.sqlite3");
+            async move {
+                let pool = SqlitePool::connect(&format!("sqlite:{}", file.display()))
+                    .await
+                    .unwrap();
+                let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM issues")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+                pool.close().await;
+                rows
+            }
+        };
+
+        let main_only = copies.join("main-only");
+        std::fs::create_dir_all(&main_only).unwrap();
+        std::fs::copy(&path, main_only.join("workspace.sqlite3")).unwrap();
+        assert_eq!(
+            count(&main_only).await,
+            0,
+            "the main file alone misses the commit"
+        );
+
+        let all = copies.join("all-files");
+        std::fs::create_dir_all(&all).unwrap();
+        std::fs::copy(&path, all.join("workspace.sqlite3")).unwrap();
+        std::fs::copy(&wal, all.join("workspace.sqlite3-wal")).unwrap();
+        assert_eq!(count(&all).await, 1, "main file plus -wal keeps the commit");
+        let _ = std::fs::remove_dir_all(&copies);
+    });
+}

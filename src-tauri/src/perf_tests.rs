@@ -765,3 +765,36 @@ fn measure_dashboard() {
         pool.close().await;
     });
 }
+
+// --- Database size ----------------------------------------------------------
+
+/// Size of the database file after migrating and loading the issue fixture,
+/// after a full WAL checkpoint, so the main file holds everything.
+#[test]
+#[ignore]
+fn measure_database_size() {
+    tauri::async_runtime::block_on(async {
+        for count in [0usize, 500, 5000] {
+            let database = TempDatabase::new(&format!("perf-size-{count}"));
+            let pool = database.open().await;
+            migrator(i64::MAX).await.run(&pool).await.unwrap();
+            if count > 0 {
+                fixture(&pool, count).await;
+            }
+            sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let bytes: i64 = sqlx::query_scalar(
+                "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            println!(
+                "SIZE issues={count} bytes={bytes} kib={:.0}",
+                bytes as f64 / 1024.0
+            );
+        }
+    });
+}
