@@ -885,6 +885,50 @@ mod temporal {
 }
 
 #[test]
+fn overlapping_first_calendar_reads_initialize_the_workspace() {
+    tauri::async_runtime::block_on(async {
+        let database = crate::test_support::TempDatabase::new("calendar-first-read");
+        let pool = database.open().await;
+        migrator(i64::MAX).await.run(&pool).await.unwrap();
+        sqlx::query("PRAGMA journal_mode = WAL")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let reads = (0..3)
+            .map(|_| {
+                let pool = pool.clone();
+                tauri::async_runtime::spawn(async move {
+                    list_items(
+                        &pool,
+                        DEFAULT_WORKSPACE,
+                        range("2026-11-18", "2026-11-22", "Asia/Manila"),
+                    )
+                    .await
+                })
+            })
+            .collect::<Vec<_>>();
+        let calendar_lists = (0..3)
+            .map(|_| {
+                let pool = pool.clone();
+                tauri::async_runtime::spawn(
+                    async move { calendars_of(&pool, DEFAULT_WORKSPACE).await },
+                )
+            })
+            .collect::<Vec<_>>();
+        for read in reads {
+            assert!(read.await.unwrap().unwrap().items.is_empty());
+        }
+        for list in calendar_lists {
+            let calendars = list.await.unwrap().unwrap();
+            assert_eq!(calendars.len(), 1);
+            assert!(calendars[0].is_default);
+        }
+        assert_eq!(count(&pool, "scheduling_state").await, 1);
+        pool.close().await;
+    });
+}
+
+#[test]
 fn rescheduling_closing_and_archiving_an_issue_only_moves_its_deadline() {
     tauri::async_runtime::block_on(async {
         let pool = migrated_pool().await;

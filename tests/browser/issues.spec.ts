@@ -470,6 +470,8 @@ test("creates labels, assigns several, filters by them, and keeps archived label
   await page.getByLabel("Match all selected labels").click();
   await expect(page.getByText("No issues match these filters.")).toBeVisible();
   await expect(page).toHaveURL(/match=all/);
+  // Close the label popup before interacting with the controls behind it.
+  await page.getByText("Labels (2)", { exact: true }).click();
   await page.getByRole("button", { name: "Reset filters" }).click();
   await expect(titles).toHaveCount(2);
 

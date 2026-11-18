@@ -400,16 +400,17 @@ pub async fn calendars_of(
     pool: &SqlitePool,
     workspace: &str,
 ) -> Result<Vec<Calendar>, SchedulingError> {
-    let mut tx = pool.begin().await?;
-    ensure_default(&mut tx, workspace).await?;
+    // Let the default insert run in autocommit so concurrent first reads
+    // can wait for a writer without upgrading an old read snapshot.
+    let mut conn = pool.acquire().await?;
+    ensure_default(&mut conn, workspace).await?;
     let calendars = sqlx::query_as(&format!(
         "SELECT {CALENDAR_FIELDS} FROM calendars WHERE workspace_id = ?
          ORDER BY archived_at IS NOT NULL, is_default DESC, name COLLATE NOCASE, id"
     ))
     .bind(workspace)
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut *conn)
     .await?;
-    tx.commit().await?;
     Ok(calendars)
 }
 
@@ -895,7 +896,17 @@ pub(crate) async fn refresh_instants(
     if checked.as_deref() == Some(version) {
         return Ok(0);
     }
-    let mut tx = pool.begin().await?;
+    let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+    // Another calendar read may have refreshed the workspace while we waited.
+    let checked: Option<String> =
+        sqlx::query_scalar("SELECT tzdb_version FROM scheduling_state WHERE workspace_id = ?")
+            .bind(workspace)
+            .fetch_optional(&mut *tx)
+            .await?;
+    if checked.as_deref() == Some(version) {
+        tx.commit().await?;
+        return Ok(0);
+    }
     let mut changed = 0;
     for table in ["events", "work_blocks"] {
         let timed = if table == "events" {

@@ -174,12 +174,14 @@ Apple M5, macOS 26.5.1, Node and Rust as pinned.
 
 | Check                            | Result                                                                                                        |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `npm run test:mac`               | Pass: ESLint, 177 frontend unit tests, build, `cargo fmt --check`, 266 Rust tests (5 timing fixtures ignored) |
-| `npx playwright test` (Chromium) | 228 passed, 6 skipped (the opt-in timing fixtures), 1 failed: see below                                       |
+| `npm run test:mac`               | Pass: ESLint, 177 frontend unit tests, build, `cargo fmt --check`, 267 Rust tests (5 timing fixtures ignored) |
+| `npx playwright test` (Chromium) | 229 passed, 6 skipped (the opt-in timing fixtures)                                                            |
 | `cargo test --locked ... phase5` | Pass                                                                                                          |
 | GitHub CI on `main`              | Success for each Phase 5 merge (duplicate runs of the same commit were cancelled by newer pushes)             |
 
-**Unexpected failure.** `issues.spec.ts` "creates labels, assigns several, filters by them, and keeps archived labels visible" fails locally with `Test timeout of 30000ms exceeded`. It is a long label journey that has nothing to do with dashboards. It also failed on earlier Phase 5 commits on this machine and passes in GitHub CI, so it is a local timing problem with that test's 30 second budget rather than a Phase 5 regression. It is not fixed here.
+The issue-label journey previously timed out because the open Labels popup intercepted the click on Reset filters. The test now closes the popup before clicking Reset and still verifies that the full issue list returns. The GitHub Quick CI workflow does not run Playwright.
+
+The calendar now serializes the first time-zone refresh and makes the initial default-calendar insert safe when several views request it together. A Rust regression test opens a fresh SQLite database and verifies that overlapping calendar reads succeed and return a single default calendar.
 
 ### Gaps and platform evidence
 
