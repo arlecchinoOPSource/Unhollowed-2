@@ -821,6 +821,21 @@ export async function installIpcMock(page: Page) {
                 title,
                 updatedAt: "2026-11-01T00:00:00Z",
               }));
+            case "create_document": {
+              const document = {
+                id: `document-${documents.length + 1}`,
+                title:
+                  (args as unknown as { title?: string }).title ??
+                  "Untitled document",
+                content: empty,
+              };
+              documents.push(document);
+              return {
+                ...document,
+                createdAt: "2026-11-01T00:00:00Z",
+                updatedAt: "2026-11-01T00:00:00Z",
+              };
+            }
             case "get_document": {
               const document = documents.find((item) => item.id === args.id);
               if (!document) throw { code: "not_found" };

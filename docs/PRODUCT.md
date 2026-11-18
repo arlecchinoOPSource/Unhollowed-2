@@ -22,3 +22,20 @@ Home opens on what needs attention today and keeps the directory of areas under 
 - **Independent.** Each section has its own loading, empty, and error state with Retry. One failing source leaves the others as they are.
 - **Date changes.** Home reads today from the local clock, which updates at local midnight and when the window regains focus. Every section re-reads for the new day.
 - **No history.** Home shows today and what is open now; trends stay on Dashboards.
+
+### Quick actions (U2-P5-15)
+
+The **Quick actions** row on Home starts everyday work in the workflow that already owns the record. There are no parallel forms.
+
+| Action                | What it does                                                                                          | Persists through                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| New issue             | A title field; Create issue saves an issue with no project or dates, then says "Created ISS-N title." | `create_issue`                      |
+| New document          | Creates a document and opens it in the editor, with a link back to Home                               | `create_document`                   |
+| Add event             | Opens the calendar's own event editor on today                                                        | `create_calendar_event`             |
+| Schedule issue work   | Choose an open issue; opens it, where work sessions are planned                                       | The issue's own Work sessions panel |
+| Record a check-in     | Opens the check-in screen                                                                             | `save_checkin` (on that screen)     |
+| Open a recent project | Opens the most recently changed active project                                                        | None                                |
+| Mark done (habits)    | Each habit due today has Mark done / Undo                                                             | `set_habit_completion`              |
+
+- **Refresh.** Writes go through the shared command wrapper, so a successful change publishes its sources and the Home sections and dashboard widgets that read them refresh. A failed write publishes nothing.
+- **Cancel and failure.** Cancel closes the form and returns focus to the button that opened it. A failed create keeps what was typed, shows the error, and leaves focus in the field. A successful create returns focus to its button and announces the result. The dialogs return focus to their opener.

@@ -11,6 +11,7 @@ import {
   Milestones,
   RecentDocuments,
 } from "./HomeSections";
+import { QuickActions } from "./QuickActions";
 import "./home.css";
 import "../today/today.css";
 
@@ -30,14 +31,17 @@ export function Home() {
         <p>A private workspace for your notes, plans, and everyday routines.</p>
       </section>
       {desktop ? (
-        <div className="home-grid" data-today={today}>
-          <Attention today={today} />
-          <TodaySchedule today={today} />
-          <HabitsToday today={today} />
-          <Milestones today={today} />
-          <RecentDocuments today={today} />
-          <ActiveProjects today={today} />
-        </div>
+        <>
+          <QuickActions today={today} />
+          <div className="home-grid" data-today={today}>
+            <Attention today={today} />
+            <TodaySchedule today={today} />
+            <HabitsToday today={today} />
+            <Milestones today={today} />
+            <RecentDocuments today={today} />
+            <ActiveProjects today={today} />
+          </div>
+        </>
       ) : (
         <p>Open the desktop app to see today's summary.</p>
       )}
