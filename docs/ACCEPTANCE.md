@@ -32,3 +32,38 @@ Run on Apple Silicon macOS 26.5.1. The Rust journeys use real SQLite and applica
 | Native Windows x64                       | Repeat the native journey with a disposable workspace and record startup, linked content, upgrade, and restart.                                                    | Untested here. Tracked in [#53](https://github.com/arlecchinoOPSource/Unhollowed-2/issues/53). |
 
 The macOS checks passed with 28 frontend and 106 Rust tests. Chromium passed 43 tests. Two Rust benchmarks and two Chromium performance tests were skipped under the regular test commands. The large-workspace relationship picker gap remains tracked in [#52](https://github.com/arlecchinoOPSource/Unhollowed-2/issues/52).
+
+## Beta productivity workflow (U2-P6-09)
+
+Commit `e76fc3a` plus this change, macOS arm64. The journey is `src-tauri/src/beta_workflow.rs`, run with `cargo test --locked beta_workflow`. It uses a real SQLite file and the same functions the Tauri commands call. Nothing is mocked. It is a persistence and data-flow test, not a test of the desktop window.
+
+| Step | Required action                        | Automated result                                                                                                                                                                                                              |
+| ---- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Create a project                       | Pass                                                                                                                                                                                                                          |
+| 2    | Create issues                          | Pass (3 issues)                                                                                                                                                                                                               |
+| 3    | Priorities and milestones              | Pass (high, urgent, low; all three in one milestone)                                                                                                                                                                          |
+| 4-5  | Create a document and apply formatting | Pass (heading, bold, italic stored as document JSON, read back byte for byte)                                                                                                                                                 |
+| 6    | Link the document to the project       | Pass (also linked to an issue)                                                                                                                                                                                                |
+| 7    | Schedule work                          | Pass (a 90-minute work block on an issue)                                                                                                                                                                                     |
+| 8    | Recurring events                       | Pass (daily, 5 occurrences; the dashboard counts at least 5 for the week)                                                                                                                                                     |
+| 9-10 | Habit and completions                  | Pass (2 completions)                                                                                                                                                                                                          |
+| 11   | Mood check-in                          | Pass (1 day recorded)                                                                                                                                                                                                         |
+| 12   | Complete project issues                | Pass (2 of 3 done; 1 open)                                                                                                                                                                                                    |
+| 13   | Dashboard updates                      | Pass. The dashboard value changes after the completions and shows open 1, due 3, due completed 2, habits completed 2, mood days 1, work blocks 1, open milestones 1.                                                          |
+| 14   | Restart                                | The database is closed and opened again from disk, and the migrations run again.                                                                                                                                              |
+| 15   | Workspace intact                       | Pass. The whole dashboard is identical, issue ids, status, priority, and milestone are identical, the document text is identical, project and issue links hold, `integrity_check` is `ok`, and no table gained or lost a row. |
+
+Related coverage that already existed: `acceptance_tests` (projects and issues), `phase4_journey` (documents and calendar), `phase5_journey` and `phase5_acceptance` (dashboards), `habits` and `checkins` upgrade tests, and the Chromium specs for each page.
+
+### Not covered, for a person to run on the packaged app
+
+The 15 steps through the real window, on macOS and Windows, with a fresh data folder, and then quit and relaunch the app (never use your everyday workspace):
+
+1. Create a project, three issues with different priorities, and a milestone assigned to them.
+2. Create a document, apply heading, bold, and italic, and link it to the project.
+3. Schedule a work block and a daily recurring event.
+4. Add a habit and check it on two days. Record a mood check-in.
+5. Complete two issues. Open the dashboard and compare the numbers with what you did.
+6. Quit with Cmd+Q (macOS) or by closing the window (Windows), relaunch, and confirm everything above is unchanged.
+
+Result: not run in this change. No native window was driven.

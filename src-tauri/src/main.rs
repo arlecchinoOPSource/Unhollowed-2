@@ -6,6 +6,8 @@ mod acceptance_tests;
 mod analytics;
 #[cfg(test)]
 mod backup_tests;
+#[cfg(test)]
+mod beta_workflow;
 mod checkins;
 mod dashboards;
 mod database;
