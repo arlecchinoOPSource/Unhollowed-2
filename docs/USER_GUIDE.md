@@ -24,11 +24,11 @@ Not in this beta: accounts, sync between computers, mobile apps, an in-app full 
 
 ## Install
 
-The beta installers are **not signed or notarized**, so your computer will warn you. Only install files you got from the project owner, and check them first (below).
+The public beta installers are **unsigned**. The macOS app is also **not notarized**. Gatekeeper, SmartScreen, or your organization’s device policy may warn or block installation. Download from the official GitHub release and check the files first (below).
 
 1. **Check the download.** Compare its SHA-256 with `SHA256SUMS` from the same release: `shasum -a 256 -c SHA256SUMS` on macOS, or `Get-FileHash <file>` in PowerShell on Windows.
-2. **macOS.** Open the `.dmg`, drag **Unhollowed 2** to Applications. The first time, right-click the app, choose **Open**, then **Open** again. If macOS still refuses, run `xattr -dr com.apple.quarantine "/Applications/Unhollowed 2.app"` in Terminal.
-3. **Windows.** Run `Unhollowed 2_..._x64-setup.exe`. If SmartScreen says "Windows protected your PC", choose **More info**, then **Run anyway**. It installs for your account only. The `.msi` is for managed deployment; install only one of the two, not both.
+2. **macOS.** Open the `.dmg`, drag **Unhollowed 2** to Applications. macOS may block the first launch. On managed devices, ask your administrator whether unsigned apps are allowed.
+3. **Windows.** Run `Unhollowed 2_..._x64-setup.exe`. SmartScreen or Smart App Control may block the installer. It installs for your account only. The `.msi` is for managed deployment; install only one of the two, not both.
 
 Installing needs no internet if WebView2 is already present. If Windows asks to download WebView2, you need a connection once.
 
@@ -92,7 +92,7 @@ There is no automatic updater. Download the newer installer from the owner, veri
 
 | Problem                                                                      | What to try                                                                                                                         |
 | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| macOS says the app "cannot be opened" or is from an unidentified developer   | Right-click the app, **Open**; or clear quarantine with the `xattr` command above.                                                  |
+| macOS says the app "cannot be opened" or is from an unidentified developer   | Check the file against the official release checksum. Managed devices may require administrator approval.                           |
 | Windows shows "Windows protected your PC"                                    | **More info**, then **Run anyway**, for a file you verified.                                                                        |
 | The app shows "This workspace was last opened by a newer version" and closes | You opened a newer workspace with an older app. Install the newer version. Your data was not changed.                               |
 | "Unhollowed 2 could not open your workspace"                                 | Restart. If it persists, restore a backup. Do not delete the data folder.                                                           |

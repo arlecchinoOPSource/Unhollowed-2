@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.0.0-beta.1 — 2026-11-18
+
+- Prepared the first public beta for unsigned Apple Silicon macOS and Windows x64 distribution. See the [draft release notes](docs/release-notes/v1.0.0-beta.1.md) for compatibility, verification, and known limitations.
 
 - Added Day, Week, and Workweek calendar views: a timeline with hour rows, an all-day band for events and deadlines, overlapping events side by side, shaded working hours, a current-time line, and 15-, 30-, or 60-minute grid lines. Week is the default, and events open the shared editor from the keyboard or by clicking a time.
 - Added recurring events: daily, weekly, monthly, and yearly repeats every 1 to 99 units, ending never, after a count, or on a date, expanded only for the dates shown. Single occurrences can be moved, edited, or canceled and keep their identity, and changes can apply to this event, this and following events, or all events. Adds migration 22.
