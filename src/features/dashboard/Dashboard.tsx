@@ -15,6 +15,7 @@ import {
   type Preferences,
 } from "./controls";
 import { ordered, type DashboardLayout } from "./layout";
+import { describe, move, resize, settle } from "./grid";
 import { useDashboardLayout } from "./useDashboardLayout";
 import { WidgetHost } from "./WidgetHost";
 import { widgetDefinition } from "./widgets";
@@ -31,7 +32,12 @@ export function Dashboard() {
   const desktop = isTauri();
   const today = localDate(new Date());
   const dashboard = useDashboardLayout(today, desktop);
-  const { layout } = dashboard;
+  // While arranging, a draft is shown; the committed layout is untouched
+  // until Save succeeds, and Cancel simply drops the draft.
+  const [draft, setDraft] = useState<DashboardLayout | null>(null);
+  const [arrangeNote, setArrangeNote] = useState("");
+  const [saveProblem, setSaveProblem] = useState("");
+  const layout = draft ?? dashboard.layout;
   const prefs: Preferences = {
     preset: layout.preferences.preset,
     custom: layout.preferences.custom,
@@ -193,6 +199,49 @@ export function Dashboard() {
             {project ? " Filtered to one project." : ""}
             {habit ? " Habits filtered to one habit." : ""}
           </p>
+          <div className="dash-edit">
+            {draft ? (
+              <>
+                <button
+                  type="button"
+                  className="action"
+                  onClick={async () => {
+                    const problem = await dashboard.commit(draft);
+                    setSaveProblem(problem ?? "");
+                    if (!problem) {
+                      setDraft(null);
+                      setArrangeNote("");
+                    }
+                  }}
+                >
+                  Save layout
+                </button>
+                <button
+                  type="button"
+                  className="action"
+                  onClick={() => {
+                    setDraft(null);
+                    setSaveProblem("");
+                    setArrangeNote("");
+                  }}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="action"
+                onClick={() => setDraft(dashboard.layout)}
+              >
+                Arrange widgets
+              </button>
+            )}
+            {saveProblem && <p role="alert">{saveProblem}</p>}
+            <p role="status" className="dash-arrange-note">
+              {arrangeNote}
+            </p>
+          </div>
           <details className="dash-details">
             <summary>Sections</summary>
             <div role="group" aria-label="Visible sections">
@@ -228,15 +277,126 @@ export function Dashboard() {
             layout.widgets.every((item) => item.hidden) && (
               <p>All sections are hidden. Turn some on under Sections.</p>
             )}
-          {ordered(layout.widgets)
-            .filter((item) => shown(item.id))
-            .map((item) => (
-              <WidgetHost
-                key={item.id}
-                instance={{ ...item, config: item.config ?? undefined }}
-                context={{ project: scope, habit: habit || null, period }}
-              />
-            ))}
+          <div className="dash-grid" data-arranging={draft ? "" : undefined}>
+            {ordered(settle(layout.widgets.filter((item) => !item.hidden))).map(
+              (item) => {
+                const act = (
+                  change: (
+                    list: typeof layout.widgets,
+                  ) => typeof layout.widgets,
+                  id = item.id,
+                ) => {
+                  if (!draft) return;
+                  const widgets = change(draft.widgets);
+                  setDraft({ ...draft, widgets });
+                  const moved = widgets.find((box) => box.id === id)!;
+                  setArrangeNote(
+                    `${label(item.id, item.type)}: ${describe(moved)}.`,
+                  );
+                };
+                const name = label(item.id, item.type);
+                return (
+                  <div
+                    key={item.id}
+                    className="dash-cell"
+                    data-cell={item.id}
+                    style={
+                      {
+                        "--x": item.x + 1,
+                        "--y": item.y + 1,
+                        "--w": item.w,
+                        "--h": item.h,
+                      } as React.CSSProperties
+                    }
+                  >
+                    {draft && (
+                      <div
+                        className="dash-arrange"
+                        role="group"
+                        aria-label={`Arrange ${name}`}
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) return;
+                          const keys: Record<string, [number, number]> = {
+                            ArrowLeft: [-1, 0],
+                            ArrowRight: [1, 0],
+                            ArrowUp: [0, -1],
+                            ArrowDown: [0, 1],
+                          };
+                          const step = keys[event.key];
+                          if (!step) return;
+                          event.preventDefault();
+                          act((list) =>
+                            event.shiftKey
+                              ? resize(list, item.id, step[0], step[1])
+                              : move(list, item.id, step[0], step[1]),
+                          );
+                        }}
+                      >
+                        <span>
+                          {name}. Arrow keys move; Shift with an arrow resizes.
+                        </span>
+                        {(
+                          [
+                            [
+                              "Move left",
+                              () => move(draft.widgets, item.id, -1, 0),
+                            ],
+                            [
+                              "Move right",
+                              () => move(draft.widgets, item.id, 1, 0),
+                            ],
+                            [
+                              "Move up",
+                              () => move(draft.widgets, item.id, 0, -1),
+                            ],
+                            [
+                              "Move down",
+                              () => move(draft.widgets, item.id, 0, 1),
+                            ],
+                            [
+                              "Narrower",
+                              () => resize(draft.widgets, item.id, -1, 0),
+                            ],
+                            [
+                              "Wider",
+                              () => resize(draft.widgets, item.id, 1, 0),
+                            ],
+                            [
+                              "Shorter",
+                              () => resize(draft.widgets, item.id, 0, -1),
+                            ],
+                            [
+                              "Taller",
+                              () => resize(draft.widgets, item.id, 0, 1),
+                            ],
+                          ] as const
+                        ).map(([text, run]) => (
+                          <button
+                            key={text}
+                            type="button"
+                            className="action"
+                            aria-label={`${text}: ${name}`}
+                            onClick={() => act(run)}
+                          >
+                            {text}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <WidgetHost
+                      instance={{ ...item, config: item.config ?? undefined }}
+                      context={{
+                        project: scope,
+                        habit: habit || null,
+                        period,
+                      }}
+                    />
+                  </div>
+                );
+              },
+            )}
+          </div>
         </>
       )}
     </section>

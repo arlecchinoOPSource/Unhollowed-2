@@ -130,3 +130,51 @@
 .dash-period {
   color: var(--muted);
 }
+
+/* The widget grid: 12 columns on wide windows, one column in reading order
+   on narrow ones. Positions come from the saved layout (see grid.ts). */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 16px;
+}
+
+.dash-cell {
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .dash-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: minmax(2.5rem, auto);
+  }
+
+  .dash-cell {
+    grid-column: var(--x) / span var(--w);
+    grid-row: var(--y) / span var(--h);
+  }
+}
+
+.dash-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.dash-arrange {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 8px;
+  border: 1px dashed var(--control-line);
+  border-radius: 8px;
+}
+
+.dash-arrange > span {
+  flex-basis: 100%;
+  color: var(--muted);
+}

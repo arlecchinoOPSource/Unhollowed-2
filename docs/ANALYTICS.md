@@ -168,3 +168,13 @@ A dashboard is a name and a versioned layout, stored in the `dashboards` table (
 - **Saving.** Changes apply at once and save one after another, so the last change wins. A failed save keeps the change on screen and says it was not saved.
 - **First visit.** With no dashboard, one named "Dashboard" is created from the Phase 4 `localStorage` choices (period and hidden sections, only supported values) or the defaults. The old key is left in place and not read again.
 - **Upgrades.** The migration is forward-only and adds one table; a test upgrades a version 28 database and checks existing data is untouched.
+
+## Arranging widgets (U2-P5-06)
+
+`Arrange widgets` on the dashboard opens an editing draft. The committed layout is untouched until **Save layout** succeeds, **Cancel** drops the draft, and a failed save keeps the committed layout and says why.
+
+- **Grid.** 12 columns, rows of at least 2.5 rem that grow with their content. A widget has a column, a row, a width in columns, and a height in rows. Below 900 px the grid is one column in reading order (row, then column); positions are kept for wider windows.
+- **Placement rules** (`grid.ts`, used for both display and editing, so they cannot disagree). Sizes and columns are clamped to the grid. The widget being edited keeps the spot it was given. Every other widget, in reading order, goes to the first row where it fits without overlap, and never above a widget that is above it in the same columns, so closing a gap cannot make a widget jump over its neighbors. The result has no overlaps and depends only on the input; settling a settled layout changes nothing. A test applies 300 random moves and resizes and checks that nothing overlaps.
+- **Pointer and keyboard.** Each widget in the draft has buttons: Move left, right, up, down, Narrower, Wider, Shorter, Taller. With the widget's frame focused, arrow keys move it and Shift with an arrow resizes it. The new position is announced ("column 7, row 8, 6 columns wide, 4 rows tall"). Nothing requires dragging.
+- **Limits.** A widget cannot be narrower or shorter than its type's minimum, wider than the grid, or taller than 40 rows.
+- **Not added.** Freehand dragging and a grid library: the buttons and keys cover pointer and keyboard use without a dependency or extra CSP surface.

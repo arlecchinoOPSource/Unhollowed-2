@@ -23,6 +23,11 @@ export interface DashboardState {
   problem: string;
   /** Applies a change and saves it, unless the record is from a newer release. */
   update: (change: (layout: DashboardLayout) => DashboardLayout) => void;
+  /**
+   * Saves a layout and shows it only if the save succeeded. On failure the
+   * last committed layout stays and the reason comes back.
+   */
+  commit: (layout: DashboardLayout) => Promise<string | null>;
 }
 
 /**
@@ -135,7 +140,27 @@ export function useDashboardLayout(
     [commit],
   );
 
+  const save = useCallback(
+    (layout: DashboardLayout): Promise<string | null> => {
+      if (latest.current.recovery === "newer")
+        return Promise.resolve(dashboardError({ code: "newer_layout" }));
+      const done = chain.current.then(async () => {
+        try {
+          const saved = await saveDashboard(latest.current.id, NAME, layout);
+          commit({ ...latest.current, id: saved.id, layout, problem: "" });
+          return null;
+        } catch (cause) {
+          return dashboardError(cause);
+        }
+      });
+      chain.current = done;
+      return done;
+    },
+    [commit],
+  );
+
   return {
+    commit: save,
     ready: state.ready,
     layout: state.layout,
     recovery: state.recovery,
