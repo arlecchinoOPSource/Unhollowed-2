@@ -1,0 +1,47 @@
+# Autosave, crash recovery, and interrupted writes
+
+Verification for U2-P6-06. Commit `e76fc3a` plus the tests in this change, macOS arm64, disposable databases only.
+
+## What is saved, when, and what survives a crash
+
+| Data                                                                  | How it is written                                                                                                                                                    | After a crash or forced quit                                                                                                                                                                                   |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Document title and body                                               | Every edit is first copied to the webview's `localStorage` (the draft journal), then written to SQLite after 700 ms without typing, and again when the editor closes | Everything saved to SQLite is kept. Edits still only in the journal are offered back as "Unsaved edit recovery available" with **Resume unsaved edits**.                                                       |
+| Document images                                                       | Stored in SQLite as soon as inserted, before the document that points to them is saved                                                                               | Kept. An image whose document edit was lost stays in the database unused.                                                                                                                                      |
+| Issue updates, habit completions, calendar changes, dashboard layouts | One command per change, one SQLite transaction each. The screen shows success only after the command returns.                                                        | A change whose command returned is kept. A change that did not return is not applied, and the entered values stay on screen with an error (see tests). Issue edits that fail keep a draft that can be resumed. |
+| Dashboard and calendar view preferences                               | `localStorage` only (not SQLite)                                                                                                                                     | Kept if the webview flushed them; otherwise defaults return. They are not records.                                                                                                                             |
+
+### Exactly what can be lost
+
+- Document text typed since the last successful save is recoverable from the journal, **unless** the journal write failed (storage full or blocked). The editor then shows a warning, and a crash at that moment loses the unsaved text.
+- The journal is written synchronously after each edit, but when the operating system's webview flushes `localStorage` to disk is outside the app's control. A forced kill within a short window after typing may lose the last few characters. This was not measured on a real kill and is a known limit.
+- Interface preferences are not recovered.
+- No other record type has unsaved state: a form either completed its command or stayed open.
+
+## Interrupted writes, kills, disk errors, locks
+
+`src-tauri/src/recovery_tests.rs`:
+
+| Test                                                                   | What it shows                                                                                                                                                                                      |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `a_killed_process_keeps_committed_work_and_drops_the_open_transaction` | A child process commits one row, opens a transaction, writes a second row, and aborts. After reopening, only the committed row exists, `integrity_check` is `ok`, and the file accepts new writes. |
+| `a_dropped_transaction_changes_nothing`                                | A transaction that is never committed leaves the data as it was.                                                                                                                                   |
+| `the_database_commits_with_a_rollback_journal_and_full_sync`           | The app's connection settings are SQLite's rollback journal with `synchronous = FULL`: a commit is on disk before it returns. The app does not use write-ahead logging.                            |
+| `a_write_refused_by_the_disk_is_an_error_not_a_success`                | A write to a file the process cannot write returns an error and changes nothing.                                                                                                                   |
+| `a_locked_database_reports_busy_and_succeeds_once_released`            | While another connection holds the write lock, a write fails with "database is locked" and leaves no row; after release the same write succeeds.                                                   |
+
+`tests/browser/documents.spec.ts`, "a failed save never says saved...": with every save rejected, the editor shows "Could not save. Retry or continue editing.", never "All changes saved"; after a reload the edit is offered back and saving it succeeds.
+
+Existing failure-path tests for the other areas: issues (`issues.spec.ts`: failed update keeps a recoverable draft, failed move restores the card), habits (`habits.spec.ts`: a failed save keeps the cell and can be retried), calendar (`calendar.spec.ts`: a failed write keeps the entered values), dashboards (`dashboardControls.spec.ts`: a failed save keeps the change on screen and says so), and the shared write wrapper (`dataChanges.test.tsx`: failed writes publish nothing).
+
+## Findings
+
+| ID    | Severity | Finding                                                                                                                                                                                                                                | Status                                                                               |
+| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| REC-1 | Info     | The database uses a rollback journal, not WAL. Commits are durable, but a long read can delay a write, and a write blocks readers briefly. The connection waits up to sqlx's default busy timeout of 5 seconds, then reports an error. | Accepted for a single-user app. Revisit if timing audits (U2-P6-13) show contention. |
+| REC-2 | Low      | Draft journal durability after a forced kill depends on the webview's `localStorage` flush timing.                                                                                                                                     | Open: measure on the packaged macOS and Windows apps (U2-P6-17, U2-P6-18).           |
+
+## Gaps
+
+- No Windows run. Forced termination of the packaged desktop app, power loss, and a full disk were not exercised; the database tests simulate a kill with a child-process abort and a refused write with a read-only file.
+- Long editing sessions were not run for hours; document size and repeated saves are covered by the performance fixtures in [Performance](PERFORMANCE.md).

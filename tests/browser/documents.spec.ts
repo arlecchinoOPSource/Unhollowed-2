@@ -157,6 +157,8 @@ async function setup(page: Page, version?: number, graphSize = 0) {
               case "get_document_image":
                 return { mime: "image/png", data: image };
               case "update_document": {
+                if (Reflect.get(window, "failSaves"))
+                  throw { code: "storage_failed" };
                 Object.assign(document!, { title, content });
                 return structuredClone(document);
               }
@@ -692,4 +694,26 @@ test("renders a global graph with 500 connected notes and filters its navigation
   await expect(page.getByRole("link", { name: "Graph note 498" })).toHaveCount(
     0,
   );
+});
+
+test("a failed save never says saved, keeps the draft, and saves on retry (U2-P6-06)", async ({
+  page,
+}) => {
+  await setup(page);
+  const editor = page.getByRole("textbox", { name: "Document content" });
+  await page.evaluate(() => Reflect.set(window, "failSaves", true));
+  await editor.fill("Edit during a disk error");
+  await expect(
+    page.getByText("Could not save. Retry or continue editing."),
+  ).toBeVisible();
+  await expect(page.getByText("All changes saved")).toHaveCount(0);
+  // The journal still holds the edit, so a crash or reload at this point recovers it.
+  await page.evaluate(() => Reflect.set(window, "failSaves", false));
+  await page.reload();
+  await expect(
+    page.getByText("Unsaved edit recovery available."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Resume unsaved edits" }).click();
+  await expect(editor).toHaveText("Edit during a disk error");
+  await expect(page.getByText("All changes saved")).toBeVisible();
 });
