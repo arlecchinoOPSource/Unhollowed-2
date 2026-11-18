@@ -28,6 +28,14 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Arlecchino",
+    "copyright": "Copyright © 2026 Arlecchino",
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

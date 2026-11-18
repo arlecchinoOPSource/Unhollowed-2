@@ -86,7 +86,7 @@ There is no automatic updater. Download the newer installer from the owner, veri
 - No accounts, sync, or mobile apps; one workspace per computer.
 - Nothing is encrypted; protect your files with FileVault or BitLocker.
 - Tested on a limited set of systems (see above); accessibility was checked with automated tools, not with screen readers.
-- No open-source license has been chosen yet ([Legal](LEGAL.md)).
+- Unhollowed 2 is distributed under the [MIT License](../LICENSE). See [licensing and redistribution](LEGAL.md) for third-party notices.
 
 ## Troubleshooting
 
