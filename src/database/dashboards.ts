@@ -28,6 +28,10 @@ export const saveDashboard = (
   layout: unknown,
 ): Promise<DashboardRecord> => invoke("save_dashboard", { id, name, layout });
 
+/** Makes a dashboard the one opened first. */
+export const setDefaultDashboard = (id: string): Promise<void> =>
+  invoke("set_default_dashboard", { id });
+
 export const deleteDashboard = (id: string): Promise<void> =>
   invoke("delete_dashboard", { id });
 

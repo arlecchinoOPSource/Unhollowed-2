@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { GRID } from "./layout";
+import { GRID, newWidgetId } from "./layout";
 import type { PlacedWidget } from "./layout";
+
+export { newWidgetId };
 import { WidgetHost, hasRenderer, type WidgetContext } from "./WidgetHost";
 import {
   DESTINATIONS,
@@ -11,18 +13,6 @@ import {
   type Shortcut,
   type WidgetDefinition,
 } from "./widgets";
-
-/** A unique, well-formed ID for a new instance of `type`. */
-export function newWidgetId(
-  type: string,
-  existing: readonly { id: string }[],
-): string {
-  const taken = new Set(existing.map((item) => item.id));
-  for (let n = 1; ; n++) {
-    const id = `${type}-${n}`.slice(0, 64);
-    if (!taken.has(id)) return id;
-  }
-}
 
 /** A new widget placed below everything, with the type's defaults. */
 export function newWidget(
@@ -43,7 +33,7 @@ export function newWidget(
 }
 
 /** A modal dialog; the browser returns focus to the opener when it closes. */
-function Modal({
+export function Modal({
   title,
   onClose,
   children,

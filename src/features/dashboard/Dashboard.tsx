@@ -17,6 +17,7 @@ import {
 import { ordered, type DashboardLayout } from "./layout";
 import { describe, move, resize, settle } from "./grid";
 import { newWidget, WidgetLibrary, WidgetSettings } from "./WidgetLibrary";
+import { DashboardManager } from "./DashboardManager";
 import { useDashboardLayout } from "./useDashboardLayout";
 import { WidgetHost } from "./WidgetHost";
 import { widgetDefinition } from "./widgets";
@@ -111,6 +112,58 @@ export function Dashboard() {
           {dashboard.recovery !== "ok" && (
             <p role="status">{dashboard.notes.join(" ")}</p>
           )}
+          <div className="dash-toolbar">
+            <DashboardManager
+              dashboard={dashboard}
+              disabled={draft !== null}
+              onArrange={() => setDraft(dashboard.layout)}
+            />
+            <div className="dash-edit">
+              {draft ? (
+                <>
+                  <button
+                    type="button"
+                    className="action"
+                    onClick={async () => {
+                      const problem = await dashboard.commit(draft);
+                      setSaveProblem(problem ?? "");
+                      if (!problem) {
+                        setDraft(null);
+                        setArrangeNote("");
+                      }
+                    }}
+                  >
+                    Save layout
+                  </button>
+                  <button
+                    type="button"
+                    className="action"
+                    onClick={(event) => {
+                      opener.current = event.currentTarget;
+                      setLibrary(true);
+                    }}
+                  >
+                    Add widget
+                  </button>
+                  <button
+                    type="button"
+                    className="action"
+                    onClick={() => {
+                      setDraft(null);
+                      setSaveProblem("");
+                      setArrangeNote("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : null}
+              {saveProblem && <p role="alert">{saveProblem}</p>}
+              <p role="status" className="dash-arrange-note">
+                {arrangeNote}
+              </p>
+            </div>
+          </div>
           <div className="dash-controls">
             <div role="group" aria-label="Period">
               {presets.map(({ value, label }) => (
@@ -187,7 +240,10 @@ export function Dashboard() {
                     onChange={(event) =>
                       setPrefs({
                         ...prefs,
-                        custom: { ...prefs.custom, [edge]: event.target.value },
+                        custom: {
+                          ...prefs.custom,
+                          [edge]: event.target.value,
+                        },
                       })
                     }
                   />
@@ -207,59 +263,6 @@ export function Dashboard() {
             {project ? " Filtered to one project." : ""}
             {habit ? " Habits filtered to one habit." : ""}
           </p>
-          <div className="dash-edit">
-            {draft ? (
-              <>
-                <button
-                  type="button"
-                  className="action"
-                  onClick={async () => {
-                    const problem = await dashboard.commit(draft);
-                    setSaveProblem(problem ?? "");
-                    if (!problem) {
-                      setDraft(null);
-                      setArrangeNote("");
-                    }
-                  }}
-                >
-                  Save layout
-                </button>
-                <button
-                  type="button"
-                  className="action"
-                  onClick={(event) => {
-                    opener.current = event.currentTarget;
-                    setLibrary(true);
-                  }}
-                >
-                  Add widget
-                </button>
-                <button
-                  type="button"
-                  className="action"
-                  onClick={() => {
-                    setDraft(null);
-                    setSaveProblem("");
-                    setArrangeNote("");
-                  }}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="action"
-                onClick={() => setDraft(dashboard.layout)}
-              >
-                Arrange widgets
-              </button>
-            )}
-            {saveProblem && <p role="alert">{saveProblem}</p>}
-            <p role="status" className="dash-arrange-note">
-              {arrangeNote}
-            </p>
-          </div>
           <details className="dash-details">
             <summary>Sections</summary>
             <div role="group" aria-label="Visible sections">

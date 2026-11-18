@@ -247,3 +247,61 @@ fn upgrading_from_the_previous_schema_keeps_existing_data() {
         assert!(list(&pool, DEFAULT_WORKSPACE).await.unwrap().is_empty());
     });
 }
+
+#[test]
+fn the_default_is_the_first_dashboard_and_can_change_and_survive_removal() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        add_workspace(&pool, OTHER_WORKSPACE, "Other").await;
+        let a = save(&pool, DEFAULT_WORKSPACE, None, "A", layout(vec![]))
+            .await
+            .unwrap();
+        let b = save(&pool, DEFAULT_WORKSPACE, None, "B", layout(vec![]))
+            .await
+            .unwrap();
+        let c = save(&pool, DEFAULT_WORKSPACE, None, "C", layout(vec![]))
+            .await
+            .unwrap();
+        let names = |list: Vec<Dashboard>| list.into_iter().map(|d| d.name).collect::<Vec<_>>();
+        assert_eq!(
+            names(list(&pool, DEFAULT_WORKSPACE).await.unwrap()),
+            ["A", "B", "C"]
+        );
+
+        set_default(&pool, DEFAULT_WORKSPACE, &c.id).await.unwrap();
+        assert_eq!(
+            names(list(&pool, DEFAULT_WORKSPACE).await.unwrap()),
+            ["C", "A", "B"]
+        );
+
+        // Removing the default makes the next one the default.
+        remove(&pool, DEFAULT_WORKSPACE, &c.id).await.unwrap();
+        assert_eq!(
+            names(list(&pool, DEFAULT_WORKSPACE).await.unwrap()),
+            ["A", "B"]
+        );
+        // A new dashboard goes last, never first.
+        save(&pool, DEFAULT_WORKSPACE, None, "D", layout(vec![]))
+            .await
+            .unwrap();
+        assert_eq!(
+            names(list(&pool, DEFAULT_WORKSPACE).await.unwrap()),
+            ["A", "B", "D"]
+        );
+
+        // Unknown IDs and other workspaces' dashboards are not found, and change nothing.
+        assert_eq!(
+            set_default(&pool, OTHER_WORKSPACE, &a.id).await,
+            Err(DashboardError::NotFound)
+        );
+        assert_eq!(
+            set_default(&pool, DEFAULT_WORKSPACE, "nope").await,
+            Err(DashboardError::NotFound)
+        );
+        set_default(&pool, DEFAULT_WORKSPACE, &b.id).await.unwrap();
+        assert_eq!(
+            names(list(&pool, DEFAULT_WORKSPACE).await.unwrap()),
+            ["B", "A", "D"]
+        );
+    });
+}

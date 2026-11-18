@@ -1173,6 +1173,7 @@ export async function installIpcMock(page: Page) {
               return null;
             }
             case "list_dashboards":
+            case "set_default_dashboard":
             case "save_dashboard":
             case "delete_dashboard": {
               // Kept in sessionStorage so a reload acts like a restart.
@@ -1197,6 +1198,15 @@ export async function installIpcMock(page: Page) {
                 throw { code: "storage_failed" };
               if (command === "list_dashboards")
                 return list.sort((a, b) => a.position - b.position);
+              if (command === "set_default_dashboard") {
+                const chosen = list.find((item) => item.id === args.id);
+                if (!chosen) throw { code: "not_found" };
+                list.sort((a, b) => a.position - b.position);
+                const order = [chosen, ...list.filter((i) => i !== chosen)];
+                order.forEach((item, index) => (item.position = index));
+                write(order);
+                return null;
+              }
               if (command === "delete_dashboard") {
                 const index = list.findIndex((item) => item.id === args.id);
                 if (index < 0) throw { code: "not_found" };
@@ -1212,18 +1222,30 @@ export async function installIpcMock(page: Page) {
               if (layout.version !== 1) throw { code: "invalid_layout" };
               const existing = list.find((item) => item.id === id);
               if (id && !existing) throw { code: "not_found" };
+              if (
+                list.some(
+                  (item) =>
+                    item.id !== id &&
+                    item.name.toLowerCase() === name.trim().toLowerCase(),
+                )
+              )
+                throw { code: "duplicate_name" };
               if (existing && existing.layoutVersion > 1)
                 throw { code: "newer_layout" };
               const record: Stored = existing ?? {
-                id: `dashboard-${list.length + 1}`,
-                name,
-                position: list.length,
+                id: `dashboard-${Date.now()}-${list.length + 1}`,
+                name: name.trim(),
+                position: Math.max(-1, ...list.map((i) => i.position)) + 1,
                 layoutVersion: 1,
                 layout,
                 createdAt: now(),
                 updatedAt: now(),
               };
-              Object.assign(record, { name, layout, updatedAt: now() });
+              Object.assign(record, {
+                name: name.trim(),
+                layout,
+                updatedAt: now(),
+              });
               if (!existing) list.push(record);
               write(list);
               return structuredClone(record);
