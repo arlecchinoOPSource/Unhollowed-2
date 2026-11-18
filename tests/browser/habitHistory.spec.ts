@@ -150,8 +150,12 @@ test("a history link lands on the habit and date in the checkbox grid", async ({
     })
     .click();
   await expect(page).toHaveURL(/habit=habit-3&date=2028-02-29/);
+  // The grid's month heading; the history panel's heading can show the same
+  // month while the page changes.
   await expect(
-    page.getByRole("heading", { name: "February 2028" }),
+    page
+      .getByRole("navigation", { name: "Month" })
+      .getByRole("heading", { name: "February 2028" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
