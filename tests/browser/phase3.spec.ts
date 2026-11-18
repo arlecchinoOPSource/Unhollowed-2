@@ -83,6 +83,16 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(
       page.getByRole("option", { name: /Kickoff review/ }),
     ).toBeVisible();
+    await page
+      .getByRole("group", { name: "Calendar view" })
+      .getByRole("button", { name: "Month" })
+      .click();
+    await expect(
+      page.getByRole("combobox", { name: /Search titles/ }),
+    ).toHaveValue("kickoff");
+    await expect(
+      page.getByRole("option", { name: /Kickoff review/ }),
+    ).toBeVisible();
 
     // Today shows its schedule and context, on the day itself.
     const nav = page.getByRole("navigation", { name: "Workspace" });

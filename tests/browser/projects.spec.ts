@@ -197,7 +197,9 @@ test("saves a new project without redirecting after the user goes back", async (
   await expect(dialog.getByRole("button", { name: "Saving…" })).toBeVisible();
 
   await page.goBack();
-  const home = page.getByRole("heading", { name: "Welcome to Unhollowed." });
+  const home = page.getByRole("heading", {
+    name: /^Good (morning|afternoon|evening)\.$/,
+  });
   await expect(home).toBeVisible();
   await page.evaluate(async () => {
     window.dispatchEvent(new Event("finish-create_project"));

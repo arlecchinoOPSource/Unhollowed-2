@@ -330,11 +330,6 @@ function TaskViews({ mode }: { mode: Mode }) {
           <h1 ref={heading} tabIndex={-1}>
             {title}
           </h1>
-          <p>
-            {mode === "today"
-              ? "Open issues due today, and overdue ones that still need you."
-              : "Open issues due from tomorrow on, grouped by date."}
-          </p>
         </div>
         <label className="task-group-toggle">
           <input

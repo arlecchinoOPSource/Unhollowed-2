@@ -163,10 +163,7 @@ export function Mood() {
   return (
     <section className="mood-view">
       <h1>Mood</h1>
-      <p>
-        A quick, optional check-in. Everything here is private to this device
-        and optional: leave out anything you would rather not say.
-      </p>
+      <p>Private to this device. Every field is optional.</p>
       {!desktop && <p>Open the desktop app to record check-ins.</p>}
       {desktop && (
         <>

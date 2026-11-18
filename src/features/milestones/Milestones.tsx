@@ -251,7 +251,6 @@ export function Milestones() {
         <ArrowLeft size={16} aria-hidden="true" /> All issues
       </Link>
       <h1>Milestones</h1>
-      <p>Plan checkpoints and see how much work remains.</p>
       {!desktop && <p>Open the desktop app to manage your local milestones.</p>}
       {desktop && (
         <form

@@ -7,8 +7,9 @@
 }
 
 .habit-month-nav h2 {
-  min-width: 10em;
+  min-width: 9em;
   margin: 0;
+  font-size: 17px;
   text-align: center;
 }
 
@@ -27,6 +28,12 @@
 .habit-month-nav button {
   display: inline-grid;
   place-items: center;
+  border-color: var(--line);
+}
+
+.habit-month-nav button:not(:disabled):hover {
+  color: var(--accent);
+  background: var(--selection);
 }
 
 .habit-month-nav input {
@@ -44,10 +51,19 @@
   color: var(--accent);
 }
 
+.habit-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 16px;
+}
+
 .habit-add {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: center;
   gap: 8px;
 }
 
@@ -57,13 +73,53 @@
 }
 
 .habit-add input {
-  height: 34px;
-  padding: 0 8px;
+  height: 36px;
+  min-width: 220px;
+  padding: 0 12px;
   border: 1px solid var(--control-line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
   font: inherit;
+}
+
+.habit-add .action {
+  margin: 0;
+}
+
+.habit-tools {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.habit-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 550;
+}
+
+.habit-tool:hover {
+  color: var(--accent);
+  background: var(--selection);
+}
+
+.habit-tool[aria-expanded="true"] {
+  color: var(--accent);
+  background: var(--selection);
 }
 
 .habit-status {

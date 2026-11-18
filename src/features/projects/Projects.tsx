@@ -60,7 +60,6 @@ export function Projects() {
       <div className="project-page-top">
         <div>
           <h1>Projects</h1>
-          <p>Plan your work and track its progress.</p>
         </div>
         {desktop && (
           <button

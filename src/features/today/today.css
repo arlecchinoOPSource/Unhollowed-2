@@ -1,18 +1,24 @@
 .task-tabs {
   display: inline-flex;
-  gap: 4px;
+  gap: 2px;
   padding: 3px;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .task-tabs a {
-  padding: 5px 14px;
-  border-radius: 7px;
+  padding: 6px 16px;
+  border-radius: 8px;
   color: var(--muted);
+  font-weight: 550;
   text-decoration: none;
+}
+
+.task-tabs a:hover {
+  color: var(--text);
 }
 
 .task-tabs a[aria-current="page"] {
@@ -61,9 +67,10 @@
 
 .task-reschedule button,
 .task-reschedule input {
-  padding: 4px 8px;
+  min-height: 28px;
+  padding: 3px 8px;
   border: 1px solid var(--control-line);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -77,13 +84,27 @@
 .today-schedule {
   display: grid;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .today-schedule h2,
 .today-schedule h3,
 .today-schedule p {
   margin: 0;
+}
+
+.today-schedule p {
+  font-size: 13px;
+}
+
+/* An empty live region keeps its place in the tree but takes no space. */
+.today-schedule > p[role="status"]:empty {
+  margin-top: -8px;
+}
+
+.today-schedule h3 {
+  margin-top: 6px;
+  font-size: 13px;
 }
 
 .today-schedule-head {
@@ -93,18 +114,45 @@
   gap: 8px 12px;
 }
 
+.today-schedule-head h2 {
+  margin-right: auto;
+  font-size: 14px;
+}
+
+.today-schedule-head .action {
+  order: 2;
+  min-height: 30px;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.today-schedule-head a {
+  font-size: 13px;
+  text-decoration: none;
+}
+
 .agenda-list {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.agenda-list li {
+  padding: 6px 10px;
+  border-left: 3px solid var(--periwinkle);
+  border-radius: 4px 8px 8px 4px;
+  background: color-mix(in srgb, var(--selection) 60%, transparent);
 }
 
 .agenda-time {
   display: inline-block;
   min-width: 7.5em;
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 

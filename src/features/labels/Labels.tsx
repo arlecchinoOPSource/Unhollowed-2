@@ -277,7 +277,6 @@ export function Labels() {
         <ArrowLeft size={16} aria-hidden="true" /> All issues
       </Link>
       <h1>Labels</h1>
-      <p>Group issues by themes that stay useful across projects.</p>
       {!desktop && <p>Open the desktop app to manage your local labels.</p>}
       {desktop && (
         <form

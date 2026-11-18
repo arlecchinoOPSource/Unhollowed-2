@@ -340,13 +340,6 @@ export function IssueCalendar({
   return (
     <section className="calendar-view">
       <div className="issue-page-top">
-        <div>
-          <h1>Calendar</h1>
-          <p>Issues on the days they are due.</p>
-          <Link className="calendar-manage" to="/calendar/calendars">
-            Manage calendars
-          </Link>
-        </div>
         <ViewSwitch date={day} />
         <div className="calendar-filters">
           <label>

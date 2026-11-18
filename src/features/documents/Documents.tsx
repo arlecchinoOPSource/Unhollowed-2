@@ -1,4 +1,5 @@
-import { ArrowLeft, FilePlus } from "lucide-react";
+import { ArrowLeft, FilePlus, FileUp } from "lucide-react";
+import { BrandMark } from "../../components/brand/BrandMark";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { isRecordId, safeBack } from "../../app/links";
@@ -150,16 +151,18 @@ export function Documents() {
           </Link>
         )}
       <h1>Documents</h1>
-      <p>Write, organize, and connect your notes.</p>
       {!desktop ? (
         <p>Documents are stored locally in the desktop app.</p>
       ) : (
         <div className="documents">
-          <section aria-labelledby="document-list-heading">
+          <section
+            aria-labelledby="document-list-heading"
+            className="documents-side"
+          >
             <h2 id="document-list-heading">Your documents</h2>
             <div className="word-controls">
               <label>
-                Template
+                <span className="filter-name">Template</span>
                 <select
                   value={template}
                   onChange={(event) =>
@@ -172,15 +175,16 @@ export function Documents() {
                 </select>
               </label>
               <label>
-                Search documents
+                <span className="filter-name">Search documents</span>
                 <input
                   type="search"
+                  placeholder="Search…"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </label>
               <label>
-                Show documents
+                <span className="filter-name">Show documents</span>
                 <select
                   value={view}
                   onChange={(event) => setView(event.target.value)}
@@ -192,7 +196,7 @@ export function Documents() {
                 </select>
               </label>
               <label>
-                Folder filter
+                <span className="filter-name">Folder filter</span>
                 <select
                   value={folder}
                   onChange={(event) => setFolder(event.target.value)}
@@ -207,7 +211,7 @@ export function Documents() {
                 </select>
               </label>
               <label>
-                Sort documents
+                <span className="filter-name">Sort documents</span>
                 <select
                   value={sort}
                   onChange={(event) => setSort(event.target.value)}
@@ -240,7 +244,8 @@ export function Documents() {
             >
               <FilePlus size={15} aria-hidden="true" /> New document
             </button>
-            <label className="word-controls">
+            <label className="word-controls documents-import">
+              <FileUp size={15} aria-hidden="true" />
               Import document
               <input
                 type="file"
@@ -349,7 +354,10 @@ export function Documents() {
             ) : requested ? (
               <p role="alert">This link does not name a document.</p>
             ) : (
-              <p>Select or create a document to start writing.</p>
+              <div className="documents-empty">
+                <BrandMark size={72} animate />
+                <p>Select or create a document to start writing.</p>
+              </div>
             )}
           </section>
         </div>

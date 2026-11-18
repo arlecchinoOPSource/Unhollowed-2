@@ -55,6 +55,28 @@ export function monthTitle(month: string): string {
   }).format(parseLocalDate(`${month}-01`));
 }
 
+/** A compact date for lists: "today", "Nov 12", or "Nov 12, 2027". */
+export function shortDate(date: string, today: string): string {
+  if (date === today) return "today";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric",
+  }).format(parseLocalDate(date));
+}
+
+/** A compact span such as "Oct 19 – Nov 17, 2026", or one day alone. */
+export function dateRange(from: string, to: string): string {
+  const format = (date: string, year: boolean) =>
+    new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: year ? "numeric" : undefined,
+    }).format(parseLocalDate(date));
+  if (from === to) return format(to, true);
+  return `${format(from, from.slice(0, 4) !== to.slice(0, 4))} – ${format(to, true)}`;
+}
+
 export function fullDate(date: string): string {
   return new Intl.DateTimeFormat(undefined, {
     weekday: "long",

@@ -714,7 +714,7 @@ test("supports keyboard capture, search, issue navigation and completion", async
   await page.goto("/");
   // Wait for the app to render so its shortcut listener is attached.
   await expect(
-    page.getByRole("heading", { name: "Welcome to Unhollowed." }),
+    page.getByRole("heading", { name: /^Good (morning|afternoon|evening)\.$/ }),
   ).toBeVisible();
   await page.keyboard.press("Alt+Shift+KeyN");
   const capture = page.getByLabel("New issue");

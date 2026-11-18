@@ -12,10 +12,17 @@
 }
 
 .issue-create {
-  display: grid;
-  gap: 5px;
-  margin: 20px 0 8px;
-  font-weight: 600;
+  margin: 18px 0 4px;
+}
+
+/* The label stays for assistive tech; the field says what it is. */
+.issue-create > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .issue-create div {
@@ -42,21 +49,27 @@
 
 .issue-create input {
   flex: 1 1 240px;
+  min-height: 40px;
+  padding-inline: 14px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
 }
 
 .issue-message {
   min-height: 1.55em;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
 }
 
 .issue-filters {
   display: inline-flex;
-  gap: 4px;
+  gap: 2px;
   padding: 3px;
   margin-bottom: 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .issue-filters button {
@@ -65,9 +78,14 @@
   gap: 6px;
   padding: 5px 12px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted);
+  font-weight: 550;
+}
+
+.issue-filters button:hover {
+  color: var(--text);
 }
 
 .issue-filters button[aria-pressed="true"] {
@@ -87,10 +105,12 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
 .issues-empty {
-  padding: 20px;
+  padding: 32px 24px;
+  text-align: center;
 }
 
 .issues-empty svg {
@@ -112,8 +132,37 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
-  padding: 10px 14px;
+  padding: 9px 14px;
   overflow-wrap: anywhere;
+  animation: rise 0.4s var(--ease) both;
+}
+
+.issue-row:hover {
+  background: var(--surface-hover);
+}
+
+.issue-row:first-child {
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.issue-row:last-child {
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.issue-row:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.issue-row:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.issue-row:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+.issue-row:nth-child(n + 5) {
+  animation-delay: 120ms;
 }
 
 .issue-row + .issue-row {
@@ -131,11 +180,13 @@
   border-radius: 50%;
   background: transparent;
   color: var(--muted);
+  transition: transform 0.2s var(--ease);
 }
 
 .issue-toggle:hover {
   background: var(--selection);
   color: var(--accent);
+  transform: scale(1.08);
 }
 
 .issue-key {
@@ -154,7 +205,6 @@
 
 .issue-title:hover {
   color: var(--accent);
-  text-decoration: underline;
 }
 
 .issue-meta {
@@ -255,8 +305,8 @@
 .issue-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px 16px;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 14px;
 }
 
@@ -266,25 +316,59 @@
   font-weight: 600;
 }
 
+/* Each select shows its filter in its value ("Any status"), so the names
+   are kept for assistive tech only and the bar stays one quiet row. */
+.issue-toolbar .filter-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .issue-toolbar .issue-search {
-  flex: 1 1 260px;
+  flex: 1 1 100%;
 }
 
 .issue-toolbar :is(input, select) {
   min-width: 0;
+  min-height: 34px;
   font: inherit;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--control-line);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 999px;
+  padding: 5px 14px;
+}
+
+.issue-toolbar select {
+  font-size: 13px;
+}
+
+.issue-toolbar .issue-search input {
+  width: 100%;
+  min-height: 38px;
+  border-radius: var(--radius-sm);
+  padding-inline: 12px;
+}
+
+.issue-label-filter > summary {
+  min-height: 34px;
+  padding: 5px 14px 5px 12px;
+  border: 1px solid var(--control-line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .issue-sort {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 6px;
+  margin-left: auto;
 }
 
 .issue-direction,
@@ -299,8 +383,10 @@
 
 .issue-direction {
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
+  border-color: var(--control-line);
+  border-radius: 50%;
 }
 
 .issue-active-filters {
@@ -323,7 +409,8 @@
 }
 
 .issue-active-filters li button {
-  padding: 3px 8px;
+  padding: 3px 8px 3px 11px;
+  border-radius: 999px;
   border-color: var(--accent);
   background: var(--selection);
   color: var(--accent);
@@ -380,7 +467,49 @@
 .issue-page-links {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
+  gap: 6px;
+}
+
+.issue-page-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.issue-page-links a:hover {
+  background: var(--selection);
+  color: var(--accent);
+}
+
+.issue-shortcuts > summary {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.issue-shortcuts ul {
+  margin: 6px 0 4px;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  font: 600 11px/1.5 var(--interface);
+  text-align: center;
 }
 
 .issue-relationships {
@@ -578,10 +707,17 @@
   align-items: center;
   justify-self: start;
   gap: 6px;
-  padding: 7px 12px;
+  min-height: 34px;
+  padding: 6px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
+  color: var(--muted);
+  font-weight: 550;
+}
+
+.issue-export button:hover:not([aria-disabled="true"]) {
+  color: var(--accent);
 }
 
 .issue-export button[aria-disabled="true"] {

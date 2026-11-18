@@ -14,7 +14,7 @@ test("loads Home, navigates every page, and persists appearance offline", async 
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Welcome to Unhollowed." }),
+    page.getByRole("heading", { name: /^Good (morning|afternoon|evening)\.$/ }),
   ).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Workspace" });
   for (const title of [
@@ -47,7 +47,7 @@ test("loads Home, navigates every page, and persists appearance offline", async 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await navigation.getByRole("link", { name: "Home", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Welcome to Unhollowed." }),
+    page.getByRole("heading", { name: /^Good (morning|afternoon|evening)\.$/ }),
   ).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   expect(errors).toEqual([]);

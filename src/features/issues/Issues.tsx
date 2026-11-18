@@ -16,7 +16,6 @@ export function Issues() {
       <div className="issue-page-top">
         <div>
           <h1>Issues</h1>
-          <p>Review, update, and complete your work across every project.</p>
         </div>
         <span className="issue-page-links">
           <ViewLink to="/issues/board" board />
@@ -51,7 +50,6 @@ export function IssueBoardPage() {
       <div className="issue-page-top">
         <div>
           <h1>Board</h1>
-          <p>See work in progress by status and move it along.</p>
         </div>
         <span className="issue-page-links">
           <ViewLink to="/issues" />

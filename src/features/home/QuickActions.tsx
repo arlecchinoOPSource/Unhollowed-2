@@ -1,4 +1,11 @@
-import { CalendarPlus, FilePlus, ListPlus } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarPlus,
+  FilePlus,
+  FolderKanban,
+  ListPlus,
+  Smile,
+} from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { links } from "../../app/links";
@@ -109,51 +116,55 @@ export function QuickActions({ today }: { today: string }) {
 
   return (
     <section aria-labelledby="home-actions" className="home-actions">
-      <h2 id="home-actions">Quick actions</h2>
+      <h2 id="home-actions" className="visually-hidden">
+        Quick actions
+      </h2>
       <div className="home-action-row">
         <button
           ref={issueButton}
           type="button"
-          className="action"
+          className="home-action"
           aria-expanded={adding}
           onClick={() => {
             setAdding(!adding);
             setMessage("");
           }}
         >
-          <ListPlus size={15} aria-hidden="true" /> New issue
+          <ListPlus size={18} aria-hidden="true" /> New issue
         </button>
-        <button type="button" className="action" onClick={newDocument}>
-          <FilePlus size={15} aria-hidden="true" /> New document
+        <button type="button" className="home-action" onClick={newDocument}>
+          <FilePlus size={18} aria-hidden="true" /> New document
         </button>
         <button
           type="button"
-          className="action"
+          className="home-action"
           onClick={() =>
             events.openNew(
               newDraft(today, deviceZone(), events.defaultCalendar),
             )
           }
         >
-          <CalendarPlus size={15} aria-hidden="true" /> Add event
+          <CalendarPlus size={18} aria-hidden="true" /> New event
         </button>
         <button
           ref={planButton}
           type="button"
-          className="action"
+          className="home-action"
           onClick={plan}
         >
-          Schedule issue work
+          <CalendarClock size={18} aria-hidden="true" /> Plan work
         </button>
-        <Link className="action" to="/mood">
-          Record a check-in
+        <Link className="home-action" to="/mood">
+          <Smile size={18} aria-hidden="true" /> Check in
         </Link>
-        {recent ? (
-          <Link className="action" to={links.project(recent.id)}>
-            Open {recent.name}
+        {recent && (
+          <Link
+            className="home-action"
+            to={links.project(recent.id)}
+            aria-label={`Open ${recent.name}`}
+          >
+            <FolderKanban size={18} aria-hidden="true" /> {recent.name}
           </Link>
-        ) : (
-          <span className="home-muted">No active project to open.</span>
         )}
       </div>
       {adding && (
@@ -193,7 +204,7 @@ export function QuickActions({ today }: { today: string }) {
       {events.editor}
       {picking && (
         <Modal
-          title="Schedule issue work"
+          title="Plan work"
           onClose={() => {
             setPicking(false);
             setIssues(null);
@@ -214,10 +225,7 @@ export function QuickActions({ today }: { today: string }) {
                 navigate(links.issue(chosen), { state: { from: "/" } });
               }}
             >
-              <p>
-                Work sessions are planned on the issue itself. Choose the issue
-                to open its work sessions.
-              </p>
+              <p>Pick an issue to plan its work sessions.</p>
               <label className="dash-field">
                 Issue
                 <select

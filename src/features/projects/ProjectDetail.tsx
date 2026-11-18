@@ -1,4 +1,4 @@
-import { ArrowLeft, Flag, ListTodo } from "lucide-react";
+import { ArrowLeft, Flag, ListTodo, Target } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { isRecordId } from "../../app/links";
@@ -149,7 +149,6 @@ function ProjectDetails({ id }: { id: string }) {
             <Link className="project-card" to={`/projects/${id}/issues`}>
               <ListTodo size={19} aria-hidden="true" />
               <h2>Issues</h2>
-              <p>Review and update the work in this project.</p>
             </Link>
             <Link
               className="project-card"
@@ -157,12 +156,10 @@ function ProjectDetails({ id }: { id: string }) {
             >
               <Flag size={19} aria-hidden="true" />
               <h2>Milestones</h2>
-              <p>Plan checkpoints and track progress for this project.</p>
             </Link>
             <Link className="project-card" to={`/projects/${id}/goals`}>
-              <Flag size={19} aria-hidden="true" />
+              <Target size={19} aria-hidden="true" />
               <h2>Missions &amp; objectives</h2>
-              <p>Define project goals and connect them to issues.</p>
             </Link>
           </div>
           <div className="project-documents">

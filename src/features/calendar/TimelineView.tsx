@@ -474,13 +474,6 @@ export function TimelineView({
   return (
     <section className="calendar-view timeline-view">
       <div className="issue-page-top">
-        <div>
-          <h1>Calendar</h1>
-          <p>Events, issue deadlines, and work blocks.</p>
-          <Link className="calendar-manage" to="/calendar/calendars">
-            Manage calendars
-          </Link>
-        </div>
         <ViewSwitch date={date} />
       </div>
       <div className="calendar-nav timeline-nav">

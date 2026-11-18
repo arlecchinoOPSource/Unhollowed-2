@@ -1,3 +1,4 @@
+import { ArrowUpRight, Check } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { links } from "../../app/links";
@@ -16,7 +17,7 @@ import {
 } from "../../database/issues";
 import { listProjects, projectError } from "../../database/projects";
 import { queryKey, useSharedQuery } from "../../database/sharedQuery";
-import { fullDate } from "../calendar/monthGrid";
+import { shortDate } from "../calendar/monthGrid";
 import { localDate } from "../today/dates";
 import { activeProjects, habitsDue, LIMIT, recentDocuments } from "./homeData";
 
@@ -46,7 +47,9 @@ function Section({
     <section aria-labelledby={id} className="home-section">
       <div className="home-head">
         <h2 id={id}>{title}</h2>
-        <Link to={to}>{open}</Link>
+        <Link to={to} className="home-open" aria-label={open} title={open}>
+          <ArrowUpRight size={16} aria-hidden="true" />
+        </Link>
       </div>
       {error ? (
         <div role="alert">
@@ -56,7 +59,9 @@ function Section({
           </button>
         </div>
       ) : loading ? (
-        <p role="status">Loading…</p>
+        <p role="status" className="home-loading">
+          Loading…
+        </p>
       ) : (
         (empty ?? children)
       )}
@@ -101,7 +106,9 @@ function IssueSection({
       error={error}
       retry={retry}
       loading={data === null && loading}
-      empty={data && data.total === 0 ? <p>{empty}</p> : null}
+      empty={
+        data && data.total === 0 ? <p className="home-empty">{empty}</p> : null
+      }
     >
       {data && (
         <>
@@ -109,21 +116,26 @@ function IssueSection({
             {data.issues.map((issue) => (
               <li key={issue.id}>
                 <Link to={links.issue(issue.id)} state={{ from: "/" }}>
-                  ISS-{issue.number} {issue.title}
+                  <span className="home-key">ISS-{issue.number}</span>{" "}
+                  {issue.title}
                 </Link>
                 {showUpdated ? (
-                  <span>
-                    {" "}
-                    updated {fullDate(localDate(new Date(issue.updatedAt)))}
+                  <span className="home-meta">
+                    updated{" "}
+                    {shortDate(localDate(new Date(issue.updatedAt)), today)}
                   </span>
                 ) : (
-                  issue.dueDate && <span> due {fullDate(issue.dueDate)}</span>
+                  issue.dueDate && (
+                    <span className="home-meta">
+                      due {shortDate(issue.dueDate, today)}
+                    </span>
+                  )
                 )}
               </li>
             ))}
           </ul>
           {data.total > data.issues.length && (
-            <p>
+            <p className="home-more">
               <Link to={to}>{data.total - data.issues.length} more</Link>
             </p>
           )}
@@ -231,33 +243,44 @@ export function HabitsToday({ today }: { today: string }) {
       error={error}
       retry={retry}
       loading={data === null && loading}
-      empty={data && due.length === 0 ? <p>No habits to do today.</p> : null}
+      empty={
+        data && due.length === 0 ? (
+          <p className="home-empty">No habits to do today.</p>
+        ) : null
+      }
     >
-      <ul className="home-list">
+      <ul className="home-list home-habits">
         {due.slice(0, 10).map((habit) => (
           <li key={habit.id}>
-            <Link to={links.habit(habit.id, today)}>{habit.name}</Link>
-            <span>
-              {" "}
-              {done.has(habit.id) ? "Done today" : "Not done yet"}
-            </span>{" "}
             <button
               type="button"
-              className="action"
+              className="home-check"
               aria-pressed={done.has(habit.id)}
               aria-label={`${done.has(habit.id) ? "Undo" : "Mark done"}: ${habit.name}`}
+              title={done.has(habit.id) ? "Undo" : "Mark done"}
               onClick={() => toggle(habit.id, done.has(habit.id))}
             >
-              {done.has(habit.id) ? "Undo" : "Mark done"}
+              <Check size={14} strokeWidth={3} aria-hidden="true" />
             </button>
+            <Link to={links.habit(habit.id, today)}>{habit.name}</Link>
           </li>
         ))}
       </ul>
       {problem && <p role="alert">{problem}</p>}
       {due.length > 0 && (
-        <p>
-          {due.filter((h) => done.has(h.id)).length} of {due.length} done today.
-        </p>
+        <div className="home-progress">
+          <span
+            className="home-progress-bar"
+            aria-hidden="true"
+            style={{
+              width: `${(100 * due.filter((h) => done.has(h.id)).length) / due.length}%`,
+            }}
+          />
+          <p>
+            {due.filter((h) => done.has(h.id)).length} of {due.length} done
+            today.
+          </p>
+        </div>
       )}
     </Section>
   );
@@ -289,7 +312,7 @@ export function Milestones({ today }: { today: string }) {
       loading={data === null && loading}
       empty={
         data && items.length === 0 ? (
-          <p>No open milestones are due in the next two weeks.</p>
+          <p className="home-empty">Nothing due in the next two weeks.</p>
         ) : null
       }
     >
@@ -305,10 +328,9 @@ export function Milestones({ today }: { today: string }) {
             >
               {m.title}
             </Link>
-            <span>
-              {" "}
-              {m.overdue ? "was due" : "due"} {fullDate(m.dueDate)}
-              {m.projectName ? `, ${m.projectName}` : ""}
+            <span className="home-meta">
+              {m.overdue ? "was due" : "due"} {shortDate(m.dueDate, today)}
+              {m.projectName ? ` · ${m.projectName}` : ""}
             </span>
           </li>
         ))}
@@ -335,7 +357,11 @@ export function RecentDocuments({ today }: { today: string }) {
       error={error}
       retry={retry}
       loading={data === null && loading}
-      empty={data && docs.length === 0 ? <p>No documents yet.</p> : null}
+      empty={
+        data && docs.length === 0 ? (
+          <p className="home-empty">No documents yet.</p>
+        ) : null
+      }
     >
       <ul className="home-list">
         {docs.map((doc) => (
@@ -346,10 +372,10 @@ export function RecentDocuments({ today }: { today: string }) {
             >
               {doc.title || "Untitled"}
             </Link>
-            <span>
+            <span className="home-meta">
               {doc.openedAt
-                ? ` opened ${fullDate(localDate(new Date(doc.openedAt)))}`
-                : ` changed ${fullDate(localDate(new Date(doc.updatedAt)))}`}
+                ? `opened ${shortDate(localDate(new Date(doc.openedAt)), today)}`
+                : `changed ${shortDate(localDate(new Date(doc.updatedAt)), today)}`}
             </span>
           </li>
         ))}
@@ -376,14 +402,22 @@ export function ActiveProjects({ today }: { today: string }) {
       error={error}
       retry={retry}
       loading={data === null && loading}
-      empty={data && projects.length === 0 ? <p>No active projects.</p> : null}
+      empty={
+        data && projects.length === 0 ? (
+          <p className="home-empty">No active projects.</p>
+        ) : null
+      }
     >
       <ul className="home-list">
         {projects.map((project) => (
           <li key={project.id}>
             <Link to={links.project(project.id)}>{project.name}</Link>
-            <span> · </span>
-            <Link to={links.projectIssues(project.id)}>Issues</Link>
+            <Link
+              to={links.projectIssues(project.id)}
+              className="home-meta home-chip"
+            >
+              Issues
+            </Link>
           </li>
         ))}
       </ul>

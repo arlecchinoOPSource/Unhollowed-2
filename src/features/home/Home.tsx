@@ -1,7 +1,8 @@
-import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router";
 import { features } from "../../app/pages";
+import { BrandMark } from "../../components/brand/BrandMark";
 import { isTauri } from "../../database/status";
+import { parseLocalDate } from "../today/dates";
 import { TodaySchedule } from "../today/TodaySchedule";
 import { useLocalToday } from "../today/useLocalToday";
 import {
@@ -16,6 +17,11 @@ import { QuickActions } from "./QuickActions";
 import "./home.css";
 import "../today/today.css";
 
+function greeting(hour: number) {
+  if (hour < 5 || hour >= 18) return "Good evening.";
+  return hour < 12 ? "Good morning." : "Good afternoon.";
+}
+
 /**
  * Home: what needs attention today. Each section reads on its own, shows at
  * most a handful of items with a link to the full list, and says so when it
@@ -25,11 +31,19 @@ import "../today/today.css";
 export function Home() {
   const desktop = isTauri();
   const today = useLocalToday();
+  const date = new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(parseLocalDate(today));
   return (
     <>
-      <section className="welcome">
-        <h1>Welcome to Unhollowed.</h1>
-        <p>A private workspace for your notes, plans, and everyday routines.</p>
+      <section className="home-hero">
+        <BrandMark size={84} animate className="is-floating" />
+        <div>
+          <p className="home-date">{date}</p>
+          <h1>{greeting(new Date().getHours())}</h1>
+        </div>
       </section>
       {desktop ? (
         <>
@@ -45,24 +59,18 @@ export function Home() {
           </div>
         </>
       ) : (
-        <p>Open the desktop app to see today's summary.</p>
+        <p>Open the desktop app to see your day.</p>
       )}
       <section aria-labelledby="explore">
         <details className="home-areas">
           <summary id="explore">All areas</summary>
           <div className="feature-grid">
-            {features.map(({ path, title, description, icon: Icon }) => (
+            {features.map(({ path, title, icon: Icon }) => (
               <Link className="feature-card" key={path} to={path}>
                 <span className="feature-icon">
-                  <Icon size={20} aria-hidden="true" />
+                  <Icon size={18} aria-hidden="true" />
                 </span>
-                <ArrowUpRight
-                  className="card-arrow"
-                  size={16}
-                  aria-hidden="true"
-                />
-                <h3>{title}</h3>
-                <p>{description}</p>
+                {title}
               </Link>
             ))}
           </div>
