@@ -18,6 +18,8 @@ mod documents;
 mod goals;
 mod habits;
 #[cfg(test)]
+mod hostile_input_tests;
+#[cfg(test)]
 mod integrity_tests;
 mod issues;
 mod labels;
@@ -43,7 +45,7 @@ mod search;
 mod test_support;
 
 fn main() {
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         .plugin(database::plugin())
         // Used only from Rust to ask where to save exports. The webview has no
         // dialog permissions.
@@ -206,6 +208,50 @@ fn main() {
             milestones::close_milestone,
             milestones::reopen_milestone
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to start Unhollowed 2");
+        .run(tauri::generate_context!());
+    if let Err(error) = result {
+        let message = startup_failure_message(&error.to_string());
+        eprintln!("{message}");
+        // No window exists yet, so a panic would end the app with nothing
+        // visible. A native message tells the person what happened.
+        rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("Unhollowed 2 could not start")
+            .set_description(&message)
+            .show();
+        std::process::exit(1);
+    }
+}
+
+/// What the person is told when startup fails. Their data is never changed by
+/// a failed start, so the message says so and names the likely fixes.
+fn startup_failure_message(detail: &str) -> String {
+    let hint = if detail.contains("previously applied but is missing") {
+        "This workspace was last opened by a newer version of Unhollowed 2. Install the latest version to open it."
+    } else {
+        "Restart the app. If this keeps happening, restore a backup of your workspace or report the problem."
+    };
+    format!("Unhollowed 2 could not open your workspace. Your data has not been changed.\n\n{hint}\n\nDetails: {detail}")
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::startup_failure_message;
+
+    #[test]
+    fn a_newer_workspace_says_to_update_and_promises_no_change() {
+        let message = startup_failure_message(
+            "error while initializing plugin sql: migration 999 was previously applied but is missing in the resolved migrations",
+        );
+        assert!(message.contains("newer version"));
+        assert!(message.contains("Your data has not been changed"));
+        assert!(message.contains("migration 999"));
+    }
+
+    #[test]
+    fn any_other_failure_names_a_next_step() {
+        let message = startup_failure_message("unable to open database file");
+        assert!(message.contains("restore a backup"));
+        assert!(message.contains("unable to open database file"));
+    }
 }

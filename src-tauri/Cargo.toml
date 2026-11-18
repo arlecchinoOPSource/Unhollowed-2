@@ -11,6 +11,9 @@ tauri-build = { version = "2", features = [] }
 base64 = "0.22"
 jiff = { version = "0.2", default-features = false, features = ["std", "tzdb-bundle-always"] }
 jiff-tzdb = "0.1"
+# Already built for tauri-plugin-dialog. Used directly only to show a message
+# when the app cannot start, before any window or plugin exists.
+rfd = { version = "0.17", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", default-features = false, features = ["sqlite"] }

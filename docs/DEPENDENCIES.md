@@ -49,6 +49,10 @@ Production npm packages (109): 94 MIT, plus ISC, BSD-2/3-Clause, Apache-2.0 or M
 
 Cargo (332 crates): almost all MIT or Apache-2.0, with Unicode-3.0, Zlib, BSD-3-Clause, and Unlicense. Five crates are MPL-2.0 (`cssparser`, `cssparser-macros`, `dtoa-short`, `option-ext`, `selectors`). MPL-2.0 is file-level copyleft: unmodified use needs no source release of the app. No GPL, AGPL, or LGPL dependency was found in either graph. The app's own crate has no `license` field; setting it and adding the `LICENSE` file is part of U2-P6-20.
 
+## Changes since this audit
+
+- U2-P6-15 added `rfd` 0.17.2 as a direct Cargo dependency (default features off) to show a native message when startup fails. It was already in the build graph through `tauri-plugin-dialog`, so no new crate was added to the lockfile.
+
 ## Reproducibility
 
 Lockfiles, pinned Node (`.nvmrc`), pinned Rust (`rust-toolchain.toml`), and SHA-pinned actions make inputs reproducible. Byte-identical installers were not checked: Tauri bundles embed timestamps and platform signing data.
