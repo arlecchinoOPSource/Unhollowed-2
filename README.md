@@ -1,8 +1,10 @@
 # Unhollowed 2
 
-A free, local-first desktop workspace by Arlecchino for connecting documents, projects, and personal routines. The current build includes Home, local documents with a rich-text editor, projects, issues, feature previews, appearance settings, and a local SQLite workspace.
+A free, local-first desktop workspace by Arlecchino that keeps documents, projects and issues, a calendar, habits, mood check-ins, and dashboards in one private place. It works offline, needs no account, and stores everything on your computer.
 
-Built with Tauri 2, Rust, SQLite, React, TypeScript, and Vite. GitHub Issues and milestones track upcoming work.
+**Status: beta.** Supported on macOS (Apple Silicon) and Windows x64. Start with the [user guide](docs/USER_GUIDE.md) for installation, getting started, data locations, import and export, backup, troubleshooting, and reporting problems. The draft [v1.0.0-beta.1 release notes](docs/release-notes/v1.0.0-beta.1.md) list what was tested and the known limitations.
+
+The rest of this page is for developers. Built with Tauri 2, Rust, SQLite, React, TypeScript, and Vite. GitHub Issues and milestones track upcoming work.
 
 ## Set up
 
@@ -51,7 +53,7 @@ The workspace uses a stable UUID stored as text, and `app_state` records which w
 
 See [Phase 0 verification](docs/phase-0.md) for resolved versions and checks.
 
-## Beta status, platforms, and license
+## Beta status and license
 
 Unhollowed 2 is beta software, provided as is, without warranty. Keep your own copies of anything important. Supported beta targets are macOS on Apple Silicon and Windows x64; see [license, redistribution, and platforms](docs/LEGAL.md). **No open-source license has been chosen yet**, so the code is all rights reserved until the owner selects one. Dependency licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and what the app stores and sends is in the [privacy statement](docs/PRIVACY_STATEMENT.md).
 
@@ -60,5 +62,5 @@ Unhollowed 2 is beta software, provided as is, without warranty. Keep your own c
 - [Product](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [data model](docs/DATA_MODEL.md)
 - [Development](docs/DEVELOPMENT.md) and [local macOS testing](docs/MACOS_TESTING.md)
 - [CI and packaging](docs/CI_CD.md) and [release preparation](docs/RELEASE.md)
-- [Privacy statement](docs/PRIVACY_STATEMENT.md), [security audit](docs/SECURITY.md), and [legal readiness](docs/LEGAL.md)
+- [User guide](docs/USER_GUIDE.md), [release notes](docs/release-notes/v1.0.0-beta.1.md), [privacy statement](docs/PRIVACY_STATEMENT.md), [security audit](docs/SECURITY.md), and [legal readiness](docs/LEGAL.md)
 - [Contributing](docs/CONTRIBUTING.md), [decisions](docs/DECISIONS.md), and [changelog](CHANGELOG.md)
