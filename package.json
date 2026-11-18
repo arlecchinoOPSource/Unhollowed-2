@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "notices": "node scripts/third-party-notices.mjs",
     "test:browser": "playwright test",
     "test:mac": "bash scripts/test-mac.sh",
     "test:mac:full": "bash scripts/test-mac.sh full"
