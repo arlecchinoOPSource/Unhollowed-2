@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import type { CalendarItem } from "../../database/events";
+import { eventParam } from "../../app/links";
 import { isTauri } from "../../database/status";
 import { useLocalToday } from "../today/useLocalToday";
 import { CalendarSearch } from "./CalendarSearch";
@@ -42,6 +43,19 @@ function SearchBar({
   const [state, setState] = useState<SearchState>(defaultSearch);
   const [message, setMessage] = useState("");
   const editing = useEventEditing({ onMessage: setMessage, onChanged });
+
+  const wanted = eventParam(params);
+  const { openEvent } = editing;
+  useEffect(() => {
+    if (!wanted) return;
+    // Open once, then drop the parameter so closing or going back does not
+    // reopen the event.
+    void openEvent(wanted);
+    const next = new URLSearchParams(params);
+    next.delete("event");
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted]);
 
   function open(item: CalendarItem) {
     const date = itemDate(item);
