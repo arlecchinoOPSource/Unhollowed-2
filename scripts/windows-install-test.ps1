@@ -82,7 +82,9 @@ $script:nsisExe = $null
 Check 'NSIS: silent install' {
   Start-Process $Nsis -ArgumentList '/S' -Wait
   $script:nsisExe = Find-Exe @("$env:LOCALAPPDATA\Unhollowed 2", "$env:LOCALAPPDATA\Programs", $env:ProgramFiles)
-  $script:nsisExe
+  $meta = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+    ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'Unhollowed 2*' } | Select-Object -First 1
+  "$script:nsisExe; Apps entry: name '$($meta.DisplayName)', version '$($meta.DisplayVersion)', publisher '$($meta.Publisher)', icon '$($meta.DisplayIcon)'"
 }
 Check 'NSIS: first start shows a window and creates the workspace' {
   $r = Run-App $script:nsisExe
@@ -128,7 +130,7 @@ Check 'MSI: silent install and registered version' {
   if (-not $entry) { throw 'No uninstall entry for the MSI.' }
   $script:productCode = Split-Path $entry.PSPath -Leaf
   $script:msiExe = Find-Exe @($entry.InstallLocation, "$env:ProgramFiles\Unhollowed 2", "$env:LOCALAPPDATA\Unhollowed 2", $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA)
-  "ProductVersion $($entry.DisplayVersion), $script:msiExe"
+  "ProductVersion $($entry.DisplayVersion), $script:msiExe; Apps entry: name '$($entry.DisplayName)', publisher '$($entry.Publisher)', icon '$($entry.DisplayIcon)'"
 }
 Check 'MSI: first start shows a window and creates the workspace' {
   $r = Run-App $script:msiExe
