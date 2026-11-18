@@ -24,6 +24,12 @@ export interface Series {
   points: readonly Point[];
 }
 
+/** Where a point's records are, and what opening it says. */
+export interface Drill {
+  to: string;
+  text: string;
+}
+
 export interface ChartProps {
   kind: "bar" | "line";
   title: string;
@@ -37,6 +43,14 @@ export interface ChartProps {
   state?: "ready" | "empty" | "unavailable";
   /** Said when empty or unavailable. */
   message?: string;
+  /**
+   * The records behind a point, or null when it has none to list. Each is a
+   * link in the values table; clicking a mark follows it too.
+   */
+  drill?: (series: number, point: number) => Drill | null;
+  onOpen?: (to: string) => void;
+  /** Said under the chart when its points have no records to open. */
+  aggregateNote?: string;
 }
 
 const W = 640;
@@ -75,6 +89,9 @@ export function Chart({
   max,
   state = "ready",
   message,
+  drill,
+  onOpen,
+  aggregateNote,
 }: ChartProps) {
   const id = useId();
   if (state !== "ready")
@@ -232,7 +249,15 @@ export function Chart({
                 const x =
                   cx(i) - (barWidth * series.length) / 2 + si * barWidth;
                 return (
-                  <g key={i} className="chart-mark">
+                  <g
+                    key={i}
+                    className="chart-mark"
+                    data-drill={drill?.(si, i) ? "" : undefined}
+                    onClick={() => {
+                      const target = drill?.(si, i);
+                      if (target && onOpen) onOpen(target.to);
+                    }}
+                  >
                     <rect
                       className="chart-bar"
                       x={x}
@@ -257,6 +282,7 @@ export function Chart({
           );
         })}
       </svg>
+      {aggregateNote && <p className="chart-note">{aggregateNote}</p>}
       <details className="chart-table">
         <summary>Show values ({labels.length})</summary>
         <div className="chart-table-scroll">
@@ -270,6 +296,7 @@ export function Chart({
                     {s.name}
                   </th>
                 ))}
+                {drill && <th scope="col">Records</th>}
               </tr>
             </thead>
             <tbody>
@@ -283,6 +310,26 @@ export function Chart({
                         : format(s.points[i].value as number)}
                     </td>
                   ))}
+                  {drill && (
+                    <td>
+                      {series.map((_, si) => {
+                        const target = drill(si, i);
+                        return target ? (
+                          <a
+                            key={si}
+                            href={target.to}
+                            onClick={(event) => {
+                              if (!onOpen) return;
+                              event.preventDefault();
+                              onOpen(target.to);
+                            }}
+                          >
+                            {target.text}
+                          </a>
+                        ) : null;
+                      })}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -550,6 +550,15 @@ fn rejects_unsupported_filters() {
                 ..IssueFilter::default()
             },
             IssueFilter {
+                completed_from: Some("2026-11-01".into()),
+                ..IssueFilter::default()
+            },
+            IssueFilter {
+                completed_from: Some("2026-11-02T00:00:00Z".into()),
+                completed_before: Some("2026-11-02T00:00:00Z".into()),
+                ..IssueFilter::default()
+            },
+            IssueFilter {
                 undated: Some("maybe".into()),
                 ..IssueFilter::default()
             },
@@ -615,5 +624,51 @@ fn indexes_issues_saved_before_the_search_migration() {
         let next = seed(&pool, DEFAULT_WORKSPACE, Seed::default()).await;
         assert_eq!(next.number, 2);
         pool.close().await;
+    });
+}
+
+#[test]
+fn completion_instants_select_exactly_the_issues_the_trend_counts() {
+    tauri::async_runtime::block_on(async {
+        let pool = migrated_pool().await;
+        let mut ids = vec![];
+        for (title, at) in [
+            ("Before", "2026-11-01T22:59:59Z"),
+            ("First second", "2026-11-01T23:00:00Z"),
+            ("Last second", "2026-11-02T22:59:59.900Z"),
+            ("After", "2026-11-02T23:00:00Z"),
+        ] {
+            let issue = seed(
+                &pool,
+                DEFAULT_WORKSPACE,
+                Seed {
+                    title,
+                    status: "done",
+                    ..Seed::default()
+                },
+            )
+            .await;
+            sqlx::query("UPDATE issues SET completed_at = ? WHERE id = ?")
+                .bind(at)
+                .bind(&issue.id)
+                .execute(&pool)
+                .await
+                .unwrap();
+            ids.push(issue.id);
+        }
+        // Not done: never counted, even with no time at all.
+        seed(&pool, DEFAULT_WORKSPACE, Seed::default()).await;
+        let range = IssueQuery {
+            filter: IssueFilter {
+                completed_from: Some("2026-11-01T23:00:00Z".into()),
+                completed_before: Some("2026-11-02T23:00:00Z".into()),
+                ..IssueFilter::default()
+            },
+            sort: Some("created".into()),
+            direction: Some("asc".into()),
+            ..IssueQuery::default()
+        };
+        // One local day in Paris (UTC+1): 2 November.
+        assert_eq!(titles(&pool, range).await, ["First second", "Last second"]);
     });
 }

@@ -101,6 +101,9 @@ export interface IssueFilter {
   dueAfter?: string;
   dueBefore?: string;
   undated?: "include" | "exclude" | "only";
+  /** UTC instants: done issues completed at or after one and before the other. */
+  completedFrom?: string;
+  completedBefore?: string;
   /** Issues with these labels. Archived labels still match. */
   labelIds?: string[];
   /** `any` (default) matches one of the labels, `all` every label. */

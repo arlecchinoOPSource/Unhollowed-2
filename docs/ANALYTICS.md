@@ -238,3 +238,19 @@ The `comparison` widget shows habit consistency, issues completed, scheduled tim
 - **Where a series cannot be placed.** The progress trend places completions by day up to 92 days and by week beyond. A weekly source cannot be split into months, so for periods over 92 days a monthly comparison says so for that row instead of guessing. Habits and mood are not part of a project, so they are unavailable while a project is selected.
 - **Refresh.** All four rows use the shared reads (`queryKey`), the same keys as the sections, so one request serves both and a write refreshes them together.
 - **Not included.** Productivity scores, causal claims, inferred project histories.
+
+## Drilldowns (U2-P5-12)
+
+A chart point that has records opens them. The values table under every chart has a **Records** column with a real link per point, so keyboard and screen-reader users follow it with Tab and Enter; clicking a mark does the same. Points with nothing to open have no link.
+
+| Metric            | Opens                                                                              | Cohort                                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Issues completed  | `/issues?state=closed&status=done&completedFrom=…&completedTo=…` (and the project) | Done issues, not archived, whose `completed_at` falls on those local days: the trend's own rule                            |
+| Scheduled time    | The calendar day (`view=day`), or the agenda from the bucket's first day           | The calendar items of that day. A week or month opens the agenda at its first day, so the agenda's own range may be longer |
+| Habit completion  | One habit on the day when a habit is chosen; otherwise the habit grid              | A ratio across habits has no single record list; the chart says so                                                         |
+| Mood (comparison) | Nothing                                                                            | An average of ratings, not a list of records; the chart says so                                                            |
+
+- **Exact cohort.** The issue list's `completedFrom` and `completedTo` are local days in the URL and a removable "Completed: …" filter chip. They become UTC instants (the local midnight at the start of the first day and of the day after the last) and the backend compares them with `completed_at` to the second, the same way the trend places a completion, so the list holds the issues the point counted. A test checks the boundary seconds. Half a range, an impossible day, or a reversed range is ignored. Saved views do not store it.
+- **Return.** The list shows **Back to the dashboard** (navigation state accepted only for in-app paths), and the browser's Back works too. The period comes back with the dashboard; project and habit filters are transient and start empty again.
+- **Removed records.** A drilldown only names days and a project or habit ID. If the project or habit has since been removed, the target screen explains it as it does for any other link.
+- **Not fabricated.** Aggregate-only values never list made-up rows.

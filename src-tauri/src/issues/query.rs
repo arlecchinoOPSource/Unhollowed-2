@@ -39,6 +39,11 @@ pub struct IssueFilter {
     /// `undated` is `include`.
     pub due_after: Option<String>,
     pub due_before: Option<String>,
+    /// UTC instants as `YYYY-MM-DDTHH:MM:SSZ`. Only issues completed at or
+    /// after `completed_from` and before `completed_before` match, which is
+    /// how the progress trend places a completion on a local day.
+    pub completed_from: Option<String>,
+    pub completed_before: Option<String>,
     /// `include` (the default), `exclude`, or `only` issues without a due date.
     pub undated: Option<String>,
     /// Issues carrying these labels. Archived labels still match.
@@ -126,6 +131,9 @@ struct ValidQuery {
     inbox: bool,
     due_after: Option<String>,
     due_before: Option<String>,
+    /// First 19 characters of the instants, as stored in `completed_at`.
+    completed_from: Option<String>,
+    completed_before: Option<String>,
     undated: Undated,
     label_ids: Vec<String>,
     match_all_labels: bool,
@@ -199,6 +207,20 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
         return Err(invalid());
     }
 
+    let instant = |value: &Option<String>| match value {
+        None => Ok(None),
+        Some(text) if text.len() == 20 && text.parse::<jiff::Timestamp>().is_ok() => {
+            Ok(Some(text[..19].to_owned()))
+        }
+        Some(_) => Err(invalid()),
+    };
+    let completed_from = instant(&filter.completed_from)?;
+    let completed_before = instant(&filter.completed_before)?;
+    if matches!((&completed_from, &completed_before), (Some(from), Some(before)) if from >= before)
+    {
+        return Err(invalid());
+    }
+
     // Some(false) hides archived issues, Some(true) shows only them.
     let archived = match filter.archived.as_deref() {
         None | Some("exclude") => Some(false),
@@ -256,6 +278,8 @@ fn validate(query: IssueQuery) -> Result<ValidQuery, IssueError> {
         inbox: filter.inbox,
         due_after: filter.due_after,
         due_before: filter.due_before,
+        completed_from,
+        completed_before,
         undated,
         label_ids,
         match_all_labels,
@@ -365,6 +389,16 @@ fn push_filters(
         if query.match_all_labels {
             builder.push(" = ").push_bind(query.label_ids.len() as i64);
         }
+    }
+    if let Some(from) = &query.completed_from {
+        builder
+            .push(" AND substr(completed_at, 1, 19) >= ")
+            .push_bind(from.clone());
+    }
+    if let Some(before) = &query.completed_before {
+        builder
+            .push(" AND substr(completed_at, 1, 19) < ")
+            .push_bind(before.clone());
     }
     if let Undated::Only = query.undated {
         builder.push(" AND due_date IS NULL");

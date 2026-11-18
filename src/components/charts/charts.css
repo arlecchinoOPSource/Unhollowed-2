@@ -128,3 +128,12 @@
     animation: none;
   }
 }
+
+.chart-mark[data-drill] {
+  cursor: pointer;
+}
+
+.chart-note {
+  margin: 4px 0;
+  color: var(--muted);
+}
