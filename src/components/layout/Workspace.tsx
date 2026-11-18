@@ -1,6 +1,7 @@
 import { Moon, PanelLeft, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { RouteErrorBoundary } from "./RouteErrorBoundary";
 import { pages } from "../../app/pages";
 import { BrandMark } from "../brand/BrandMark";
 import { GlobalSearch } from "../search/GlobalSearch";
@@ -98,7 +99,9 @@ export function Workspace() {
         </header>
         <main id="main" tabIndex={-1}>
           <ReminderRunner />
-          <Outlet />
+          <RouteErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </RouteErrorBoundary>
         </main>
       </div>
     </div>
