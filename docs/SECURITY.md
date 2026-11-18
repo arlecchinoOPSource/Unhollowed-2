@@ -80,4 +80,5 @@ Findings from this pass: none required a code fix. The gaps were missing fronten
 ## Gaps
 
 - Windows was not run. WebView2 CSP behavior and the packaged app's data-folder permissions need a check on a Windows machine.
+- No fuzzing or randomized input generation was run; malformed-input coverage is hand-written fixtures.
 - This is a source audit with non-destructive checks. It is not a penetration test and no external reviewer has signed off.
