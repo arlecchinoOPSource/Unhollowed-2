@@ -27,11 +27,6 @@ export function Settings() {
       <h1>Settings</h1>
       <section aria-labelledby="storage-heading" className="settings-section">
         <h2 id="storage-heading">Local storage</h2>
-        <p>
-          {desktop
-            ? "Check the connection to your workspace database."
-            : "Local SQLite storage is available in the desktop app."}
-        </p>
         {desktop && (
           <button className="action" onClick={checkStorage} disabled={checking}>
             Check local storage

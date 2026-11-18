@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { listHabits, type Habit } from "../../database/habits";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
-import { fullDate } from "../calendar/monthGrid";
+import { dateRange, fullDate } from "../calendar/monthGrid";
 import { localDate } from "../today/dates";
 import {
   daysIn,
@@ -104,7 +104,6 @@ export function Dashboard() {
   return (
     <section className="dash-view">
       <h1>Dashboards</h1>
-      <p>See your progress across the workspace.</p>
       {!desktop && <p>Open the desktop app to see your local progress.</p>}
       {desktop && !dashboard.ready && <p role="status">Loading dashboard…</p>}
       {desktop && dashboard.ready && (
@@ -258,9 +257,8 @@ export function Dashboard() {
             </p>
           )}
           <p role="status" className="dash-period">
-            Showing {fullDate(period.from)} to {fullDate(period.to)} (
-            {daysIn(period)} {daysIn(period) === 1 ? "day" : "days"}
-            ), through today at most.
+            {dateRange(period.from, period.to)} ({daysIn(period)}{" "}
+            {daysIn(period) === 1 ? "day" : "days"})
             {project ? " Filtered to one project." : ""}
             {habit ? " Habits filtered to one habit." : ""}
           </p>

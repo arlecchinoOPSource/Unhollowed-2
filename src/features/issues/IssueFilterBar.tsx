@@ -160,12 +160,12 @@ export function IssueFilterBar({
     <>
       <div className="issue-toolbar" role="search" aria-label="Find issues">
         <label className="issue-search">
-          Search issues
+          <span className="filter-name">Search issues</span>
           <input
             type="search"
             ref={searchRef}
             onKeyDown={onSearchKeyDown}
-            placeholder="Search titles and descriptions"
+            placeholder="Search issues…"
             maxLength={200}
             value={typedSearch ?? filters.text}
             onChange={(event) => search(event.target.value)}
@@ -173,7 +173,7 @@ export function IssueFilterBar({
         </label>
         {showStatus && (
           <label>
-            Status
+            <span className="filter-name">Status</span>
             <select
               value={filters.status}
               onChange={(event) =>
@@ -192,7 +192,7 @@ export function IssueFilterBar({
           </label>
         )}
         <label>
-          Priority
+          <span className="filter-name">Priority</span>
           <select
             value={filters.priority}
             onChange={(event) =>
@@ -211,7 +211,7 @@ export function IssueFilterBar({
         </label>
         {!projectId && (
           <label>
-            Project
+            <span className="filter-name">Project</span>
             <select
               value={filters.project}
               onChange={(event) => onChange({ project: event.target.value })}
@@ -233,7 +233,7 @@ export function IssueFilterBar({
           </label>
         )}
         <label>
-          Due date
+          <span className="filter-name">Due date</span>
           <select
             value={filters.due}
             onChange={(event) =>
@@ -249,7 +249,7 @@ export function IssueFilterBar({
           </select>
         </label>
         <label>
-          Milestone
+          <span className="filter-name">Milestone</span>
           <select
             value={filters.milestone}
             onChange={(event) => onChange({ milestone: event.target.value })}
@@ -266,7 +266,7 @@ export function IssueFilterBar({
           </select>
         </label>
         <label>
-          Archived
+          <span className="filter-name">Archived</span>
           <select
             value={filters.archived}
             onChange={(event) =>
@@ -308,7 +308,7 @@ export function IssueFilterBar({
         </details>
         <div className="issue-sort">
           <label>
-            Sort by
+            <span className="filter-name">Sort by</span>
             <select
               value={filters.sort}
               onChange={(event) => {

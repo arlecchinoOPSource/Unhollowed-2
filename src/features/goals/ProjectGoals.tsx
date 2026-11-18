@@ -90,10 +90,6 @@ function Goals({ projectId }: { projectId: string }) {
         Back to project
       </Link>
       <h1>Missions &amp; objectives</h1>
-      <p>
-        Missions describe broad goals. Objectives define measurable outcomes.
-        Milestones mark checkpoints.
-      </p>
       {!isTauri() && <p>Open the desktop app to manage project goals.</p>}
       {!data && isTauri() && !error && (
         <p role="status">Loading project goals…</p>

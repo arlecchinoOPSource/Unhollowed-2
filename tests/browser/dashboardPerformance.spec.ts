@@ -42,7 +42,7 @@ test("widgets that ask the same question share one request per scope", async ({
   // Let Home finish its own reads before counting.
   await expect(
     page.getByRole("region", { name: "Upcoming milestones", exact: true }),
-  ).toContainText("No open milestones");
+  ).toContainText("Nothing due in the next two weeks");
   await expect(
     page.getByRole("region", { name: "Active projects", exact: true }),
   ).toContainText("Studio launch");
@@ -112,7 +112,7 @@ test("rapid period changes leave the dashboard on the last choice, with no error
   await dispatch(page, "hold-command", "get_progress_analytics");
   await page.getByRole("button", { name: "Last 7 days", exact: true }).click();
   await page.getByRole("button", { name: "This month", exact: true }).click();
-  await expect(page.locator(".dash-period")).toContainText("November 1, 2026");
+  await expect(page.locator(".dash-period")).toContainText("Nov 1 – ");
   await dispatch(page, "release-get_progress_analytics", undefined);
   await expect(
     page.getByRole("region", { name: "Projects and issues" }),

@@ -15,6 +15,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
+  type ReactNode,
 } from "react";
 import { Link, useSearchParams } from "react-router";
 import { calendarColors, schedulingError } from "../../database/calendars";
@@ -100,9 +101,12 @@ function dayName(day: string, style: "short" | "long") {
 export function TimelineView({
   view,
   setIncrement,
+  tools,
 }: {
   view: View;
   setIncrement: (value: CalendarSettings["increment"]) => void;
+  /** Page tools shown under the title, such as search. */
+  tools?: ReactNode;
 }) {
   const desktop = isTauri();
   const today = useLocalToday();
@@ -476,13 +480,13 @@ export function TimelineView({
       <div className="issue-page-top">
         <div>
           <h1>Calendar</h1>
-          <p>Events, issue deadlines, and work blocks.</p>
           <Link className="calendar-manage" to="/calendar/calendars">
             Manage calendars
           </Link>
         </div>
         <ViewSwitch date={date} />
       </div>
+      {tools}
       <div className="calendar-nav timeline-nav">
         <button
           type="button"

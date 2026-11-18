@@ -412,10 +412,6 @@ export function Calendars() {
         <ArrowLeft size={16} aria-hidden="true" /> Calendar
       </Link>
       <h1>Calendars</h1>
-      <p>
-        Separate your commitments by context, and hide the ones you do not need
-        to see.
-      </p>
       {!desktop && <p>Open the desktop app to manage your local calendars.</p>}
       {desktop && (
         <form

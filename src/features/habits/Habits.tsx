@@ -1,4 +1,14 @@
-import { ChevronLeft, ChevronRight, CircleCheck } from "lucide-react";
+import {
+  ArchiveRestore,
+  ChartLine,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  FileDown,
+  History,
+  Plus,
+  Settings2,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -222,7 +232,6 @@ export function Habits() {
   return (
     <section className="habits-view">
       <h1>Habits</h1>
-      <p>Check off each day you practice. Earlier months keep their history.</p>
       {!desktop && <p>Open the desktop app to track your local habits.</p>}
       {desktop && (
         <>
@@ -293,54 +302,71 @@ export function Habits() {
               Today
             </button>
           </nav>
-          <form aria-label="Add a habit" className="habit-add" onSubmit={add}>
-            <label>
-              New habit
-              <input name="name" required maxLength={60} />
-            </label>
-            <button className="action" type="submit">
-              Add habit
-            </button>
-            <button
-              type="button"
-              className="action"
-              aria-expanded={history}
-              aria-controls="habit-history"
-              onClick={() => setHistory((open) => !open)}
-            >
-              {history ? "Hide history" : "Show history"}
-            </button>
-            <button
-              type="button"
-              className="action"
-              aria-expanded={trends}
-              aria-controls="habit-trends"
-              onClick={() => setTrends((open) => !open)}
-            >
-              {trends ? "Hide trends" : "Show trends"}
-            </button>
-            <button
-              type="button"
-              className="action"
-              onClick={() => setImporting(true)}
-            >
-              Import from Ember
-            </button>
-            <button
-              type="button"
-              className="action"
-              onClick={() => setBackingUp(true)}
-            >
-              Backup and restore
-            </button>
-            <button
-              type="button"
-              className="action"
-              onClick={() => setManaging(true)}
-            >
-              Manage habits
-            </button>
-          </form>
+          <div className="habit-bar">
+            <form aria-label="Add a habit" className="habit-add" onSubmit={add}>
+              <label>
+                <span className="visually-hidden">New habit</span>
+                <input
+                  name="name"
+                  required
+                  maxLength={60}
+                  placeholder="New habit"
+                />
+              </label>
+              <button className="action" type="submit">
+                <Plus size={16} aria-hidden="true" /> Add habit
+              </button>
+            </form>
+            <div className="habit-tools">
+              <button
+                type="button"
+                className="habit-tool"
+                aria-label={history ? "Hide history" : "Show history"}
+                aria-expanded={history}
+                aria-controls="habit-history"
+                onClick={() => setHistory((open) => !open)}
+              >
+                <History size={16} aria-hidden="true" /> History
+              </button>
+              <button
+                type="button"
+                className="habit-tool"
+                aria-label={trends ? "Hide trends" : "Show trends"}
+                aria-expanded={trends}
+                aria-controls="habit-trends"
+                onClick={() => setTrends((open) => !open)}
+              >
+                <ChartLine size={16} aria-hidden="true" /> Trends
+              </button>
+              <button
+                type="button"
+                className="habit-tool"
+                aria-label="Import from Ember"
+                title="Import from Ember"
+                onClick={() => setImporting(true)}
+              >
+                <FileDown size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="habit-tool"
+                aria-label="Backup and restore"
+                title="Backup and restore"
+                onClick={() => setBackingUp(true)}
+              >
+                <ArchiveRestore size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="habit-tool"
+                aria-label="Manage habits"
+                title="Manage habits"
+                onClick={() => setManaging(true)}
+              >
+                <Settings2 size={16} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
           {addError && <p role="alert">{addError}</p>}
           {backingUp && (
             <HabitBackup

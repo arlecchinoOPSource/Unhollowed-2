@@ -38,7 +38,9 @@
 }
 
 .word-more summary {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
   margin-bottom: 6px;
 }

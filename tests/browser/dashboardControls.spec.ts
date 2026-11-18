@@ -56,17 +56,13 @@ test("each preset resolves to the documented inclusive range", async ({
     "aria-pressed",
     "true",
   );
-  await expect(period(page)).toContainText(
-    "Monday, October 19, 2026 to Tuesday, November 17, 2026 (30 days)",
-  );
+  await expect(period(page)).toContainText("Oct 19 – Nov 17, 2026 (30 days)");
   expect(await range(page, "get_workspace_analytics")).toBe(
     "2026-10-19..2026-11-17",
   );
 
   await preset(page, "Last 7 days").click();
-  await expect(period(page)).toContainText(
-    "Wednesday, November 11, 2026 to Tuesday, November 17, 2026 (7 days)",
-  );
+  await expect(period(page)).toContainText("Nov 11 – Nov 17, 2026 (7 days)");
   await expect
     .poll(() => range(page, "get_progress_analytics"))
     .toBe("2026-11-11..2026-11-17");
@@ -75,9 +71,7 @@ test("each preset resolves to the documented inclusive range", async ({
   );
 
   await preset(page, "This month").click();
-  await expect(period(page)).toContainText(
-    "Sunday, November 1, 2026 to Monday, November 30, 2026 (30 days)",
-  );
+  await expect(period(page)).toContainText("Nov 1 – Nov 30, 2026 (30 days)");
   await expect
     .poll(() => range(page, "get_schedule_analytics"))
     .toBe("2026-11-01..2026-11-30");
@@ -95,9 +89,7 @@ test("custom dates are inclusive, and a bad range explains itself and keeps a us
   const custom = page.getByRole("group", { name: "Custom dates" });
   await custom.getByLabel("From").fill("2026-11-05");
   await custom.getByLabel("To").fill("2026-11-05");
-  await expect(period(page)).toContainText(
-    "Thursday, November 5, 2026 to Thursday, November 5, 2026 (1 day)",
-  );
+  await expect(period(page)).toContainText("Nov 5, 2026 (1 day)");
   await expect
     .poll(() => range(page, "get_workspace_analytics"))
     .toBe("2026-11-05..2026-11-05");

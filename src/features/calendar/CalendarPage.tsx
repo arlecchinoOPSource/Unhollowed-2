@@ -101,35 +101,38 @@ export function CalendarPage() {
   const [revision, setRevision] = useState(0);
   // Issues changed in the view or the overdue list reload the other.
   const [issueRevision, setIssueRevision] = useState(0);
+  // Search and overdue work sit under the page title, above the grid.
+  const tools = isTauri() && (
+    <>
+      <SearchBar
+        view={view}
+        revision={revision}
+        onChanged={() => setRevision((value) => value + 1)}
+      />
+      <OverdueIssues
+        revision={issueRevision}
+        onChanged={() => {
+          setIssueRevision((value) => value + 1);
+          setRevision((value) => value + 1);
+        }}
+      />
+    </>
+  );
   return (
     <CalendarPreferences.Provider value={settings}>
-      {isTauri() && (
-        <SearchBar
-          view={view}
-          revision={revision}
-          onChanged={() => setRevision((value) => value + 1)}
-        />
-      )}
-      {isTauri() && (
-        <OverdueIssues
-          revision={issueRevision}
-          onChanged={() => {
-            setIssueRevision((value) => value + 1);
-            setRevision((value) => value + 1);
-          }}
-        />
-      )}
       {view === "month" || view === "agenda" ? (
         <IssueCalendar
           key={revision}
           agenda={view === "agenda"}
           onIssueChanged={() => setIssueRevision((value) => value + 1)}
+          tools={tools}
         />
       ) : (
         <TimelineView
           key={revision}
           view={view}
           setIncrement={(increment) => save({ ...settings, increment })}
+          tools={tools}
         />
       )}
       <PreferenceControls current={settings} save={save} error={error} />

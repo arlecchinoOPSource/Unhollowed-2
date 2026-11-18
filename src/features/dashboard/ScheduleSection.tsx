@@ -8,7 +8,7 @@ import {
   type UpcomingItem,
 } from "../../database/analytics";
 import { deviceZone } from "../../database/events";
-import { fullDate } from "../calendar/monthGrid";
+import { dateRange, fullDate } from "../calendar/monthGrid";
 
 const SOURCES = ["calendar", "issues", "projects"] as const;
 
@@ -128,9 +128,8 @@ export function ScheduleSection({
       {data && t && (
         <>
           <p>
-            {fullDate(data.from)} to {fullDate(data.to)}. These are scheduled
-            hours, what the calendar plans, not time actually spent. Events,
-            planned work sessions, and due dates are counted separately.
+            {dateRange(data.from, data.to)}. These are scheduled hours, what the
+            calendar plans, not time actually spent.
           </p>
           {data.truncated && (
             <p role="note">

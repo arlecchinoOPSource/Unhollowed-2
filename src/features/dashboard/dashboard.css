@@ -21,6 +21,36 @@
   font: inherit;
 }
 
+/* The period presets read as one segmented control. */
+.dash-controls [role="group"][aria-label="Period"] {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.dash-controls [aria-label="Period"] .action {
+  margin: 0;
+  min-height: 30px;
+  padding: 4px 12px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.dash-controls [aria-label="Period"] .action:hover {
+  box-shadow: none;
+  color: var(--text);
+}
+
+.dash-controls [aria-label="Period"] .action[aria-pressed="true"] {
+  background: var(--selection);
+  color: var(--accent);
+}
+
 .dash-section h3 {
   margin: 20px 0 6px;
 }
@@ -33,19 +63,43 @@
 }
 
 .dash-tiles > div {
-  padding: 12px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 0.25s var(--ease),
+    box-shadow 0.25s var(--ease);
+}
+
+.dash-tiles > div:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
 
 .dash-tiles dt {
   color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
 }
 
 .dash-tiles dd {
-  margin: 4px 0 0;
-  font-size: 1.15em;
-  font-weight: 600;
+  margin: 6px 0 0;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-tiles dd a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.dash-tiles dd a:hover {
+  color: var(--accent);
 }
 
 .dash-table {
@@ -54,7 +108,7 @@
 }
 
 .dash-table :is(th, td) {
-  padding: 4px 8px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--line);
   text-align: left;
 }
@@ -81,7 +135,7 @@
 }
 
 .dash-bar {
-  fill: var(--accent);
+  fill: var(--periwinkle);
 }
 
 .dash-zero {
@@ -104,7 +158,12 @@
 }
 
 .dash-section {
-  margin: 0 0 28px;
+  margin: 0 0 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
   min-width: 0;
   /* Wide tables scroll inside their section, never the page. */
   overflow-x: auto;
@@ -129,6 +188,7 @@
 
 .dash-period {
   color: var(--muted);
+  font-size: 13px;
 }
 
 /* The widget grid: 12 columns on wide windows, one column in reading order
@@ -137,6 +197,12 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 0 16px;
+}
+
+/* Inside a card, tiles sit on the card, not on the page. */
+.dash-section .dash-tiles > div {
+  background: var(--background);
+  box-shadow: none;
 }
 
 .dash-cell {

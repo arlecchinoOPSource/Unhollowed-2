@@ -10,7 +10,7 @@ async function open(page: Page, seed: object = {}) {
   await page.addInitScript((data) => Object.assign(window, data), seed);
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Welcome to Unhollowed." }),
+    page.getByRole("heading", { name: /^Good (morning|afternoon|evening)\.$/ }),
   ).toBeVisible();
 }
 
@@ -68,7 +68,7 @@ test("every section explains an empty workspace", async ({ page }) => {
     "No habits to do today.",
   );
   await expect(section(page, "Upcoming milestones")).toContainText(
-    "No open milestones are due in the next two weeks.",
+    "Nothing due in the next two weeks.",
   );
   await expect(section(page, "Recent documents")).toContainText(
     "No documents yet.",
@@ -183,7 +183,7 @@ test("add event uses the event editor and says what it saved", async ({
   page,
 }) => {
   await open(page);
-  await actions(page).getByRole("button", { name: "Add event" }).click();
+  await actions(page).getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "New event" });
   await editor.getByLabel("Title").fill("Standup");
   await editor.getByRole("button", { name: "Save event" }).click();
@@ -197,16 +197,14 @@ test("document, check-in, project, and issue-work actions open the screens that 
 }) => {
   await open(page, { __seedIssues: [{ title: "Plan the offsite" }] });
   await expect(
-    actions(page).getByRole("link", { name: "Record a check-in" }),
+    actions(page).getByRole("link", { name: "Check in" }),
   ).toHaveAttribute("href", "/mood");
   await expect(
     actions(page).getByRole("link", { name: /^Open / }),
   ).toHaveAttribute("href", /\/projects\/.+/);
 
-  await actions(page)
-    .getByRole("button", { name: "Schedule issue work" })
-    .click();
-  const dialog = page.getByRole("dialog", { name: "Schedule issue work" });
+  await actions(page).getByRole("button", { name: "Plan work" }).click();
+  const dialog = page.getByRole("dialog", { name: "Plan work" });
   await dialog
     .getByLabel("Issue")
     .selectOption({ label: "ISS-1 Plan the offsite" });

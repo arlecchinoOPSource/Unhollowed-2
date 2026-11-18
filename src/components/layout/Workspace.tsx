@@ -2,12 +2,16 @@ import { Moon, PanelLeft, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { pages } from "../../app/pages";
+import { BrandMark } from "../brand/BrandMark";
 import { GlobalSearch } from "../search/GlobalSearch";
 import { isTauri } from "../../database/status";
 import { isIssueShortcut } from "../../features/issues/issueKeyboard";
 import { ReminderRunner } from "../../features/calendar/ReminderRunner";
 import { SidebarViews } from "../../features/views/SidebarViews";
 import { useTheme } from "../../stores/theme";
+
+// Navigation groups: the day, the work, the self, then settings.
+const GROUP_STARTS = new Set(["/documents", "/habits", "/settings"]);
 
 export function Workspace() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -38,22 +42,29 @@ export function Workspace() {
       <a className="skip" href="#main">
         Skip to content
       </a>
-      <aside id="sidebar" hidden={!sidebarOpen}>
-        <Link to="/" className="wordmark">
-          Unhollowed<span>.</span>
+      <aside id="sidebar" className="sidebar" hidden={!sidebarOpen}>
+        <Link to="/" className="wordmark" aria-label="Unhollowed home">
+          <BrandMark size={30} animate />
+          <span className="wordmark-text">Unhollowed</span>
         </Link>
-        <nav aria-label="Workspace">
+        <nav aria-label="Workspace" className="sidebar-nav">
           {pages.map(({ path, title, icon: Icon }) => (
-            <NavLink to={path} end={path === "/"} key={path}>
-              <Icon size={17} aria-hidden="true" />
-              {title}
+            <NavLink
+              to={path}
+              end={path === "/"}
+              key={path}
+              className={GROUP_STARTS.has(path) ? "nav-break" : undefined}
+              title={title}
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span className="nav-label">{title}</span>
             </NavLink>
           ))}
         </nav>
         <SidebarViews />
       </aside>
       <div className="workspace-body">
-        <header>
+        <header className="topbar">
           <button
             type="button"
             aria-label="Toggle sidebar"
@@ -63,7 +74,9 @@ export function Workspace() {
           >
             <PanelLeft size={19} />
           </button>
-          <span className="page-title">{title}</span>
+          <span className="page-title" key={title}>
+            {title}
+          </span>
           <div className="toolbar">
             <GlobalSearch />
             <button
@@ -75,7 +88,11 @@ export function Workspace() {
               }
               onClick={toggleTheme}
             >
-              {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
+              {theme === "light" ? (
+                <Moon size={18} className="theme-icon" key="moon" />
+              ) : (
+                <Sun size={18} className="theme-icon" key="sun" />
+              )}
             </button>
           </div>
         </header>
