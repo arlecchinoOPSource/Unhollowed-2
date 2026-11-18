@@ -1,0 +1,52 @@
+name: Windows installer test
+
+# Builds the unsigned Windows installers, then installs, starts, upgrades, and
+# uninstalls them on a real Windows runner. Manual only. See docs/WINDOWS_DISTRIBUTION.md.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installer-test-${{ github.run_id }}
+
+jobs:
+  test:
+    name: Install and run on Windows
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Set up pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri -> target
+      - name: Install frontend dependencies
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Build unsigned installers
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        with:
+          args: --ci --no-sign --bundles nsis,msi -- --locked
+          uploadUpdaterJson: false
+      - name: Write an older-release database fixture
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\old" | Out-Null
+          $env:U2_OLD_DATABASE = "$env:RUNNER_TEMP\old\workspace.sqlite3"
+          cargo test --locked --manifest-path src-tauri/Cargo.toml write_older_release_fixture -- --ignored
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Install, run, upgrade, and uninstall
+        shell: pwsh
+        run: |
+          $nsis = (Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1).FullName
+          $msi = (Get-ChildItem src-tauri/target/release/bundle/msi/*.msi | Select-Object -First 1).FullName
+          pwsh scripts/windows-install-test.ps1 -Nsis $nsis -Msi $msi -OldDatabase "$env:RUNNER_TEMP\old\workspace.sqlite3"
