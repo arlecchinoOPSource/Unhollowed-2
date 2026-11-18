@@ -323,3 +323,8 @@
 .dash-scope button {
   margin-left: 8px;
 }
+
+.dash-coverage {
+  margin: 0 0 16px;
+  color: var(--muted);
+}

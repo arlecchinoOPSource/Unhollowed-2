@@ -214,6 +214,47 @@ function chart(
   });
 }
 
+const GRAINS = ["week", "month"];
+
+const comparison = make<{ grain: string; period?: PeriodOverride }>({
+  type: "comparison",
+  label: "Comparison",
+  description:
+    "Habits, issues, scheduled time, and mood on the same weeks or months.",
+  sources: ["issues", "habits", "checkins", "calendar"],
+  filters: ["period", "project", "habit"],
+  size: [12, 12, 6, 6],
+  empty: "No data in this period.",
+  error: "This comparison could not read its data.",
+  fields: [
+    {
+      kind: "choice",
+      key: "grain",
+      label: "Group by",
+      options: [
+        { value: "week", label: "Week" },
+        { value: "month", label: "Month" },
+      ],
+    },
+    { kind: "period", key: "period", label: "Period" },
+  ],
+  defaults: { grain: "week" },
+  parse: (raw) => {
+    if (raw === undefined || raw === null) return { grain: "week" };
+    if (
+      !record(raw) ||
+      !Object.keys(raw).every((k) => k === "grain" || k === "period")
+    )
+      return null;
+    const grain = raw.grain ?? "week";
+    if (typeof grain !== "string" || !GRAINS.includes(grain)) return null;
+    const period = parsePeriodConfig(
+      raw.period === undefined ? undefined : { period: raw.period },
+    );
+    return period ? { grain, ...period } : null;
+  },
+});
+
 const definitions: WidgetDefinition[] = [
   none(
     "stat-card",
@@ -356,6 +397,7 @@ const definitions: WidgetDefinition[] = [
         : null;
     },
   }),
+  comparison,
 ];
 
 export const widgetTypes: readonly WidgetDefinition[] = definitions;

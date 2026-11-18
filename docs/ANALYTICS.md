@@ -226,3 +226,15 @@ The dashboard's controls (period, project, habit) are the globals. Each widget r
 - **Empty versus unavailable.** _Empty_ (the source answered and nothing matched) and _unavailable_ (the source does not apply) are different displays with different wording.
 - **Motion.** None. Reduced motion needs no override and the stylesheet keeps it that way.
 - **Narrow widths.** The drawing scales to its container; the table scrolls inside its own box.
+
+## Comparison (U2-P5-11)
+
+The `comparison` widget shows habit consistency, issues completed, scheduled time, and mood side by side on the same weeks or months. It only aligns and sums what the shared queries already return (`comparison.ts`).
+
+- **Alignment.** Weeks are Monday to Sunday and months are calendar months, both clipped to the period, as the habit and check-in engines cut them. Choose _Group by_ in Settings (default week).
+- **Own unit and scale per row.** Habit consistency (percent of eligible habit days, 0 to 100), issues completed (count), scheduled time (minutes, formatted as hours and minutes), and mood (average, 1 to 5). Rows are never put on one axis, indexed, or combined into a score, and the widget says so. Plans (scheduled time) and completed work (issues, habits) stay in separate rows, and scheduled time is never called time worked.
+- **Reconciles with its source.** Habit and mood values are the engines' own bucket values. Issue and scheduled-time values are the source's daily buckets summed into the week or month, so each row's total equals the total of the source's buckets for the displayed period. Each row shows its total (or the habit percent for the whole period) beside its coverage.
+- **Coverage and sparse data.** Each row states "Data in N of M weeks." A week or month with no source data has no value, which is not zero, and a bucket that starts after today has no data yet. A row with no data at all is the empty display.
+- **Where a series cannot be placed.** The progress trend places completions by day up to 92 days and by week beyond. A weekly source cannot be split into months, so for periods over 92 days a monthly comparison says so for that row instead of guessing. Habits and mood are not part of a project, so they are unavailable while a project is selected.
+- **Refresh.** All four rows use the shared reads (`queryKey`), the same keys as the sections, so one request serves both and a write refreshes them together.
+- **Not included.** Productivity scores, causal claims, inferred project histories.
