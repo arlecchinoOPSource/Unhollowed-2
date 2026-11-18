@@ -668,3 +668,100 @@ fn measure_habit_sizes() {
         }
     });
 }
+
+// --- Dashboard --------------------------------------------------------------
+
+/// One workspace holding everything a heavy dashboard reads: 5,000 issues in
+/// 12 projects with milestones and an objective, a year of 500 events (with
+/// repeating series, work blocks, and deadlines), and 30 habits with five
+/// years of completions and check-ins. Returns how long the fixture took.
+async fn dashboard_fixture(pool: &SqlitePool) -> Duration {
+    let start = Instant::now();
+    fixture(pool, 5000).await;
+    calendar_fixture(pool, 500).await;
+    habit_fixture(pool, 30, 5).await;
+    start.elapsed()
+}
+
+#[test]
+#[ignore]
+fn measure_dashboard() {
+    use crate::analytics::{progress::progress, schedule::schedule, workspace_analytics};
+    use crate::checkins::analytics::analytics as mood;
+    use crate::habits::stats::statistics;
+    tauri::async_runtime::block_on(async {
+        let database = TempDatabase::new("perf-dashboard");
+        let pool = database.open().await;
+        migrator(i64::MAX).await.run(&pool).await.unwrap();
+        let built = dashboard_fixture(&pool).await;
+        let count = |table: &'static str| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_scalar::<_, i64>(&format!("SELECT count(*) FROM {table}"))
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+            }
+        };
+        println!(
+            "\nFixture built in {built:.1?}: {} issues, {} projects, {} events, {} work blocks, {} habits, {} completions, {} check-ins.",
+            count("issues").await,
+            count("projects").await,
+            count("events").await,
+            count("work_blocks").await,
+            count("habits").await,
+            count("habit_completions").await,
+            count("daily_checkins").await
+        );
+        let ws = DEFAULT_WORKSPACE;
+        let zone = "Europe/Paris";
+        let one_project: String =
+            sqlx::query_scalar("SELECT id FROM projects ORDER BY name LIMIT 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let mut rows: Vec<(&'static str, Duration)> = Vec::new();
+        for (label, from) in [("30 days", "2026-10-18"), ("366 days", "2025-11-17")] {
+            let to = "2026-11-16";
+            macro_rules! t {
+                ($name:expr, $call:expr) => {{
+                    $call.await.unwrap();
+                    let start = Instant::now();
+                    for _ in 0..10 {
+                        $call.await.unwrap();
+                    }
+                    rows.push((
+                        Box::leak(format!("{} ({label})", $name).into_boxed_str()) as &str,
+                        start.elapsed() / 10,
+                    ));
+                }};
+            }
+            t!(
+                "Workspace analytics (all sections)",
+                workspace_analytics(&pool, ws, from, to, None, zone, TODAY)
+            );
+            t!(
+                "Workspace analytics, one project",
+                workspace_analytics(&pool, ws, from, to, Some(&one_project), zone, TODAY)
+            );
+            t!(
+                "Progress analytics",
+                progress(&pool, ws, from, to, None, zone, TODAY)
+            );
+            t!(
+                "Schedule analytics",
+                schedule(&pool, ws, from, to, None, zone, TODAY)
+            );
+            t!(
+                "Habit statistics",
+                statistics(&pool, ws, from, to, None, TODAY)
+            );
+            t!("Mood analytics", mood(&pool, ws, from, to, false, TODAY));
+        }
+        println!("\n| Read | Time |\n|---|---:|");
+        for (name, time) in &rows {
+            println!("| {name} | {:.2} ms |", time.as_secs_f64() * 1000.0);
+        }
+        pool.close().await;
+    });
+}
