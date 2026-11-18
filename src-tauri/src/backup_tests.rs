@@ -295,6 +295,13 @@ fn after_a_crash_only_a_copy_of_all_database_files_keeps_the_last_commits() {
         let live = TempDatabase::new("backup-crash");
         let db = live.open().await;
         migrator(i64::MAX).await.run(&db).await.unwrap();
+        // Put the schema in the main file, so only the child's commit is left in
+        // the -wal file. A pool close alone does not always checkpoint (it did
+        // not on Linux CI), which made a main-file-only copy empty of tables.
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(&db)
+            .await
+            .unwrap();
         let path = db.connect_options().get_filename().to_path_buf();
         db.close().await;
 
