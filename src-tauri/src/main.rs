@@ -16,6 +16,8 @@ mod milestones;
 mod overview;
 #[cfg(test)]
 mod perf_tests;
+#[cfg(test)]
+mod phase4_journey;
 mod portability;
 mod projects;
 mod relationships;
