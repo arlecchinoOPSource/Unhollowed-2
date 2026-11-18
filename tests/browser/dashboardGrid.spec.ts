@@ -142,7 +142,7 @@ test("add a note from the library, configure it, and keep it across a restart", 
   await add.click();
   const library = page.getByRole("dialog", { name: "Add a widget" });
   await expect(library.getByText("Not available yet:")).toContainText(
-    "Line chart",
+    "Issue list",
   );
   // Previews use the real widget.
   await library.getByRole("button", { name: "Preview Notes" }).click();
@@ -361,4 +361,69 @@ test("the dashboard manager and its confirmations pass automated accessibility c
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await check();
+});
+
+test("charts from the library read the shared queries and pass accessibility checks", async ({
+  page,
+}) => {
+  await open(page);
+  await arrange(page);
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Bar chart" }).click();
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Line chart" }).click();
+  await page.getByRole("button", { name: "Settings: Line chart" }).click();
+  const dialog = page.getByRole("dialog", { name: /Settings: Line chart/ });
+  await dialog.getByLabel("Measure").selectOption("habit-completion");
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+
+  const bar = page.locator('[data-cell="bar-chart-1"]');
+  await expect(
+    bar.getByRole("heading", { name: "Issues completed" }),
+  ).toBeVisible();
+  // The seeded workspace completed nothing, so this is the empty state.
+  await expect(bar.locator('[data-chart-state="empty"]')).toContainText(
+    "No issues were completed in this period.",
+  );
+
+  const line = page.locator('[data-cell="line-chart-1"]');
+  await expect(
+    line.getByRole("heading", { name: "Habit completion" }),
+  ).toBeVisible();
+
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.evaluate(
+      (value) => (document.documentElement.dataset.theme = value),
+      theme,
+    );
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(violations.map((v) => `${theme} ${v.id}: ${v.help}`)).toEqual([]);
+  }
+});
+
+test("habit charts say they do not apply under a project filter", async ({
+  page,
+}) => {
+  await open(page);
+  await arrange(page);
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Line chart" }).click();
+  await page.getByRole("button", { name: "Settings: Line chart" }).click();
+  await page
+    .getByRole("dialog", { name: /Settings: Line chart/ })
+    .getByLabel("Measure")
+    .selectOption("habit-completion");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+  await page
+    .locator(".dash-controls select")
+    .first()
+    .selectOption({ index: 1 });
+  await expect(
+    page.locator('[data-cell="line-chart-1"] [data-chart-state="unavailable"]'),
+  ).toContainText("not part of a project");
 });

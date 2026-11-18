@@ -56,5 +56,6 @@ test("every field a type offers edits a key its own parse accepts", () => {
 test("the library offers only widgets this build can show", () => {
   expect(hasRenderer("notes")).toBe(true);
   expect(hasRenderer("heatmap")).toBe(true);
-  expect(hasRenderer("line-chart")).toBe(false);
+  expect(hasRenderer("line-chart")).toBe(true);
+  expect(hasRenderer("issue-list")).toBe(false);
 });

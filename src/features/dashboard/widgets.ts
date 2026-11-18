@@ -28,7 +28,13 @@ export type FieldSpec =
   | { kind: "textarea"; key: string; label: string; max: number }
   | { kind: "destinations"; key: string; label: string; max: number }
   /** The widget's own period, or none to follow the dashboard's. */
-  | { kind: "period"; key: string; label: string };
+  | { kind: "period"; key: string; label: string }
+  | {
+      kind: "choice";
+      key: string;
+      label: string;
+      options: readonly { value: string; label: string }[];
+    };
 
 /** Places in the app a shortcut may open. */
 export const DESTINATIONS: readonly Shortcut[] = [
@@ -165,6 +171,49 @@ const none = (
     ) => object | null,
   });
 
+const CHART_KEYS = ["metric", "period"];
+
+/** A chart widget: one measure from a fixed list, plus an optional period. */
+function chart(
+  type: string,
+  label: string,
+  description: string,
+  metrics: readonly { value: string; label: string }[],
+  sources: readonly DataSource[],
+) {
+  return make<{ metric: string; period?: PeriodOverride }>({
+    type,
+    label,
+    description,
+    sources,
+    filters: ["period", "project", "habit"],
+    size: [6, 5, 4, 3],
+    empty: "No data in this period.",
+    error: "This chart could not read its data.",
+    fields: [
+      { kind: "choice", key: "metric", label: "Measure", options: metrics },
+      { kind: "period", key: "period", label: "Period" },
+    ],
+    defaults: { metric: metrics[0].value },
+    parse: (raw) => {
+      if (raw === undefined || raw === null)
+        return { metric: metrics[0].value };
+      if (
+        !record(raw) ||
+        !Object.keys(raw).every((k) => CHART_KEYS.includes(k))
+      )
+        return null;
+      const metric = raw.metric ?? metrics[0].value;
+      if (!metrics.some((item) => item.value === metric)) return null;
+      const period = parsePeriodConfig(
+        raw.period === undefined ? undefined : { period: raw.period },
+      );
+      if (!period) return null;
+      return { metric: metric as string, ...period };
+    },
+  });
+}
+
 const definitions: WidgetDefinition[] = [
   none(
     "stat-card",
@@ -175,23 +224,25 @@ const definitions: WidgetDefinition[] = [
     [12, 2, 4, 2],
     "No activity in this period.",
   ),
-  none(
+  chart(
     "line-chart",
     "Line chart",
     "A measure over time.",
-    ["issues", "habits", "checkins", "calendar"],
-    ["period", "project"],
-    [6, 4, 4, 3],
-    "No data in this period.",
+    [
+      { value: "issues-completed", label: "Issues completed" },
+      { value: "habit-completion", label: "Habit completion" },
+    ],
+    ["issues", "habits"],
   ),
-  none(
+  chart(
     "bar-chart",
     "Bar chart",
-    "A measure by day, week, or project.",
-    ["issues", "habits", "calendar"],
-    ["period", "project"],
-    [6, 4, 4, 3],
-    "No data in this period.",
+    "A measure by day or week.",
+    [
+      { value: "issues-completed", label: "Issues completed" },
+      { value: "scheduled-time", label: "Scheduled time" },
+    ],
+    ["issues", "calendar"],
   ),
   none(
     "heatmap",

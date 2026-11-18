@@ -219,6 +219,22 @@ function Field({
       </fieldset>
     );
   }
+  if (spec.kind === "choice")
+    return (
+      <label className="dash-field">
+        {spec.label}
+        <select
+          value={typeof value === "string" ? value : spec.options[0].value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {spec.options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
   const links = Array.isArray(value) ? (value as Shortcut[]) : [];
   const chosen = new Set(links.map((link) => link.to));
   return (
