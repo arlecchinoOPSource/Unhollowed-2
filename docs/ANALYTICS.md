@@ -116,3 +116,13 @@ Mounted views refresh from a small client-side signal, `src/database/dataChanges
 - **Remembered on this device.** The period (and custom dates) and which sections are shown, in `localStorage` under `unhollowed-2-dashboard` with a version. On read, every field is validated on its own: an unknown preset, an invalid or too-long custom range, an unknown or repeated section, or a different version is replaced by its default without an error.
 - **Sections.** _Sections_ lists the five sections with a checkbox each; unchecked sections are not rendered or read. _Show all sections_ restores them.
 - **Links.** Issue links keep the project filter, and calendar links open the month containing the period's last day.
+
+## Widget registry (U2-P5-02)
+
+`src/features/dashboard/widgets.ts` is the typed table of dashboard widgets. It holds no data and runs no queries: each widget keeps reading its own analytics contract, so a metric means the same wherever it appears ([Metric contracts](METRICS.md)).
+
+- **Types.** `stat-card`, `line-chart`, `bar-chart`, `heatmap`, `issue-list`, `agenda-list`, `project-progress`, `milestone-progress`, `mood-trend`, `notes`, `shortcuts`. A type ID is stored in layouts and never renamed or reused. Types are fixed in code: no scripts, no external plugins.
+- **Each type declares** a label, a config `version`, the data `sources` that refresh it (the same names as "Keeping views current"), the dashboard `filters` it honors, a grid size (12 columns, with minimums), empty and error wording, `defaults`, and a `parse` that returns valid config or `null`.
+- **Instances.** A placed widget is `{ id, type, version, config? }`. IDs match `^[a-z0-9][a-z0-9-]{0,63}$` and are unique in a layout.
+- **Safe fallback.** `resolveWidget` never throws. An unknown type becomes a placeholder and its record is kept. Missing, invalid, or older config falls back to the defaults and says so. Unknown config keys are invalid, so no stored data can smuggle in behavior. Shortcuts accept only in-app paths.
+- **Phase 4 sections** are the default layout: `glance` is a `stat-card`, `progress` a `project-progress`, `schedule` an `agenda-list`, `habits` a `heatmap`, and `mood` a `mood-trend`. The IDs equal the saved section keys, so stored preferences keep working. `WidgetHost` renders them with unchanged semantics. Types without a renderer yet show "not available yet".

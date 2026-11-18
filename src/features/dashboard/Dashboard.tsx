@@ -17,11 +17,8 @@ import {
   type Preferences,
   type SectionKey,
 } from "./controls";
-import { GlanceSection } from "./GlanceSection";
-import { HabitsSection } from "./HabitsSection";
-import { MoodSection } from "./MoodSection";
-import { ProgressSection } from "./ProgressSection";
-import { ScheduleSection } from "./ScheduleSection";
+import { WidgetHost } from "./WidgetHost";
+import { defaultLayout } from "./widgets";
 import "./dashboard.css";
 
 /**
@@ -207,21 +204,15 @@ export function Dashboard() {
           {prefs.hidden.length === sections.length && (
             <p>All sections are hidden. Turn some on under Sections.</p>
           )}
-          {shown("glance") && <GlanceSection project={scope} period={period} />}
-          {shown("progress") && (
-            <ProgressSection project={scope} period={period} />
-          )}
-          {shown("schedule") && (
-            <ScheduleSection project={scope} period={period} />
-          )}
-          {shown("habits") && (
-            <HabitsSection
-              project={scope}
-              habit={habit || null}
-              period={period}
-            />
-          )}
-          {shown("mood") && <MoodSection project={scope} period={period} />}
+          {defaultLayout
+            .filter(({ id }) => shown(id as SectionKey))
+            .map((instance) => (
+              <WidgetHost
+                key={instance.id}
+                instance={instance}
+                context={{ project: scope, habit: habit || null, period }}
+              />
+            ))}
         </>
       )}
     </section>
