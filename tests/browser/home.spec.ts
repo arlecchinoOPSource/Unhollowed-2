@@ -245,3 +245,33 @@ test("checking a habit on Home updates its summary", async ({ page }) => {
     .click();
   await expect(habits).toContainText("0 of 2 done today.");
 });
+
+test("resume: in-progress issues by last change, and documents and projects with their dates and work links", async ({
+  page,
+}) => {
+  await open(page, {
+    __seedIssues: [
+      { title: "Draft the brief", status: "in_progress" },
+      { title: "Not started", status: "todo" },
+      { title: "Finished", status: "done" },
+    ],
+    __seedDocuments: ["Venue notes"],
+  });
+  const progress = section(page, "In progress");
+  await expect(progress).toContainText("Draft the brief");
+  await expect(progress).not.toContainText("Not started");
+  await expect(progress).not.toContainText("Finished");
+  await expect(progress).toContainText("updated");
+
+  const docs = section(page, "Recent documents");
+  await expect(docs.getByRole("link", { name: "Venue notes" })).toHaveAttribute(
+    "href",
+    /\/documents\?doc=.+/,
+  );
+  await expect(docs).toContainText("changed");
+
+  const projects = section(page, "Active projects");
+  await expect(
+    projects.getByRole("link", { name: "Issues" }).first(),
+  ).toHaveAttribute("href", /\/projects\/.+\/issues/);
+});

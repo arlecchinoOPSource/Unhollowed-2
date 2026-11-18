@@ -8,6 +8,7 @@ import {
   ActiveProjects,
   Attention,
   HabitsToday,
+  InProgress,
   Milestones,
   RecentDocuments,
 } from "./HomeSections";
@@ -35,6 +36,7 @@ export function Home() {
           <QuickActions today={today} />
           <div className="home-grid" data-today={today}>
             <Attention today={today} />
+            <InProgress today={today} />
             <TodaySchedule today={today} />
             <HabitsToday today={today} />
             <Milestones today={today} />

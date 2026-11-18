@@ -39,3 +39,12 @@ The **Quick actions** row on Home starts everyday work in the workflow that alre
 
 - **Refresh.** Writes go through the shared command wrapper, so a successful change publishes its sources and the Home sections and dashboard widgets that read them refresh. A failed write publishes nothing.
 - **Cancel and failure.** Cancel closes the form and returns focus to the button that opened it. A failed create keeps what was typed, shows the error, and leaves focus in the field. A successful create returns focus to its button and announces the result. The dialogs return focus to their opener.
+
+### Resuming work (U2-P5-16)
+
+Home shows where to pick work back up without keeping a browsing log.
+
+- **In progress.** Open issues whose status is In progress, most recently changed first, at most 5, each with the day it last changed. Archived issues are never listed.
+- **Recent documents.** Ordered by when each was last opened, or for one never opened, when it last changed (the line says "opened" or "changed"). Ties break by ID, so the order is stable. Archived documents are omitted. A document deleted since is simply gone from the list; if one is deleted between listing and clicking, the editor says it is unavailable.
+- **Active projects.** Active projects only, most recently changed first, each with a link to the project and one to its issues. Completed, on-hold, and archived projects are omitted.
+- **No new metadata.** The only resume state is `documents.opened_at`, which already exists. It is one timestamp per document, owned by the document's workspace, written when the document is opened or created, kept for as long as the document exists (including while archived), and removed with the document. Issues and projects use their own `updated_at`. Nothing records which screens were visited, and nothing is stored for projects or issues beyond what they already hold. A test checks that opening is workspace-scoped and that the timestamp survives archiving.

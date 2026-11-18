@@ -17,6 +17,7 @@ import {
 import { listProjects, projectError } from "../../database/projects";
 import { queryKey, useSharedQuery } from "../../database/sharedQuery";
 import { fullDate } from "../calendar/monthGrid";
+import { localDate } from "../today/dates";
 import { activeProjects, habitsDue, LIMIT, recentDocuments } from "./homeData";
 
 /** One Home section: its own loading, error with retry, and empty state. */
@@ -73,6 +74,7 @@ function IssueSection({
   to,
   open,
   empty,
+  showUpdated = false,
 }: {
   id: string;
   title: string;
@@ -81,6 +83,8 @@ function IssueSection({
   to: string;
   open: string;
   empty: string;
+  /** Say when each issue last changed, for lists ordered by activity. */
+  showUpdated?: boolean;
 }) {
   const { data, error, loading, retry } = useSharedQuery(
     queryKey("home-issues", id, today, query),
@@ -107,7 +111,14 @@ function IssueSection({
                 <Link to={links.issue(issue.id)} state={{ from: "/" }}>
                   ISS-{issue.number} {issue.title}
                 </Link>
-                {issue.dueDate && <span> due {fullDate(issue.dueDate)}</span>}
+                {showUpdated ? (
+                  <span>
+                    {" "}
+                    updated {fullDate(localDate(new Date(issue.updatedAt)))}
+                  </span>
+                ) : (
+                  issue.dueDate && <span> due {fullDate(issue.dueDate)}</span>
+                )}
               </li>
             ))}
           </ul>
@@ -158,6 +169,27 @@ export function Attention({ today }: { today: string }) {
         empty="Nothing is due today."
       />
     </>
+  );
+}
+
+/** Issues marked in progress, most recently changed first: where to resume. */
+export function InProgress({ today }: { today: string }) {
+  return (
+    <IssueSection
+      id="home-in-progress"
+      title="In progress"
+      today={today}
+      query={{
+        state: "open",
+        statuses: ["in_progress"],
+        sort: "updated",
+        direction: "desc",
+      }}
+      to="/issues?status=in_progress"
+      open="Open in-progress issues"
+      empty="No issues are in progress."
+      showUpdated
+    />
   );
 }
 
@@ -314,6 +346,11 @@ export function RecentDocuments({ today }: { today: string }) {
             >
               {doc.title || "Untitled"}
             </Link>
+            <span>
+              {doc.openedAt
+                ? ` opened ${fullDate(localDate(new Date(doc.openedAt)))}`
+                : ` changed ${fullDate(localDate(new Date(doc.updatedAt)))}`}
+            </span>
           </li>
         ))}
       </ul>
@@ -345,6 +382,8 @@ export function ActiveProjects({ today }: { today: string }) {
         {projects.map((project) => (
           <li key={project.id}>
             <Link to={links.project(project.id)}>{project.name}</Link>
+            <span> · </span>
+            <Link to={links.projectIssues(project.id)}>Issues</Link>
           </li>
         ))}
       </ul>
