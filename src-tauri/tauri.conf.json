@@ -34,7 +34,6 @@
     "publisher": "Arlecchino",
     "copyright": "Copyright © 2026 Arlecchino",
     "license": "MIT",
-    "licenseFile": "../LICENSE",
     "resources": {
       "../LICENSE": "LICENSE",
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
