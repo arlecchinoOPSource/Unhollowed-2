@@ -352,3 +352,25 @@ fn after_a_crash_only_a_copy_of_all_database_files_keeps_the_last_commits() {
         let _ = std::fs::remove_dir_all(&copies);
     });
 }
+
+/// Writes a database as an older release (migrations 1 to 5, one project and
+/// one issue) to the path in `U2_OLD_DATABASE`, for testing that a packaged
+/// app upgrades it. Not part of normal runs:
+/// `U2_OLD_DATABASE=/tmp/old/workspace.sqlite3 cargo test write_older_release_fixture -- --ignored`
+#[test]
+#[ignore]
+fn write_older_release_fixture() {
+    let path = std::env::var("U2_OLD_DATABASE").expect("set U2_OLD_DATABASE");
+    tauri::async_runtime::block_on(async {
+        use sqlx::migrate::MigrateDatabase;
+        let url = format!("sqlite:{path}");
+        let _ = sqlx::Sqlite::drop_database(&url).await;
+        sqlx::Sqlite::create_database(&url).await.unwrap();
+        let pool = SqlitePool::connect(&url).await.unwrap();
+        migrator(5).await.run(&pool).await.unwrap();
+        let project = add_project(&pool, DEFAULT_WORKSPACE, "Kept across upgrade").await;
+        crate::test_support::add_issue_before_upgrade(&pool, DEFAULT_WORKSPACE, Some(&project))
+            .await;
+        pool.close().await;
+    });
+}
