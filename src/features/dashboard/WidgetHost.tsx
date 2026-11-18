@@ -4,6 +4,7 @@ import type { Period } from "./controls";
 import { GlanceSection } from "./GlanceSection";
 import { HabitsSection } from "./HabitsSection";
 import { ChartWidget } from "./ChartWidget";
+import { ComparisonWidget } from "./ComparisonWidget";
 import { MoodSection } from "./MoodSection";
 import { ProgressSection } from "./ProgressSection";
 import { ScheduleSection } from "./ScheduleSection";
@@ -49,6 +50,12 @@ const renderers: Record<string, Renderer> = {
     <ChartWidget
       kind="bar"
       metric={(config as { metric: string }).metric}
+      context={context}
+    />
+  ),
+  comparison: (context, config) => (
+    <ComparisonWidget
+      grain={(config as { grain: "week" | "month" }).grain}
       context={context}
     />
   ),

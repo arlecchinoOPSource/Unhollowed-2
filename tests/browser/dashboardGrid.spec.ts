@@ -427,3 +427,38 @@ test("habit charts say they do not apply under a project filter", async ({
     page.locator('[data-cell="line-chart-1"] [data-chart-state="unavailable"]'),
   ).toContainText("not part of a project");
 });
+
+test("the comparison keeps each unit apart, shows coverage, and leaves out habits and mood under a project", async ({
+  page,
+}) => {
+  await open(page);
+  await arrange(page);
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Comparison" }).click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+
+  const widget = page.locator('[data-cell="comparison-1"]');
+  await expect(widget).toContainText("not combined into a score");
+  for (const title of [
+    "Habit consistency",
+    "Issues completed",
+    "Scheduled time",
+    "Mood",
+  ])
+    await expect(
+      widget
+        .locator(`[data-chart-state], [data-comparison="${title}"]`)
+        .first(),
+    ).toBeAttached();
+  await expect(widget).toContainText(
+    "Planned on the calendar, not time worked.",
+  );
+
+  await page
+    .locator(".dash-controls select")
+    .first()
+    .selectOption({ index: 1 });
+  await expect(
+    widget.locator('[data-chart-state="unavailable"]').first(),
+  ).toContainText("not part of a project");
+});
