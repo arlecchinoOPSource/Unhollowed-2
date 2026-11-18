@@ -43,3 +43,66 @@ Not verified here, and to be checked on the packaged apps (macOS WKWebView and W
 - Focus ring rendering and `<details>` and `<dialog>` behavior in the native web views, which differ slightly from Chromium.
 - Windows high-contrast mode and operating-system text scaling at 200%.
 - Real pointer and touch input on trackpads and touch screens.
+
+## Dashboard performance, cache correctness, and recovery (U2-P5-19)
+
+Run on Apple M5, macOS 26.5.1. Nothing is cached: authoritative data is read every time, and the only sharing is between identical reads that are in flight at the same moment.
+
+### Backend reads at a heavy workspace
+
+`measure_dashboard` in `src-tauri/src/perf_tests.rs` builds one disposable file database and times each dashboard read (10 runs after a warm-up, release build):
+
+```sh
+cargo test --release --manifest-path src-tauri/Cargo.toml measure_dashboard -- --ignored --nocapture
+```
+
+Fixture: 5,250 issues in 13 projects (with milestones, an objective, labels, and parent links), 500 events across a year (repeating series, changed and canceled occurrences, reminders and links) with 250 work blocks, 30 habits with 38,241 completions over five years, and 913 check-ins.
+
+| Read                               | 30 days | 366 days |
+| ---------------------------------- | ------: | -------: |
+| Workspace analytics (all sections) | 75.7 ms |  86.5 ms |
+| Workspace analytics, one project   | 12.6 ms |  28.4 ms |
+| Progress analytics                 | 18.4 ms |  23.4 ms |
+| Schedule analytics                 | 21.6 ms |  59.2 ms |
+| Habit statistics                   | 56.7 ms |  52.7 ms |
+| Mood analytics                     |  0.1 ms |   0.9 ms |
+
+The reads run in parallel from separate widgets, so the dashboard's backend cost is the slowest read plus contention, not the sum. The workspace read's time is dominated by its habit section (57 of 76 ms), the same statistics the Habits section asks for separately, so a dashboard with both computes habit statistics twice. That duplication is recorded rather than removed here: merging them would change the analytics contract, and 2 × 57 ms is within the one-page budget. It is the first place to look if habit history grows much past five years of 30 habits.
+
+### Requests
+
+`dashboardPerformance.spec.ts` counts the IPC calls a dashboard with nine widgets (the five sections plus a line chart, a bar chart, the comparison, and the insights) sends on load.
+
+| Source              | Widgets that read it | Requests before sharing | Requests now |
+| ------------------- | -------------------: | ----------------------: | -----------: |
+| Progress analytics  |                    5 |                       5 |            1 |
+| Workspace analytics |                    2 |                       2 |            1 |
+| Habit statistics    |                    3 |                       3 |            1 |
+| Check-in analytics  |                    2 |                       2 |            1 |
+| Schedule analytics  |                    3 |                       3 |            2 |
+| **Total**           |                      |                  **15** |        **6** |
+
+The schedule is read for the period and, for the insights, for tomorrow. "Before sharing" is one request per reading widget, as the sections did before U2-P5-04.
+
+### Render cost
+
+The opt-in fixture (`PERF=1 npx playwright test dashboardPerformance`) times in-app navigation to a dashboard of nine widgets against the instant mocked backend, so it measures the UI only: median of three runs, **65 ms** until the insights list and the comparison have their content.
+
+### Correctness
+
+| Property                                                | Test                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A write refreshes only what reads its sources           | `a write refreshes only the widgets that read what it changed`: checking a habit on Home re-reads habits once and not issues, projects, or progress                                                                                                       |
+| A read begun before a write is not joined after it      | `sharedQuery.test.tsx`                                                                                                                                                                                                                                    |
+| An older answer never replaces a newer one              | `sharedQuery.test.tsx`; `rapid period changes leave the dashboard on the last choice`                                                                                                                                                                     |
+| Different scopes never share                            | `sharedQuery.test.tsx`: equal keys share, differing period, project, or zone do not                                                                                                                                                                       |
+| Failed reads clear numbers and can be retried           | `sharedQuery.test.tsx`; the dashboard's failed-load tests                                                                                                                                                                                                 |
+| Malformed layouts recover without losing supported data | `a malformed layout recovers what it can`: bad settings fall back to defaults with a notice, an unknown widget type and its config are kept, sizes are clamped, only an unusable ID is dropped, and nothing is rewritten until the user changes something |
+| Restart                                                 | `dashboards` tests: layouts, names, and the default survive; the Phase 5 journey test                                                                                                                                                                     |
+| Missing records                                         | Filters are never stored, so a removed project or habit cannot persist across a restart; links to removed records show the target screen's own message                                                                                                    |
+
+### Gaps
+
+- Timings are from one machine. Compare against these baselines on the same hardware, not across machines.
+- The render timing uses the mocked backend, so the real cost adds the backend reads above. The webview's own IPC overhead is not measured.
+- Fixtures are synthetic. A real workspace's mix of repeating series and archived habits may behave differently.
