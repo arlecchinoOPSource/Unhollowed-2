@@ -189,3 +189,23 @@ export function readLayout(
 /** The widgets in reading order: top to bottom, then left to right. */
 export const ordered = (widgets: readonly PlacedWidget[]) =>
   [...widgets].sort((a, b) => a.y - b.y || a.x - b.x);
+
+/** A unique, well-formed ID for a new instance of `type`. */
+export function newWidgetId(
+  type: string,
+  existing: readonly { id: string }[],
+): string {
+  const taken = new Set(existing.map((item) => item.id));
+  for (let n = 1; ; n++) {
+    const id = `${type}-${n}`.slice(0, 64);
+    if (!taken.has(id)) return id;
+  }
+}
+
+/** The same widgets with fresh instance IDs, for a copy of a dashboard. */
+export function withNewIds(widgets: readonly PlacedWidget[]): PlacedWidget[] {
+  const made: PlacedWidget[] = [];
+  for (const widget of widgets)
+    made.push({ ...widget, id: newWidgetId(widget.type, made) });
+  return made;
+}

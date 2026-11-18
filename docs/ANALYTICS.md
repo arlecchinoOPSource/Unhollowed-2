@@ -190,3 +190,16 @@ While arranging, **Add widget** opens the library and each widget has **Settings
 - **Validation.** The draft is checked with the same `parse` used when a layout is read, so **Apply** is enabled only for settings that would survive a restart; otherwise an alert explains. **Reset to defaults** restores the type's defaults in the form.
 - **Removing.** Takes the widget out of the draft; Cancel brings it back, and a removed built-in section can be added again from the library.
 - **Focus.** The dialogs are modal. Escape or Close returns focus to the button that opened them.
+
+## Named dashboards and starters (U2-P5-08)
+
+The dashboard page switches between the workspace's dashboards. **Manage dashboards** holds New dashboard, Rename, Duplicate, Make default, Reset layout, Delete, and Arrange widgets.
+
+- **Default.** The default is the dashboard with the lowest `position`; it opens first, and the picker marks it "(default)". Make default moves one to the front in a single transaction (`set_default_dashboard`) and keeps the others' order. A new dashboard goes last, so it never becomes the default by accident.
+- **Names** are 1 to 80 characters, unique per workspace ignoring case. At most 20 dashboards.
+- **Starters.** General Productivity, Student Workspace, Project Management, and Personal Development (`templates.ts`). A starter is a list of registry widget types with a width and column, turned into the ordinary layout format, then validated and saved like any other dashboard. Each use gets new instance IDs and shares nothing with earlier ones. They use only widgets this build can show. Starters add no separate analytics: widgets read the same sources as always.
+- **Duplicate** copies the layout (including widget settings such as notes) with new instance IDs and a new dashboard ID.
+- **Delete** asks first and says that the layout is removed, that records are not touched, that it cannot be undone, and what becomes the default. Deleting the open dashboard opens the default. Deleting the only dashboard creates a new General Productivity dashboard, so there is always one to open.
+- **Reset layout** asks first and replaces the open dashboard's widgets with the General Productivity starter, keeping its period. Widget settings are lost, and the dialog says so.
+- **Newer layouts** cannot be renamed, duplicated, or reset: they are left as the newer release wrote them.
+- **Persistence.** Dashboards, their names, layouts, and the default are in the database, so they survive a restart (browser test: create, rename, duplicate, make default, reload).

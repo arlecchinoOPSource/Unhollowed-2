@@ -250,3 +250,67 @@
   background: var(--surface);
   color: var(--text);
 }
+
+.dash-manager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.dash-manager label:not(.dash-check, .dash-field) {
+  display: grid;
+  gap: 4px;
+}
+
+.dash-manager select {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.dash-field input:not([type="checkbox"], [type="radio"]) {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.dash-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dash-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin: 8px 0;
+}
+
+.dash-toolbar .dash-manager,
+.dash-toolbar .dash-edit {
+  margin: 0;
+}
+
+.dash-manager > label:not(.dash-check, .dash-field) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-manager > p:empty,
+.dash-edit > p:empty {
+  display: none;
+}

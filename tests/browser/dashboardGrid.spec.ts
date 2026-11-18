@@ -13,6 +13,14 @@ async function open(page: Page) {
   ).toBeVisible();
 }
 
+/** Opens the manage menu if needed, then starts arranging. */
+async function arrange(page: Page) {
+  const menu = page.locator(".dash-manager details");
+  if (!(await menu.evaluate((element) => (element as HTMLDetailsElement).open)))
+    await menu.locator("summary").click();
+  await page.getByRole("button", { name: "Arrange widgets" }).click();
+}
+
 const order = (page: Page) =>
   page
     .locator("[data-cell]")
@@ -32,7 +40,7 @@ test("arranging by button: cancel keeps the layout, save keeps the new one acros
     "mood",
   ]);
 
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   await page.getByRole("button", { name: "Move up: Schedule" }).click();
   await expect(page.locator(".dash-arrange-note")).toContainText("Schedule:");
   expect(await order(page)).toEqual([
@@ -45,12 +53,10 @@ test("arranging by button: cancel keeps the layout, save keeps the new one acros
   await page.getByRole("button", { name: "Cancel" }).click();
   expect((await order(page))[1]).toBe("progress");
 
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   await page.getByRole("button", { name: "Move up: Schedule" }).click();
   await page.getByRole("button", { name: "Save layout" }).click();
-  await expect(
-    page.getByRole("button", { name: "Arrange widgets" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add widget" })).toHaveCount(0);
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "At a glance" }),
@@ -60,7 +66,7 @@ test("arranging by button: cancel keeps the layout, save keeps the new one acros
 
 test("the keyboard moves and resizes a focused widget", async ({ page }) => {
   await open(page);
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   const frame = page.getByRole("group", { name: "Arrange Habits" });
   await frame.focus();
   await page.keyboard.press("Shift+ArrowLeft");
@@ -79,7 +85,7 @@ test("the keyboard moves and resizes a focused widget", async ({ page }) => {
 
 test("two half-width widgets can share a row", async ({ page }) => {
   await open(page);
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   const press = async (name: string, times: number) => {
     for (let i = 0; i < times; i++)
       await page.getByRole("button", { name }).click();
@@ -103,7 +109,7 @@ test("a failed save keeps the last committed layout and says so", async ({
   page,
 }) => {
   await open(page);
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   await page.getByRole("button", { name: "Move up: Schedule" }).click();
   await page.evaluate(() => Object.assign(window, { __failDashboards: true }));
   await page.getByRole("button", { name: "Save layout" }).click();
@@ -131,7 +137,7 @@ test("add a note from the library, configure it, and keep it across a restart", 
   page,
 }) => {
   await open(page);
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   const add = page.getByRole("button", { name: "Add widget" });
   await add.click();
   const library = page.getByRole("dialog", { name: "Add a widget" });
@@ -167,7 +173,7 @@ test("settings that would not survive a restart cannot be applied; reset restore
   page,
 }) => {
   await open(page);
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   await page.getByRole("button", { name: "Add widget" }).click();
   await page.getByRole("button", { name: "Add Notes" }).click();
   await page.getByRole("button", { name: "Settings: Notes" }).click();
@@ -186,7 +192,7 @@ test("shortcuts are chosen from places in the app; widgets can be removed", asyn
   page,
 }) => {
   await open(page);
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   await page.getByRole("button", { name: "Add widget" }).click();
   await page.getByRole("button", { name: "Add Shortcuts" }).click();
   await page.getByRole("button", { name: "Settings: Shortcuts" }).click();
@@ -213,7 +219,7 @@ test("arrange mode and its dialogs pass automated accessibility checks", async (
   page,
 }) => {
   await open(page);
-  await page.getByRole("button", { name: "Arrange widgets" }).click();
+  await arrange(page);
   const check = async () => {
     const { violations } = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -225,5 +231,134 @@ test("arrange mode and its dialogs pass automated accessibility checks", async (
   await check();
   await page.getByRole("button", { name: "Add Notes" }).click();
   await page.getByRole("button", { name: "Settings: Notes" }).click();
+  await check();
+});
+
+const manage = async (page: Page) => {
+  const menu = page.locator(".dash-manager details");
+  if (!(await menu.evaluate((element) => (element as HTMLDetailsElement).open)))
+    await menu.locator("summary").click();
+};
+
+test("named dashboards: create from a template, rename, duplicate, default, and delete with confirmation", async ({
+  page,
+}) => {
+  await open(page);
+  const picker = page.getByRole("combobox", { name: "Dashboard", exact: true });
+  await expect(picker.locator("option")).toHaveText(["Dashboard (default)"]);
+
+  // New from a template.
+  await manage(page);
+  await page.getByRole("button", { name: "New dashboard" }).click();
+  const create = page.getByRole("dialog", { name: "New dashboard" });
+  await create.getByLabel("Name").fill("School");
+  await create.getByLabel(/Student Workspace/).check();
+  await create.getByRole("button", { name: "Create" }).click();
+  await expect(picker).toHaveValue(/dashboard-/);
+  await expect(picker.locator("option:checked")).toHaveText("School");
+  await expect(page.locator('[data-cell^="notes-"]')).toHaveCount(1);
+  await expect(page.locator('[data-cell="glance"]')).toHaveCount(0);
+
+  // Names are unique.
+  await page.getByRole("button", { name: "New dashboard" }).click();
+  const again = page.getByRole("dialog", { name: "New dashboard" });
+  await again.getByLabel("Name").fill("school");
+  await again.getByRole("button", { name: "Create" }).click();
+  await expect(again.getByRole("alert")).toContainText("already has this name");
+  await again.getByRole("button", { name: "Cancel" }).click();
+
+  // Rename and duplicate.
+  await page.getByRole("button", { name: "Rename" }).click();
+  const rename = page.getByRole("dialog", { name: "Rename dashboard" });
+  await rename.getByLabel("Name").fill("Semester");
+  await rename.getByRole("button", { name: "Rename" }).click();
+  await expect(picker.locator("option:checked")).toHaveText("Semester");
+  await page.getByRole("button", { name: "Duplicate" }).click();
+  const copy = page.getByRole("dialog", { name: "Duplicate dashboard" });
+  await expect(copy.getByLabel("Name")).toHaveValue("Semester copy");
+  await copy.getByRole("button", { name: "Create" }).click();
+  await expect(picker.locator("option:checked")).toHaveText("Semester copy");
+
+  // Make the copy the default; it survives a restart.
+  await page.getByRole("button", { name: "Make default" }).click();
+  await expect(picker.locator("option:checked")).toHaveText(
+    "Semester copy (default)",
+  );
+  await page.reload();
+  await expect(picker.locator("option:checked")).toHaveText(
+    "Semester copy (default)",
+  );
+  await expect(picker.locator("option")).toHaveCount(3);
+
+  // Deleting asks first and says what is lost.
+  await manage(page);
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Delete dashboard?" });
+  await expect(confirm).toContainText("cannot be undone");
+  await expect(confirm).toContainText("default");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(picker.locator("option")).toHaveCount(3);
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete dashboard" }).click();
+  await expect(picker.locator("option")).toHaveCount(2);
+  // The next dashboard became the default and opened.
+  await expect(picker.locator("option").first()).toContainText("(default)");
+});
+
+test("deleting the only dashboard leaves a usable General Productivity one", async ({
+  page,
+}) => {
+  await open(page);
+  await manage(page);
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("only dashboard");
+  await page.getByRole("button", { name: "Delete dashboard" }).click();
+  await expect(
+    page
+      .getByRole("combobox", { name: "Dashboard", exact: true })
+      .locator("option"),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", { name: "At a glance" }),
+  ).toBeVisible();
+});
+
+test("reset layout asks first and restores the starter widgets", async ({
+  page,
+}) => {
+  await open(page);
+  await arrange(page);
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Notes" }).click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+  await expect(page.locator('[data-cell="notes-1"]')).toHaveCount(1);
+  await manage(page);
+  await page.getByRole("button", { name: "Reset layout" }).click();
+  const confirm = page.getByRole("dialog", { name: "Reset layout?" });
+  await expect(confirm).toContainText("lost");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator('[data-cell="notes-1"]')).toHaveCount(1);
+  await page.getByRole("button", { name: "Reset layout" }).click();
+  await page.getByRole("button", { name: "Reset layout" }).last().click();
+  await expect(page.locator('[data-cell="notes-1"]')).toHaveCount(0);
+  await expect(page.locator("[data-cell]")).toHaveCount(5);
+});
+
+test("the dashboard manager and its confirmations pass automated accessibility checks", async ({
+  page,
+}) => {
+  await open(page);
+  const check = async () => {
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  };
+  await manage(page);
+  await check();
+  await page.getByRole("button", { name: "New dashboard" }).click();
+  await check();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await check();
 });

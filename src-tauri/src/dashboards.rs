@@ -230,6 +230,14 @@ pub async fn save(
             if count >= MAX_DASHBOARDS {
                 return Err(DashboardError::TooMany);
             }
+            // After the last one, so a new dashboard never becomes the default.
+            let (next_position,): (i64,) = sqlx::query_as(
+                "SELECT coalesce(max(position) + 1, 0) FROM dashboards WHERE workspace_id = ?",
+            )
+            .bind(workspace)
+            .fetch_one(pool)
+            .await
+            .map_err(storage_failed)?;
             sqlx::query_as(&format!(
                 "INSERT INTO dashboards
                      (id, workspace_id, name, name_key, position, layout_version, layout)
@@ -239,7 +247,7 @@ pub async fn save(
             .bind(workspace)
             .bind(name)
             .bind(key)
-            .bind(count)
+            .bind(next_position)
             .bind(LAYOUT_VERSION)
             .bind(layout)
             .fetch_one(pool)
@@ -285,6 +293,41 @@ pub async fn save(
     dashboard(row)
 }
 
+/// Makes a dashboard the default: the one opened first. The others keep
+/// their order behind it. One transaction, so there is never no default.
+pub async fn set_default(
+    pool: &SqlitePool,
+    workspace: &str,
+    id: &str,
+) -> Result<(), DashboardError> {
+    let mut tx = pool.begin().await.map_err(storage_failed)?;
+    let ids: Vec<(String,)> = sqlx::query_as(
+        "SELECT id FROM dashboards WHERE workspace_id = ? ORDER BY position, name_key, id",
+    )
+    .bind(workspace)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(storage_failed)?;
+    if !ids.iter().any(|(item,)| item == id) {
+        return Err(DashboardError::NotFound);
+    }
+    let order = std::iter::once(id.to_owned()).chain(
+        ids.into_iter()
+            .map(|(item,)| item)
+            .filter(|item| item != id),
+    );
+    for (position, item) in order.enumerate() {
+        sqlx::query("UPDATE dashboards SET position = ? WHERE id = ? AND workspace_id = ?")
+            .bind(position as i64)
+            .bind(item)
+            .bind(workspace)
+            .execute(&mut *tx)
+            .await
+            .map_err(storage_failed)?;
+    }
+    tx.commit().await.map_err(storage_failed)
+}
+
 /// Removes a dashboard. Only its layout is deleted; no workspace data is.
 pub async fn remove(pool: &SqlitePool, workspace: &str, id: &str) -> Result<(), DashboardError> {
     let removed = sqlx::query("DELETE FROM dashboards WHERE id = ? AND workspace_id = ?")
@@ -323,6 +366,15 @@ pub async fn save_dashboard(
 ) -> Result<Dashboard, DashboardError> {
     let (pool, workspace) = scope(&instances).await?;
     save(&pool, &workspace, id.as_deref(), &name, layout).await
+}
+
+#[tauri::command]
+pub async fn set_default_dashboard(
+    instances: State<'_, DbInstances>,
+    id: String,
+) -> Result<(), DashboardError> {
+    let (pool, workspace) = scope(&instances).await?;
+    set_default(&pool, &workspace, &id).await
 }
 
 #[tauri::command]
