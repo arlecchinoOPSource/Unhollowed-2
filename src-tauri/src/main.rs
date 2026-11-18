@@ -11,6 +11,8 @@ mod document_links;
 mod documents;
 mod goals;
 mod habits;
+#[cfg(test)]
+mod integrity_tests;
 mod issues;
 mod labels;
 mod milestones;
