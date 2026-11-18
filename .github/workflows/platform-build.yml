@@ -29,8 +29,44 @@ concurrency:
   group: desktop-packaging-${{ github.event_name }}-${{ github.run_id }}
 
 jobs:
+  # Runs only for tag pushes. The package job waits for it, so an unreviewed,
+  # mismatched, or CI-failing tag never produces installers.
+  verify-tag:
+    name: Verify release tag
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Tag matches the version and the commit is on main
+        run: |
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          bash scripts/verify-release-tag.sh "$GITHUB_REF_NAME"
+      - name: Quick CI passed for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          result="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name == "Quick checks (Ubuntu)")] | map(.conclusion) | join(",")')"
+          echo "Quick checks conclusions for $GITHUB_SHA: ${result:-none}"
+          case ",$result," in
+            *,success,*) ;;
+            *) echo "::error::Quick CI has not succeeded for this commit. Fix it or re-run it; do not bypass it."; exit 1 ;;
+          esac
+
   package:
     name: Package ${{ matrix.platform }}
+    needs: [verify-tag]
+    if: ${{ !cancelled() && (needs.verify-tag.result == 'success' || needs.verify-tag.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
@@ -62,13 +98,33 @@ jobs:
         with:
           args: --ci --no-sign --bundles ${{ matrix.platform == 'windows' && 'nsis,msi' || 'app,dmg' }} -- --locked
           uploadUpdaterJson: false
+      - name: Stage, verify, and checksum the installers
+        shell: bash
+        run: |
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          mkdir -p release-artifacts
+          bundle=src-tauri/target/release/bundle
+          if [ "${{ matrix.platform }}" = windows ]; then
+            cp "$bundle"/nsis/*.exe "$bundle"/msi/*.msi release-artifacts/
+          else
+            cp "$bundle"/dmg/*.dmg release-artifacts/
+          fi
+          bash scripts/verify-artifacts.sh "${{ matrix.platform }}" release-artifacts "$version"
+      - name: Record installer signatures
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = windows ]; then
+            pwsh -Command "Get-ChildItem release-artifacts/*.exe, release-artifacts/*.msi | ForEach-Object { '{0}: {1}' -f \$_.Name, (Get-AuthenticodeSignature \$_.FullName).Status }" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            for app in src-tauri/target/release/bundle/macos/*.app; do
+              echo "$(basename "$app"): $(codesign -dv "$app" 2>&1 | grep -E 'Signature|TeamIdentifier' | tr '\n' ' ')" | tee -a "$GITHUB_STEP_SUMMARY"
+            done
+          fi
       - name: Upload validation installers
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: unhollowed-2-${{ matrix.platform }}-${{ runner.arch }}
-          path: |
-            src-tauri/target/release/bundle/${{ matrix.platform == 'windows' && 'nsis/*.exe' || 'dmg/*.dmg' }}
-            ${{ matrix.platform == 'windows' && 'src-tauri/target/release/bundle/msi/*.msi' || '' }}
+          path: release-artifacts/*
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
