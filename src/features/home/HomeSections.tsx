@@ -1,10 +1,14 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { links } from "../../app/links";
 import { analyticsError, getProgressAnalytics } from "../../database/analytics";
 import { loadLibrary } from "../../database/documentLibrary";
 import { deviceZone } from "../../database/events";
-import { getHabitMonth, habitError } from "../../database/habits";
+import {
+  getHabitMonth,
+  habitError,
+  setHabitCompletion,
+} from "../../database/habits";
 import {
   issueError,
   queryIssues,
@@ -173,6 +177,15 @@ export function HabitsToday({ today }: { today: string }) {
     () => getHabitMonth(year, month),
     habitError,
   );
+  const [problem, setProblem] = useState("");
+  async function toggle(id: string, done: boolean) {
+    setProblem("");
+    try {
+      await setHabitCompletion(id, today, !done);
+    } catch (cause) {
+      setProblem(habitError(cause));
+    }
+  }
   const due = data ? habitsDue(data.habits, today) : [];
   const done = new Set(
     data?.completions.filter((c) => c.date === today).map((c) => c.habitId),
@@ -192,10 +205,23 @@ export function HabitsToday({ today }: { today: string }) {
         {due.slice(0, 10).map((habit) => (
           <li key={habit.id}>
             <Link to={links.habit(habit.id, today)}>{habit.name}</Link>
-            <span> {done.has(habit.id) ? "Done today" : "Not done yet"}</span>
+            <span>
+              {" "}
+              {done.has(habit.id) ? "Done today" : "Not done yet"}
+            </span>{" "}
+            <button
+              type="button"
+              className="action"
+              aria-pressed={done.has(habit.id)}
+              aria-label={`${done.has(habit.id) ? "Undo" : "Mark done"}: ${habit.name}`}
+              onClick={() => toggle(habit.id, done.has(habit.id))}
+            >
+              {done.has(habit.id) ? "Undo" : "Mark done"}
+            </button>
           </li>
         ))}
       </ul>
+      {problem && <p role="alert">{problem}</p>}
       {due.length > 0 && (
         <p>
           {due.filter((h) => done.has(h.id)).length} of {due.length} done today.

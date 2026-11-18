@@ -138,3 +138,110 @@ test("Home passes automated accessibility checks and keeps the area directory", 
     .analyze();
   expect(violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
 });
+
+const actions = (page: Page) =>
+  page.getByRole("region", { name: "Quick actions", exact: true });
+
+test("a new issue is created once through the existing command, and focus returns", async ({
+  page,
+}) => {
+  await open(page);
+  const button = actions(page).getByRole("button", { name: "New issue" });
+  await button.click();
+  const title = actions(page).getByLabel("Issue title");
+  await expect(title).toBeFocused();
+  await title.fill("Call the venue");
+  await actions(page).getByRole("button", { name: "Create issue" }).click();
+  await expect(actions(page).getByRole("status")).toContainText(
+    "Created ISS-1 Call the venue.",
+  );
+  await expect(button).toBeFocused();
+  // In-app navigation keeps the in-memory backend.
+  await page.getByRole("link", { name: "Issues", exact: true }).first().click();
+  await expect(page.getByText("Call the venue")).toHaveCount(1);
+});
+
+test("a failed or cancelled issue keeps what was typed and leaves focus usable", async ({
+  page,
+}) => {
+  await open(page);
+  await actions(page).getByRole("button", { name: "New issue" }).click();
+  await actions(page).getByLabel("Issue title").fill("Draft title");
+  await dispatch(page, "fail-command", "create_issue");
+  await actions(page).getByRole("button", { name: "Create issue" }).click();
+  await expect(actions(page).getByRole("alert")).toBeVisible();
+  await expect(actions(page).getByLabel("Issue title")).toHaveValue(
+    "Draft title",
+  );
+  await actions(page).getByRole("button", { name: "Cancel" }).click();
+  await expect(
+    actions(page).getByRole("button", { name: "New issue" }),
+  ).toBeFocused();
+});
+
+test("add event uses the event editor and says what it saved", async ({
+  page,
+}) => {
+  await open(page);
+  await actions(page).getByRole("button", { name: "Add event" }).click();
+  const editor = page.getByRole("dialog", { name: "New event" });
+  await editor.getByLabel("Title").fill("Standup");
+  await editor.getByRole("button", { name: "Save event" }).click();
+  await expect(actions(page).getByRole("status")).toContainText(
+    "Created event Standup.",
+  );
+});
+
+test("document, check-in, project, and issue-work actions open the screens that own them", async ({
+  page,
+}) => {
+  await open(page, { __seedIssues: [{ title: "Plan the offsite" }] });
+  await expect(
+    actions(page).getByRole("link", { name: "Record a check-in" }),
+  ).toHaveAttribute("href", "/mood");
+  await expect(
+    actions(page).getByRole("link", { name: /^Open / }),
+  ).toHaveAttribute("href", /\/projects\/.+/);
+
+  await actions(page)
+    .getByRole("button", { name: "Schedule issue work" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Schedule issue work" });
+  await dialog
+    .getByLabel("Issue")
+    .selectOption({ label: "ISS-1 Plan the offsite" });
+  await dialog.getByRole("button", { name: "Open issue" }).click();
+  await expect(page).toHaveURL(/\/issues\/.+/);
+  await expect(
+    page.getByRole("heading", { name: "Work sessions" }),
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "Home", exact: true }).first().click();
+  await actions(page).getByRole("button", { name: "New document" }).click();
+  await expect(page).toHaveURL(/\/documents\?doc=/);
+});
+
+test("checking a habit on Home updates its summary", async ({ page }) => {
+  await open(page, {
+    __seedHabits: {
+      today: "2026-11-17",
+      habits: [
+        { name: "Walk", startDate: "2026-11-01" },
+        { name: "Read", startDate: "2026-11-01" },
+      ],
+    },
+  });
+  const habits = section(page, "Habits today");
+  await expect(habits).toContainText("0 of 2 done today.");
+  await habits
+    .getByRole("button", { name: /^(Mark done|Undo): Walk$/ })
+    .click();
+  await expect(habits).toContainText("1 of 2 done today.");
+  await expect(
+    habits.getByRole("button", { name: /^(Mark done|Undo): Walk$/ }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await habits
+    .getByRole("button", { name: /^(Mark done|Undo): Walk$/ })
+    .click();
+  await expect(habits).toContainText("0 of 2 done today.");
+});
