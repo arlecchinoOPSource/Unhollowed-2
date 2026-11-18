@@ -40,8 +40,14 @@ test("a new widget starts below the others with its type's defaults", () => {
 
 test("every field a type offers edits a key its own parse accepts", () => {
   for (const definition of widgetTypes) {
-    for (const field of definition.fields ?? [])
-      expect(Object.keys(definition.defaults)).toContain(field.key);
+    for (const field of definition.fields ?? []) {
+      // A period override is optional, so it is absent from the defaults.
+      if (field.kind === "period") {
+        expect(
+          definition.parse({ [field.key]: { preset: "last7" } }),
+        ).not.toBeNull();
+      } else expect(Object.keys(definition.defaults)).toContain(field.key);
+    }
     // Defaults are always valid, so Reset always yields something saveable.
     expect(definition.parse(definition.defaults)).not.toBeNull();
   }

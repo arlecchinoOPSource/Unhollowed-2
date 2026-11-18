@@ -203,3 +203,12 @@ The dashboard page switches between the workspace's dashboards. **Manage dashboa
 - **Reset layout** asks first and replaces the open dashboard's widgets with the General Productivity starter, keeping its period. Widget settings are lost, and the dialog says so.
 - **Newer layouts** cannot be renamed, duplicated, or reset: they are left as the newer release wrote them.
 - **Persistence.** Dashboards, their names, layouts, and the default are in the database, so they survive a restart (browser test: create, rename, duplicate, make default, reload).
+
+## Widget periods and filters (U2-P5-09)
+
+The dashboard's controls (period, project, habit) are the globals. Each widget resolves what it uses with `effectiveScope` (`scope.ts`) from its registry capabilities:
+
+- **Period.** A widget whose type supports `period` follows the dashboard's period unless its saved config names its own: `{ "period": { "preset": "last7" | "last30" | "month" | "custom", "custom": { from, to } } }` (`custom` only with the custom preset). It resolves with the dashboard's own rules: inclusive local days, the last 7 days being today and the six before, up to 366 days, and an invalid custom range is not accepted (the widget then falls back to its defaults and says so). Set it under the widget's **Settings > Period for this widget**.
+- **Visible.** A widget with its own period shows "Period: Last 7 days (7 days), date to date (this widget's own period)" with **Use dashboard period** to reset it. Widgets that follow the dashboard show nothing extra because the dashboard's period line already applies. A period is never silently mixed: two widgets with different periods each state theirs.
+- **Record filters are not stored.** Project and habit filters name records that can be deleted, so they stay transient (see "Dashboard controls"). They apply only to widgets whose type supports them; elsewhere the widget says "The project filter does not apply here" or "The habit filter does not apply here". Sources that do not apply to a filter keep their `not_applicable` meaning inside the widget.
+- **Stored vs transient.** The override lives in the widget's config in the saved layout and survives a restart. Filters reset on every visit.

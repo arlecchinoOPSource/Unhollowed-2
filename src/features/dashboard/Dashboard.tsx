@@ -16,6 +16,7 @@ import {
 } from "./controls";
 import { ordered, type DashboardLayout } from "./layout";
 import { describe, move, resize, settle } from "./grid";
+import { effectiveScope } from "./scope";
 import { newWidget, WidgetLibrary, WidgetSettings } from "./WidgetLibrary";
 import { DashboardManager } from "./DashboardManager";
 import { useDashboardLayout } from "./useDashboardLayout";
@@ -316,6 +317,45 @@ export function Dashboard() {
                   );
                 };
                 const name = label(item.id, item.type);
+                const scope_ = effectiveScope(
+                  item.type,
+                  item.config ?? undefined,
+                  period,
+                  today,
+                  { project: project !== "", habit: habit !== "" },
+                  presets.find(({ value }) => value === prefs.preset)?.label ??
+                    "Dashboard period",
+                );
+                const usesPeriod =
+                  widgetDefinition(item.type)?.filters.includes("period") ??
+                  false;
+                const resetPeriod = () => {
+                  const strip = (list: typeof layout.widgets) =>
+                    list.map((box) =>
+                      box.id === item.id
+                        ? {
+                            ...box,
+                            config:
+                              Object.keys(box.config ?? {}).filter(
+                                (key) => key !== "period",
+                              ).length === 0
+                                ? null
+                                : Object.fromEntries(
+                                    Object.entries(box.config ?? {}).filter(
+                                      ([key]) => key !== "period",
+                                    ),
+                                  ),
+                          }
+                        : box,
+                    );
+                  if (draft)
+                    setDraft({ ...draft, widgets: strip(draft.widgets) });
+                  else
+                    dashboard.update((current) => ({
+                      ...current,
+                      widgets: strip(current.widgets),
+                    }));
+                };
                 return (
                   <div
                     key={item.id}
@@ -434,12 +474,44 @@ export function Dashboard() {
                         </button>
                       </div>
                     )}
+                    {/* Widgets that follow the dashboard say nothing extra: the
+                        dashboard's own period line above already applies. */}
+                    {((usesPeriod && scope_.own) ||
+                      scope_.project === "unsupported" ||
+                      scope_.habit === "unsupported") && (
+                      <p className="dash-scope" data-scope={item.id}>
+                        {usesPeriod && scope_.own && (
+                          <>
+                            <strong>Period:</strong> {scope_.periodLabel},{" "}
+                            {fullDate(scope_.period.from)} to{" "}
+                            {fullDate(scope_.period.to)}
+                            {scope_.own
+                              ? " (this widget's own period)"
+                              : " (same as the dashboard)"}
+                            {scope_.own && (
+                              <button
+                                type="button"
+                                className="action"
+                                aria-label={`Use the dashboard period: ${name}`}
+                                onClick={resetPeriod}
+                              >
+                                Use dashboard period
+                              </button>
+                            )}
+                          </>
+                        )}
+                        {scope_.project === "unsupported" &&
+                          " The project filter does not apply here."}
+                        {scope_.habit === "unsupported" &&
+                          " The habit filter does not apply here."}
+                      </p>
+                    )}
                     <WidgetHost
                       instance={{ ...item, config: item.config ?? undefined }}
                       context={{
                         project: scope,
                         habit: habit || null,
-                        period,
+                        period: scope_.period,
                       }}
                     />
                   </div>
@@ -463,6 +535,7 @@ export function Dashboard() {
           )}
           {settingsFor && draft && (
             <WidgetSettings
+              period={period}
               widget={draft.widgets.find((box) => box.id === settingsFor)!}
               onApply={(config) => {
                 setDraft({
