@@ -8,6 +8,8 @@ mod analytics;
 mod backup_tests;
 #[cfg(test)]
 mod beta_workflow;
+#[cfg(test)]
+mod calendar_regression;
 mod checkins;
 mod dashboards;
 mod database;
