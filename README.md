@@ -61,6 +61,6 @@ Unhollowed 2 is beta software, provided as is, without warranty. Keep your own c
 
 - [Product](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [data model](docs/DATA_MODEL.md)
 - [Development](docs/DEVELOPMENT.md) and [local macOS testing](docs/MACOS_TESTING.md)
-- [CI and packaging](docs/CI_CD.md) and [release preparation](docs/RELEASE.md)
+- [CI and packaging](docs/CI_CD.md), [release preparation](docs/RELEASE.md), and the [release checklist](docs/RELEASE_CHECKLIST.md)
 - [User guide](docs/USER_GUIDE.md), [release notes](docs/release-notes/v1.0.0-beta.1.md), [privacy statement](docs/PRIVACY_STATEMENT.md), [security audit](docs/SECURITY.md), and [legal readiness](docs/LEGAL.md)
 - [Contributing](docs/CONTRIBUTING.md), [decisions](docs/DECISIONS.md), and [changelog](CHANGELOG.md)
