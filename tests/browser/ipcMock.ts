@@ -1172,6 +1172,62 @@ export async function installIpcMock(page: Page) {
               views.splice(index, 1);
               return null;
             }
+            case "list_dashboards":
+            case "save_dashboard":
+            case "delete_dashboard": {
+              // Kept in sessionStorage so a reload acts like a restart.
+              type Stored = {
+                id: string;
+                name: string;
+                position: number;
+                layoutVersion: number;
+                layout: unknown;
+                createdAt: string;
+                updatedAt: string;
+              };
+              const read = (): Stored[] =>
+                JSON.parse(sessionStorage.getItem("__dashboards") ?? "[]");
+              const write = (list: Stored[]) =>
+                sessionStorage.setItem("__dashboards", JSON.stringify(list));
+              const list = read();
+              if (
+                (window as unknown as { __failDashboards?: boolean })
+                  .__failDashboards
+              )
+                throw { code: "storage_failed" };
+              if (command === "list_dashboards")
+                return list.sort((a, b) => a.position - b.position);
+              if (command === "delete_dashboard") {
+                const index = list.findIndex((item) => item.id === args.id);
+                if (index < 0) throw { code: "not_found" };
+                list.splice(index, 1);
+                write(list);
+                return null;
+              }
+              const { id, name, layout } = args as unknown as {
+                id: string | null;
+                name: string;
+                layout: { version: number };
+              };
+              if (layout.version !== 1) throw { code: "invalid_layout" };
+              const existing = list.find((item) => item.id === id);
+              if (id && !existing) throw { code: "not_found" };
+              if (existing && existing.layoutVersion > 1)
+                throw { code: "newer_layout" };
+              const record: Stored = existing ?? {
+                id: `dashboard-${list.length + 1}`,
+                name,
+                position: list.length,
+                layoutVersion: 1,
+                layout,
+                createdAt: now(),
+                updatedAt: now(),
+              };
+              Object.assign(record, { name, layout, updatedAt: now() });
+              if (!existing) list.push(record);
+              write(list);
+              return structuredClone(record);
+            }
             case "list_calendars":
               calendarDefault();
               return structuredClone(calendars);

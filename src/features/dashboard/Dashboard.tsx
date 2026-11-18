@@ -9,16 +9,15 @@ import {
   defaults,
   periodProblem,
   presets,
-  readPreferences,
   resolvePeriod,
   sections,
-  writePreferences,
   type Period,
   type Preferences,
-  type SectionKey,
 } from "./controls";
+import { ordered, type DashboardLayout } from "./layout";
+import { useDashboardLayout } from "./useDashboardLayout";
 import { WidgetHost } from "./WidgetHost";
-import { defaultLayout } from "./widgets";
+import { widgetDefinition } from "./widgets";
 import "./dashboard.css";
 
 /**
@@ -31,13 +30,27 @@ import "./dashboard.css";
 export function Dashboard() {
   const desktop = isTauri();
   const today = localDate(new Date());
-  const [prefs, setPrefs] = useState<Preferences>(() => readPreferences(today));
+  const dashboard = useDashboardLayout(today, desktop);
+  const { layout } = dashboard;
+  const prefs: Preferences = {
+    preset: layout.preferences.preset,
+    custom: layout.preferences.custom,
+    hidden: layout.widgets.filter((item) => item.hidden).map((item) => item.id),
+  };
+  function setPrefs(next: Preferences) {
+    dashboard.update((current): DashboardLayout => ({
+      ...current,
+      preferences: { preset: next.preset, custom: next.custom },
+      widgets: current.widgets.map((item) => ({
+        ...item,
+        hidden: next.hidden.includes(item.id),
+      })),
+    }));
+  }
   const [project, setProject] = useState("");
   const [habit, setHabit] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
-
-  useEffect(() => writePreferences(prefs), [prefs]);
 
   useEffect(() => {
     if (!desktop) return;
@@ -58,13 +71,18 @@ export function Dashboard() {
 
   const period: Period = useMemo(
     () => resolvePeriod(prefs, today),
-    [prefs, today],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layout.preferences, today],
   );
   const problem =
     prefs.preset === "custom" ? periodProblem(prefs.custom) : null;
   const filtered = project !== "" || habit !== "";
   const changed = prefs.preset !== defaults(today).preset;
-  const shown = (key: SectionKey) => !prefs.hidden.includes(key);
+  const shown = (id: string) => !prefs.hidden.includes(id);
+  const label = (id: string, type: string) =>
+    sections.find(({ key }) => key === id)?.label ??
+    widgetDefinition(type)?.label ??
+    `Unknown widget (${type})`;
   const scope = project || null;
 
   return (
@@ -72,8 +90,13 @@ export function Dashboard() {
       <h1>Dashboards</h1>
       <p>See your progress across the workspace.</p>
       {!desktop && <p>Open the desktop app to see your local progress.</p>}
-      {desktop && (
+      {desktop && !dashboard.ready && <p role="status">Loading dashboard…</p>}
+      {desktop && dashboard.ready && (
         <>
+          {dashboard.problem && <p role="alert">{dashboard.problem}</p>}
+          {dashboard.recovery !== "ok" && (
+            <p role="status">{dashboard.notes.join(" ")}</p>
+          )}
           <div className="dash-controls">
             <div role="group" aria-label="Period">
               {presets.map(({ value, label }) => (
@@ -173,21 +196,21 @@ export function Dashboard() {
           <details className="dash-details">
             <summary>Sections</summary>
             <div role="group" aria-label="Visible sections">
-              {sections.map(({ key, label }) => (
-                <label key={key} className="dash-check">
+              {ordered(layout.widgets).map((item) => (
+                <label key={item.id} className="dash-check">
                   <input
                     type="checkbox"
-                    checked={shown(key)}
+                    checked={shown(item.id)}
                     onChange={(event) =>
                       setPrefs({
                         ...prefs,
                         hidden: event.target.checked
-                          ? prefs.hidden.filter((item) => item !== key)
-                          : [...prefs.hidden, key],
+                          ? prefs.hidden.filter((id) => id !== item.id)
+                          : [...prefs.hidden, item.id],
                       })
                     }
                   />
-                  <span>{label}</span>
+                  <span>{label(item.id, item.type)}</span>
                 </label>
               ))}
               {prefs.hidden.length > 0 && (
@@ -201,15 +224,16 @@ export function Dashboard() {
               )}
             </div>
           </details>
-          {prefs.hidden.length === sections.length && (
-            <p>All sections are hidden. Turn some on under Sections.</p>
-          )}
-          {defaultLayout
-            .filter(({ id }) => shown(id as SectionKey))
-            .map((instance) => (
+          {layout.widgets.length > 0 &&
+            layout.widgets.every((item) => item.hidden) && (
+              <p>All sections are hidden. Turn some on under Sections.</p>
+            )}
+          {ordered(layout.widgets)
+            .filter((item) => shown(item.id))
+            .map((item) => (
               <WidgetHost
-                key={instance.id}
-                instance={instance}
+                key={item.id}
+                instance={{ ...item, config: item.config ?? undefined }}
                 context={{ project: scope, habit: habit || null, period }}
               />
             ))}

@@ -5,6 +5,7 @@ mod acceptance_tests;
 
 mod analytics;
 mod checkins;
+mod dashboards;
 mod database;
 mod document_links;
 mod documents;
@@ -127,6 +128,9 @@ fn main() {
             saved_views::create_saved_view,
             saved_views::update_saved_view,
             saved_views::delete_saved_view,
+            dashboards::list_dashboards,
+            dashboards::save_dashboard,
+            dashboards::delete_dashboard,
             document_links::list_issue_documents,
             document_links::link_issue_document,
             document_links::unlink_issue_document,

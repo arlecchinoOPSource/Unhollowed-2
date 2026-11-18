@@ -265,3 +265,57 @@ test("every control works from the keyboard", async ({ page }) => {
   await page.keyboard.press("Space");
   await expect(mood).not.toBeChecked();
 });
+
+test("a saved layout from a newer version is shown as the default and left unchanged", async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => {
+    const list = JSON.parse(sessionStorage.getItem("__dashboards")!);
+    list[0].layoutVersion = 2;
+    list[0].layout = { version: 2, shiny: true };
+    sessionStorage.setItem("__dashboards", JSON.stringify(list));
+  });
+  await page.reload();
+  await expect(page.getByRole("status").first()).toContainText("newer version");
+  await preset(page, "Last 7 days").click();
+  const stored = await page.evaluate(
+    () => JSON.parse(sessionStorage.getItem("__dashboards")!)[0].layout,
+  );
+  expect(stored).toEqual({ version: 2, shiny: true });
+});
+
+test("a failed save keeps the change on screen and says so", async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => Object.assign(window, { __failDashboards: true }));
+  await preset(page, "Last 7 days").click();
+  await expect(page.getByRole("alert")).toContainText("Could not read or save");
+  await expect(preset(page, "Last 7 days")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
+test("legacy browser preferences move into the saved dashboard once", async ({
+  page,
+}) => {
+  await open(page, {
+    version: 1,
+    preset: "last7",
+    custom: { from: "2026-11-01", to: "2026-11-10" },
+    hidden: ["mood"],
+  });
+  await expect(preset(page, "Last 7 days")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const stored = await page.evaluate(
+    () => JSON.parse(sessionStorage.getItem("__dashboards")!)[0].layout,
+  );
+  expect(stored.preferences.preset).toBe("last7");
+  expect(
+    stored.widgets.find((w: { id: string }) => w.id === "mood").hidden,
+  ).toBe(true);
+});

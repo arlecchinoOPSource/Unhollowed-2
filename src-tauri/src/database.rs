@@ -177,6 +177,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0028_habit_routines.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 29,
+            description: "Dashboard layouts",
+            sql: include_str!("../migrations/0029_dashboards.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
