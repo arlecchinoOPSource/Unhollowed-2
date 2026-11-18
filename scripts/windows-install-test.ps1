@@ -53,13 +53,16 @@ function Run-App([string]$Exe, [int]$Settle = 8) {
 }
 
 function Find-Exe([string[]]$Roots) {
-  foreach ($root in $Roots) {
+  foreach ($root in ($Roots | Where-Object { $_ })) {
     if (Test-Path $root) {
-      $found = Get-ChildItem $root -Filter 'unhollowed-2.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+      $found = Get-ChildItem $root -Filter '*.exe' -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^(unhollowed-2|unhollowed 2)\.exe$' } | Select-Object -First 1
       if ($found) { return $found.FullName }
     }
   }
-  throw 'unhollowed-2.exe was not found after the install.'
+  $seen = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA) | Where-Object { $_ } | ForEach-Object {
+    Get-ChildItem $_ -Directory -Filter '*nhollowed*' -ErrorAction SilentlyContinue | ForEach-Object FullName }
+  throw "The app executable was not found after the install. Folders named like the app: $($seen -join '; ')"
 }
 
 # 1. Prerequisite: the WebView2 runtime.
@@ -124,7 +127,7 @@ Check 'MSI: silent install and registered version' {
     ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'Unhollowed 2*' } | Select-Object -First 1
   if (-not $entry) { throw 'No uninstall entry for the MSI.' }
   $script:productCode = Split-Path $entry.PSPath -Leaf
-  $script:msiExe = Find-Exe @("$env:ProgramFiles\Unhollowed 2", $env:ProgramFiles, ${env:ProgramFiles(x86)})
+  $script:msiExe = Find-Exe @($entry.InstallLocation, "$env:ProgramFiles\Unhollowed 2", "$env:LOCALAPPDATA\Unhollowed 2", $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA)
   "ProductVersion $($entry.DisplayVersion), $script:msiExe"
 }
 Check 'MSI: first start shows a window and creates the workspace' {
