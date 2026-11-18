@@ -1,5 +1,7 @@
 # Release preparation
 
+The final readiness review and the GitHub prerelease checklist for `v1.0.0-beta.1` are in [Release checklist](RELEASE_CHECKLIST.md).
+
 The version, increment rules, and a Windows MSI constraint are in [Versioning](VERSIONING.md). Installer checks per platform are in [macOS](MACOS_DISTRIBUTION.md) and [Windows](WINDOWS_DISTRIBUTION.md).
 
 Use SemVer and version tags such as `v1.0.0-beta.1`. Update the npm manifest and lockfile, Rust manifest and lockfile, Tauri configuration, and changelog in one release PR. For Windows MSI, confirm that the numeric version fits Windows Installer constraints and increases across installer upgrades.
