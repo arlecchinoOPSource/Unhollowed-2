@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listHabits, type Habit } from "../../database/habits";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
@@ -16,6 +16,7 @@ import {
 } from "./controls";
 import { ordered, type DashboardLayout } from "./layout";
 import { describe, move, resize, settle } from "./grid";
+import { newWidget, WidgetLibrary, WidgetSettings } from "./WidgetLibrary";
 import { useDashboardLayout } from "./useDashboardLayout";
 import { WidgetHost } from "./WidgetHost";
 import { widgetDefinition } from "./widgets";
@@ -37,6 +38,13 @@ export function Dashboard() {
   const [draft, setDraft] = useState<DashboardLayout | null>(null);
   const [arrangeNote, setArrangeNote] = useState("");
   const [saveProblem, setSaveProblem] = useState("");
+  const [library, setLibrary] = useState(false);
+  const [settingsFor, setSettingsFor] = useState<string | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const restoreFocus = () =>
+    requestAnimationFrame(() => {
+      if (opener.current?.isConnected) opener.current.focus();
+    });
   const layout = draft ?? dashboard.layout;
   const prefs: Preferences = {
     preset: layout.preferences.preset,
@@ -219,6 +227,16 @@ export function Dashboard() {
                 <button
                   type="button"
                   className="action"
+                  onClick={(event) => {
+                    opener.current = event.currentTarget;
+                    setLibrary(true);
+                  }}
+                >
+                  Add widget
+                </button>
+                <button
+                  type="button"
+                  className="action"
                   onClick={() => {
                     setDraft(null);
                     setSaveProblem("");
@@ -382,6 +400,35 @@ export function Dashboard() {
                             {text}
                           </button>
                         ))}
+                        {widgetDefinition(item.type)?.fields && (
+                          <button
+                            type="button"
+                            className="action"
+                            aria-label={`Settings: ${name}`}
+                            onClick={(event) => {
+                              opener.current = event.currentTarget;
+                              setSettingsFor(item.id);
+                            }}
+                          >
+                            Settings
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="action"
+                          aria-label={`Remove: ${name}`}
+                          onClick={() => {
+                            setDraft({
+                              ...draft,
+                              widgets: draft.widgets.filter(
+                                (box) => box.id !== item.id,
+                              ),
+                            });
+                            setArrangeNote(`${name} removed.`);
+                          }}
+                        >
+                          Remove
+                        </button>
                       </div>
                     )}
                     <WidgetHost
@@ -397,6 +444,40 @@ export function Dashboard() {
               },
             )}
           </div>
+          {library && draft && (
+            <WidgetLibrary
+              context={{ project: scope, habit: habit || null, period }}
+              onAdd={(definition) => {
+                const added = newWidget(definition, draft.widgets);
+                setDraft({ ...draft, widgets: [...draft.widgets, added] });
+                setArrangeNote(`${definition.label} added.`);
+              }}
+              onClose={() => {
+                setLibrary(false);
+                restoreFocus();
+              }}
+            />
+          )}
+          {settingsFor && draft && (
+            <WidgetSettings
+              widget={draft.widgets.find((box) => box.id === settingsFor)!}
+              onApply={(config) => {
+                setDraft({
+                  ...draft,
+                  widgets: draft.widgets.map((box) =>
+                    box.id === settingsFor ? { ...box, config } : box,
+                  ),
+                });
+                setArrangeNote("Settings applied.");
+                setSettingsFor(null);
+                restoreFocus();
+              }}
+              onClose={() => {
+                setSettingsFor(null);
+                restoreFocus();
+              }}
+            />
+          )}
         </>
       )}
     </section>

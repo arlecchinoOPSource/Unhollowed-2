@@ -178,3 +178,15 @@ A dashboard is a name and a versioned layout, stored in the `dashboards` table (
 - **Pointer and keyboard.** Each widget in the draft has buttons: Move left, right, up, down, Narrower, Wider, Shorter, Taller. With the widget's frame focused, arrow keys move it and Shift with an arrow resizes it. The new position is announced ("column 7, row 8, 6 columns wide, 4 rows tall"). Nothing requires dragging.
 - **Limits.** A widget cannot be narrower or shorter than its type's minimum, wider than the grid, or taller than 40 rows.
 - **Not added.** Freehand dragging and a grid library: the buttons and keys cover pointer and keyboard use without a dependency or extra CSP surface.
+
+## Widget library and settings (U2-P5-07)
+
+While arranging, **Add widget** opens the library and each widget has **Settings** and **Remove**. Everything edits the draft; nothing is stored until **Save layout** succeeds.
+
+- **Library.** Lists the types this build can show (those with a renderer) with a description. Types registered but not yet drawable, such as the line chart, are named under "Not available yet" and cannot be added.
+- **Preview.** Shows the real widget (`WidgetHost`, with the type's defaults) on the dashboard's current period and filters, so a preview and the saved widget read the same data in the same way. There is no separate preview data path.
+- **Adding.** A new instance gets a unique ID (`type-1`, `type-2`, …), the type's default size, the type's defaults, and a place below everything else.
+- **Settings are generated from the registry.** Each type lists its `fields`; the form edits exactly those keys. Notes has a text field (up to 2,000 characters). Shortcuts has a choice of places in the app (Home, Today, Calendar, Issues, Projects, Documents, Habits, Mood, Dashboards), up to 12, so a shortcut cannot point anywhere else. Types with no fields say they have no settings.
+- **Validation.** The draft is checked with the same `parse` used when a layout is read, so **Apply** is enabled only for settings that would survive a restart; otherwise an alert explains. **Reset to defaults** restores the type's defaults in the form.
+- **Removing.** Takes the widget out of the draft; Cancel brings it back, and a removed built-in section can be added again from the library.
+- **Focus.** The dialogs are modal. Escape or Close returns focus to the button that opened them.
