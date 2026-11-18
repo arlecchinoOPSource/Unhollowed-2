@@ -106,3 +106,86 @@ The opt-in fixture (`PERF=1 npx playwright test dashboardPerformance`) times in-
 - Timings are from one machine. Compare against these baselines on the same hardware, not across machines.
 - The render timing uses the mocked backend, so the real cost adds the backend reads above. The webview's own IPC overhead is not measured.
 - Fixtures are synthetic. A real workspace's mix of repeating series and archived habits may behave differently.
+
+## Acceptance (U2-P5-20)
+
+This validates Phase 5 as a whole: customizable dashboards, Home, and the continuity between them. It records what was run, the values it expects, the results, and the gaps. The contracts are in [Analytics](ANALYTICS.md), [Metric contracts](METRICS.md), and [Product](PRODUCT.md).
+
+### Reproduce
+
+From the repository root, with the pinned Node and Rust versions:
+
+```sh
+npm ci
+npx playwright install chromium
+npm run test:mac
+npm run test:browser
+cargo test --locked --manifest-path src-tauri/Cargo.toml phase5
+npx playwright test phase5 --reporter=line
+```
+
+Every Rust test uses an in-memory or temporary file database that is deleted afterward. All data is synthetic. Nothing touches a real workspace and nothing needs the network.
+
+### The journey and its expected values
+
+`phase5_acceptance` (Rust, `src-tauri/src/phase5_acceptance.rs`) runs on a disposable file database with today fixed at 2026-11-17 in Europe/Paris and the period November 1 to 30. The values are worked out from the source records, not from the code under test.
+
+| Step             | What it does                                                                                                                                                                                                                 | Expected and asserted                                                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upgrade          | Builds a version 28 database (before dashboards) with a project, an issue due November 20, and a saved view, then migrates to the latest                                                                                     | Migration `0029` applies; no dashboards yet; the issue and the saved view are untouched                                                                                                   |
+| Layouts          | Saves "General Productivity" and "Student Workspace" (with a widget type this build does not know), makes the second the default, and holds a layout written by a newer release                                              | Order is Student Workspace, General Productivity, Future. Saving over the newer layout is refused (`newer_layout`) and leaves it as written                                               |
+| Source records   | Issues: Legacy due 20, Overdue due 12, Today due 17, Later due 25 (all to do), Dropped due 14 (canceled), Archived due 13. Habit Walk from the 10th, done on 15, 16, 17. Mood 4 today. One event, 10:00 to 11:00 on the 19th | See below                                                                                                                                                                                 |
+| Dashboard, first | Workspace analytics                                                                                                                                                                                                          | Open 4, overdue 1, due 4, due completed 0. Habit: 8 eligible, 3 done, 37.5%. Mood: 1 day, average 4.0. Calendar: 1 event, 60 minutes                                                      |
+| Edits            | Completes Today, moves Overdue's deadline to the 24th, moves the event to 14:00 to 16:00 on the 20th                                                                                                                         | Open 3, overdue 0, due 4, due completed 1, due percent 25.0. Calendar: 1 event, 120 minutes                                                                                               |
+| Project filter   | Progress analytics for the upgraded issue's project                                                                                                                                                                          | 1 issue, open 1, overdue 0                                                                                                                                                                |
+| Isolation        | A second workspace asks for the same period and tries to set a default                                                                                                                                                       | No dashboards, 0 open and 0 due issues, and `not_found` for the other workspace's dashboard                                                                                               |
+| Restart          | Closes the database, reopens and migrates it again                                                                                                                                                                           | The same dashboards in the same order with identical layouts, the unknown widget and its config intact, the newer layout still version 2, and the analytics recomputed to the same values |
+
+Archived issues are never counted, and a canceled issue is in no rate. Both are in the fixture.
+
+### Evidence by workflow
+
+| Workflow                                                               | Where it is checked                                                                                                                                                    | Result              |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| The phase with expected values, upgrade, isolation, and restart        | `phase5_acceptance`, `phase5_journey` (Rust, file databases)                                                                                                           | Pass                |
+| Layout storage: validation, workspace scope, default, newer layouts    | `dashboards::tests` (8 tests)                                                                                                                                          | Pass                |
+| Widget creation and configuration, arrangement, resize, restart        | `dashboardGrid.spec.ts`, `dashboardControls.spec.ts`, `widgets.test.tsx`, `grid.test.tsx`, `widgetLibrary.test.tsx`                                                    | Pass                |
+| Starter dashboards, switching, default, delete and reset confirmations | `dashboardGrid.spec.ts`, `templates.test.tsx`                                                                                                                          | Pass                |
+| Filter inheritance and per-widget periods                              | `dashboardControls.spec.ts`, `scope.test.tsx`                                                                                                                          | Pass                |
+| Habit and mood updates, issue completion, deadline and calendar edits  | `phase5_acceptance`, `home.spec.ts` (habit check), `dashboardPerformance.spec.ts` (targeted refresh)                                                                   | Pass                |
+| Drilldowns to the counted records and back                             | `drilldown.test.tsx`, `dashboardGrid.spec.ts`, the Rust completion-boundary test                                                                                       | Pass                |
+| Home, quick actions, resume, and workflow continuity                   | `home.spec.ts`, `homeData.test.tsx`, `phase5_journey`                                                                                                                  | Pass                |
+| Archived, missing, and malformed links and layouts                     | `routing.spec.ts`, `home.spec.ts`, `dashboardPerformance.spec.ts`, `links.test.tsx`, `dashboardLayout.test.tsx`                                                        | Pass                |
+| The whole phase through the UI in both themes, with a network check    | `phase5.spec.ts`: Home, quick action, widgets, settings, own period, arrange, starter dashboard, default, reload, inheritance, chart values, drilldown, missing record | Pass in both themes |
+| Accessibility and responsive behavior                                  | `dashboardAccessibility.spec.ts`, `accessibility.spec.ts`, `trackingAccessibility.spec.ts`                                                                             | Pass                |
+| Performance, request counts, recovery                                  | `measure_dashboard`, `dashboardPerformance.spec.ts` (see above)                                                                                                        | Pass                |
+
+### Offline
+
+`phase5.spec.ts` records every request the page makes during the whole journey and asserts that none leaves `127.0.0.1` or `localhost`. The app has no accounts, telemetry, or remote assets, and the dashboard's charts are drawn locally.
+
+### Regressions, Phases 1 to 4
+
+The whole repository suite ran, not just the Phase 5 files: `npm run test:mac` (ESLint, frontend unit tests, TypeScript and production build, `cargo fmt --check`, every Rust test including the Phase 3 and Phase 4 journeys, the upgrade tests, and the habit, check-in, calendar, issue, and document suites) and the full Playwright suite.
+
+### Results
+
+Apple M5, macOS 26.5.1, Node and Rust as pinned.
+
+| Check                            | Result                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `npm run test:mac`               | Pass: ESLint, 177 frontend unit tests, build, `cargo fmt --check`, 266 Rust tests (5 timing fixtures ignored) |
+| `npx playwright test` (Chromium) | 228 passed, 6 skipped (the opt-in timing fixtures), 1 failed: see below                                       |
+| `cargo test --locked ... phase5` | Pass                                                                                                          |
+| GitHub CI on `main`              | Success for each Phase 5 merge (duplicate runs of the same commit were cancelled by newer pushes)             |
+
+**Unexpected failure.** `issues.spec.ts` "creates labels, assigns several, filters by them, and keeps archived labels visible" fails locally with `Test timeout of 30000ms exceeded`. It is a long label journey that has nothing to do with dashboards. It also failed on earlier Phase 5 commits on this machine and passes in GitHub CI, so it is a local timing problem with that test's 30 second budget rather than a Phase 5 regression. It is not fixed here.
+
+### Gaps and platform evidence
+
+- **Browser mock versus native.** The Playwright journeys run against an in-memory IPC mock, so they prove the UI, its requests, and its navigation, not persistence or the real analytics. Persistence, restart, upgrade, isolation, and every analytics value are proven by the Rust tests on real SQLite files. Neither layer drives the packaged app end to end.
+- **Native application.** The unsigned macOS app bundle builds (`desktop:build --no-sign --bundles app`, 24.3 MiB), its executable exists and matches this machine's architecture (`lipo -verify_arch arm64`). The packaged app was not launched or driven by a person or a UI test in this run, so the dashboard, Home, and arrange interactions have no native evidence beyond that build.
+- **Windows.** Not run: no Windows machine was available. Windows CI is the only Windows evidence.
+- **Assistive technology.** No screen reader pass; the automated and keyboard checks in the accessibility section above are what exist. VoiceOver, NVDA, and Narrator remain to be checked on the packaged apps, as do text scaling and high-contrast modes.
+- **Timing.** Numbers are from one machine and synthetic fixtures.
+- **Not part of this issue.** Release signing, installer polish, and Phase 6 work.

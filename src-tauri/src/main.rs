@@ -20,6 +20,8 @@ mod perf_tests;
 #[cfg(test)]
 mod phase4_journey;
 #[cfg(test)]
+mod phase5_acceptance;
+#[cfg(test)]
 mod phase5_journey;
 mod portability;
 mod projects;
