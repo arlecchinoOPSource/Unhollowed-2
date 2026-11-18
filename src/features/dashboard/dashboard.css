@@ -328,3 +328,9 @@
   margin: 0 0 16px;
   color: var(--muted);
 }
+
+.dash-insights {
+  display: grid;
+  gap: 6px;
+  padding-left: 18px;
+}

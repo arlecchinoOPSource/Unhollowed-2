@@ -255,6 +255,16 @@ const comparison = make<{ grain: string; period?: PeriodOverride }>({
   },
 });
 
+const insights = none(
+  "insights",
+  "Insights",
+  "Neutral statements about overdue work, habit days, tomorrow, and milestones.",
+  ["issues", "projects", "milestones", "habits", "calendar"],
+  ["period", "project", "habit"],
+  [12, 4, 6, 3],
+  "Nothing to report.",
+);
+
 const definitions: WidgetDefinition[] = [
   none(
     "stat-card",
@@ -398,6 +408,7 @@ const definitions: WidgetDefinition[] = [
     },
   }),
   comparison,
+  insights,
 ];
 
 export const widgetTypes: readonly WidgetDefinition[] = definitions;

@@ -5,6 +5,7 @@ import { GlanceSection } from "./GlanceSection";
 import { HabitsSection } from "./HabitsSection";
 import { ChartWidget } from "./ChartWidget";
 import { ComparisonWidget } from "./ComparisonWidget";
+import { InsightsWidget } from "./InsightsWidget";
 import { MoodSection } from "./MoodSection";
 import { ProgressSection } from "./ProgressSection";
 import { ScheduleSection } from "./ScheduleSection";
@@ -59,6 +60,7 @@ const renderers: Record<string, Renderer> = {
       context={context}
     />
   ),
+  insights: (context) => <InsightsWidget context={context} />,
   notes: (_, config) => {
     const { text } = config as { text: string };
     return (

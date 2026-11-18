@@ -254,3 +254,14 @@ A chart point that has records opens them. The values table under every chart ha
 - **Return.** The list shows **Back to the dashboard** (navigation state accepted only for in-app paths), and the browser's Back works too. The period comes back with the dashboard; project and habit filters are transient and start empty again.
 - **Removed records.** A drilldown only names days and a project or habit ID. If the project or habit has since been removed, the target screen explains it as it does for any other link.
 - **Not fabricated.** Aggregate-only values never list made-up rows.
+
+## Insights (U2-P5-13)
+
+The `insights` widget lists short, neutral statements built by fixed rules in `insights.ts` from the same shared queries as the other widgets. No AI, prediction, score, or advice, and nothing is sent anywhere.
+
+- **Statements, in this order.** Overdue issues (`get_progress_analytics` totals: open and due before today), overdue projects (workspace analytics: planned, active, or on hold with a target date before today), up to three milestones from the deadline list (open, overdue or due within 14 days, nearest first, ties by title), eligible habit days (the habit statistics summary for the dashboard period, through today at most), and tomorrow's schedule (a separate read of tomorrow alone: events, planned work sessions, open due dates, and busy minutes).
+- **Explicit dates.** Every statement names its day or range in full ("before Wednesday, November 18, 2026").
+- **Source links.** Each statement ends with a link to the records behind it: the issue list filtered to overdue (with the project filter), projects, milestones, habits, or tomorrow in the calendar.
+- **Missing is not zero.** A source that has not answered, failed, or does not apply gives no statement. An answered zero is stated as such ("No open issues are overdue as of …"). Habit statements are left out under a project filter and say so.
+- **Truncation.** If the calendar returned its maximum number of items, tomorrow's totals would be lower bounds, so the widget says only that tomorrow has more items than can be totaled and gives no counts or minutes. The milestone list is capped by the query, so the widget never states how many milestones exist.
+- **Stable.** The same data always yields the same statements in the same order; tests pin the exact wording.

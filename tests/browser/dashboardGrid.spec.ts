@@ -511,3 +511,56 @@ test("a chart point opens the issues it counted, and the way back returns to the
   await page.getByRole("link", { name: "Back to the dashboard" }).click();
   await expect(page).toHaveURL(/\/dashboards/);
 });
+
+test("insights state numbers from the sources and link to them", async ({
+  page,
+}) => {
+  await installIpcMock(page);
+  await page.clock.setFixedTime(new Date("2026-11-17T10:00:00+01:00"));
+  await page.addInitScript(() =>
+    Object.assign(window, {
+      __progress: {
+        totals: {
+          total: 5,
+          open: 3,
+          done: 2,
+          canceled: 0,
+          completionPercent: 40,
+          overdue: 2,
+          upcoming: 0,
+          undatedOpen: 0,
+        },
+        deadlines: [
+          {
+            kind: "milestone",
+            id: "m1",
+            number: null,
+            title: "Beta",
+            projectId: null,
+            projectName: null,
+            dueDate: "2026-11-25",
+            overdue: false,
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("/dashboards");
+  await expect(
+    page.getByRole("heading", { name: "At a glance" }),
+  ).toBeVisible();
+  await arrange(page);
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.getByRole("button", { name: "Add Insights" }).click();
+  await page.getByRole("button", { name: "Save layout" }).click();
+  const widget = page.locator('[data-cell="insights-1"]');
+  await expect(widget).toContainText(
+    "2 open issues are overdue: due before Tuesday, November 17, 2026.",
+  );
+  await expect(widget).toContainText(
+    "Milestone Beta is due Wednesday, November 25, 2026.",
+  );
+  await expect(
+    widget.getByRole("link", { name: "Open overdue issues" }),
+  ).toHaveAttribute("href", "/issues?due=overdue");
+});
