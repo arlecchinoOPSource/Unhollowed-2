@@ -32,10 +32,22 @@ describe("desktop trust boundary (U2-P6-01)", () => {
   it("registers no shell, fs, http or opener plugin", () => {
     const manifest = read("src-tauri/Cargo.toml");
     expect(manifest).not.toMatch(
-      /tauri-plugin-(shell|fs|http|opener|process|updater|global-shortcut)/,
+      /tauri-plugin-(shell|fs|http|opener|process|global-shortcut)/,
     );
+    // The updater runs from Rust only (U2-P7-02); the webview gets no plugin API.
     expect(read("package.json")).not.toMatch(
       /@tauri-apps\/plugin-(shell|fs|http|opener|process|updater)/,
     );
+  });
+
+  it("reads updates only from the reviewed HTTPS beta channel (U2-P7-02)", () => {
+    const updater = conf.plugins.updater;
+    expect(updater.endpoints).toEqual([
+      "https://github.com/arlecchinoOPSource/Unhollowed-2/releases/download/updater-beta/latest.json",
+    ]);
+    expect(updater.pubkey).toMatch(/^[A-Za-z0-9+/=]{40,}$/);
+    for (const key of Object.keys(updater)) {
+      expect(key).not.toMatch(/^dangerous|^allowDowngrades$/);
+    }
   });
 });

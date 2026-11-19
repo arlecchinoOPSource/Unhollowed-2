@@ -43,6 +43,7 @@ mod scheduling;
 mod search;
 #[cfg(test)]
 mod test_support;
+mod updates;
 
 fn main() {
     let result = tauri::Builder::default()
@@ -51,7 +52,12 @@ fn main() {
         // dialog permissions.
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        // Used only from Rust, and only when the person asks to check for an
+        // update. The webview has no updater permissions.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::UpdateLock::default())
         .invoke_handler(tauri::generate_handler![
+            updates::check_for_update,
             database::database_status,
             relationships::list_issue_relationships,
             relationships::add_issue_relationship,
