@@ -24,6 +24,14 @@ The endpoint is a fixed asset on a dedicated `updater-beta` release that holds o
 
 `requireSignedVersion` is on: a package must be signed for the exact version the manifest announces. Signing, the key, asset names, and the manifest are in [Updater signing](UPDATER_SIGNING.md).
 
+## Interface (U2-P7-04)
+
+- **Sidebar control.** The control at the bottom-left of the sidebar (`src/features/updates/UpdateButton.tsx`) has the accessible name and tooltip "Check for updates" and works by keyboard. It starts a check and opens the updater screen at `/updates`. It is the only thing that starts a check.
+- **States.** `src/features/updates/updateMachine.ts` defines the nine states: idle, checking, up to date, update available, downloading, verifying, installing, restarting, and error. `transition` is the only way to change state, and it ignores an event that does not apply, so late or repeated events cannot produce contradictory screens. A shared store (`updateStore.ts`) keeps one state for the whole app. It starts nothing while an operation is in flight, so repeated activation cannot begin a second one.
+- **Leaving the screen.** The screen lives inside the normal workspace, so the sidebar stays usable. **Done** is offered whenever leaving is safe (idle, up to date, available, error, and during a check, which changes nothing), and it returns focus to the sidebar control. Errors explain what happened, say the workspace is not affected, and offer **Try again**, except on unsupported platforms.
+- **Version.** Settings → About shows the installed version from the `app_version` command, so the window needs no extra permission.
+- **Later work.** Download progress and the butterfly visuals are U2-P7-05. Installation and relaunch are U2-P7-06.
+
 ## Results
 
 `check_for_update` always resolves; it never rejects. The result is tagged by `status`:

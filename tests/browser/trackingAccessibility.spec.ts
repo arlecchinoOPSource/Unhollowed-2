@@ -447,7 +447,7 @@ for (const scheme of ["light", "dark"] as const) {
       await page.goto("/mood");
       await expect(page.getByRole("group", { name: /^Mood/ })).toBeVisible();
       await scan(page, "check-in form", found);
-      await page.getByLabel("Date").fill("2026-11-10");
+      await page.getByLabel("Date", { exact: true }).fill("2026-11-10");
       await expect(page.getByLabel("Note (optional)")).toHaveValue(
         "Private words",
       );

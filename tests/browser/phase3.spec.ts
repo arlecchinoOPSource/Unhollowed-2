@@ -68,7 +68,7 @@ for (const scheme of ["light", "dark"] as const) {
       .click();
     await page.getByRole("button", { name: "Schedule work session" }).click();
     const form = page.getByRole("form", { name: "New session" });
-    await form.getByLabel("Date").fill("2026-11-18");
+    await form.getByLabel("Date", { exact: true }).fill("2026-11-18");
     await form.getByLabel("Start").fill("14:00");
     await form.getByLabel("End").fill("15:30");
     await form.getByRole("button", { name: "Add session" }).click();

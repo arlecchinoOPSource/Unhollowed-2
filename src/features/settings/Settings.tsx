@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isTauri, readDatabaseStatus } from "../../database/status";
+import { getAppVersion } from "../../database/updates";
 import { DataSettings } from "./DataSettings";
 
 export function Settings() {
   const desktop = isTauri();
   const [message, setMessage] = useState("");
   const [checking, setChecking] = useState(false);
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    if (desktop) void getAppVersion().then(setVersion, () => setVersion(""));
+  }, [desktop]);
 
   async function checkStorage() {
     setChecking(true);
@@ -35,6 +41,12 @@ export function Settings() {
         <p role="status">{message}</p>
       </section>
       {desktop && <DataSettings />}
+      {desktop && (
+        <section aria-labelledby="about-heading" className="settings-section">
+          <h2 id="about-heading">About</h2>
+          <p>{version ? `Unhollowed ${version}` : "Unhollowed"}</p>
+        </section>
+      )}
     </>
   );
 }

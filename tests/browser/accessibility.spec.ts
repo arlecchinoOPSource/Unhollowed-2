@@ -32,6 +32,7 @@ const ROUTES = [
   "/mood",
   "/dashboards",
   "/settings",
+  "/updates",
 ];
 
 const STATUSES = [

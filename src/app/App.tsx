@@ -22,6 +22,7 @@ import { Milestones } from "../features/milestones/Milestones";
 import { Projects } from "../features/projects/Projects";
 import { ProjectDetail } from "../features/projects/ProjectDetail";
 import { Settings } from "../features/settings/Settings";
+import { Updates } from "../features/updates/Updates";
 import { features } from "./pages";
 
 const Graph = lazy(() => import("../features/graph/Graph"));
@@ -86,6 +87,7 @@ export function App() {
             />
           ))}
         <Route path="/settings" element={<Settings />} />
+        <Route path="/updates" element={<Updates />} />
         <Route
           path="*"
           element={

@@ -57,6 +57,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateLock::default())
         .invoke_handler(tauri::generate_handler![
+            updates::app_version,
             updates::check_for_update,
             database::database_status,
             relationships::list_issue_relationships,

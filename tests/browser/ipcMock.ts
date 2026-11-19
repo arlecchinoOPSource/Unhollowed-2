@@ -2824,6 +2824,17 @@ export async function installIpcMock(page: Page) {
               }
               return structuredClone(issue);
             }
+            case "app_version":
+              return "1.0.0-beta.1";
+            // window.__updateCheck sets the result of an update check.
+            case "check_for_update":
+              return (
+                (window as unknown as { __updateCheck?: unknown })
+                  .__updateCheck ?? {
+                  status: "current",
+                  currentVersion: "1.0.0-beta.1",
+                }
+              );
           }
           throw new Error(`Unexpected command: ${command}`);
         },

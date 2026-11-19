@@ -70,7 +70,7 @@ test("saves any subset, leaves the rest visibly unset, and shows it again", asyn
 
 test("a historical entry can be opened and edited", async ({ page }) => {
   await open(page);
-  await page.getByLabel("Date").fill("2026-11-10");
+  await page.getByLabel("Date", { exact: true }).fill("2026-11-10");
   await expect(
     page.getByRole("heading", { name: "Tuesday, November 10, 2026" }),
   ).toBeVisible();
@@ -112,7 +112,7 @@ test("an empty entry stores nothing and removes an existing one", async ({
     page.getByRole("button", { name: "Save check-in" }),
   ).toBeDisabled();
 
-  await page.getByLabel("Date").fill("2026-11-12");
+  await page.getByLabel("Date", { exact: true }).fill("2026-11-12");
   await expect(radio(page, "Energy", "4")).toBeChecked();
   await radio(page, "Energy", "Not set").check();
   await page.getByRole("button", { name: "Save changes" }).click();
@@ -171,5 +171,8 @@ test("ratings work by keyboard and the future cannot be chosen", async ({
   await page.keyboard.press("ArrowRight");
   await expect(radio(page, "Mood", "2")).toBeChecked();
   await expect(page.getByRole("button", { name: "Next day" })).toBeDisabled();
-  await expect(page.getByLabel("Date")).toHaveAttribute("max", "2026-11-17");
+  await expect(page.getByLabel("Date", { exact: true })).toHaveAttribute(
+    "max",
+    "2026-11-17",
+  );
 });

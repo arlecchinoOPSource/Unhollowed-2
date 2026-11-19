@@ -1909,7 +1909,7 @@ test("schedules, moves, and deletes work sessions apart from the deadline", asyn
   const add = async (date: string, start: string, end: string) => {
     await page.getByRole("button", { name: "Schedule work session" }).click();
     const form = page.getByRole("form", { name: "New session" });
-    await form.getByLabel("Date").fill(date);
+    await form.getByLabel("Date", { exact: true }).fill(date);
     await form.getByLabel("Start").fill(start);
     await form.getByLabel("End").fill(end);
     await form.getByRole("button", { name: "Add session" }).click();
@@ -1927,7 +1927,7 @@ test("schedules, moves, and deletes work sessions apart from the deadline", asyn
   await form.getByRole("button", { name: "Save session" }).click();
   await expect(page.getByRole("alert")).toContainText("end later");
   await expect(form).toBeVisible();
-  await form.getByLabel("Date").fill("2026-11-19");
+  await form.getByLabel("Date", { exact: true }).fill("2026-11-19");
   await form.getByLabel("End").fill("10:00");
   await form.getByRole("button", { name: "Save session" }).click();
   await expect(page.getByText("Session moved.")).toBeVisible();
