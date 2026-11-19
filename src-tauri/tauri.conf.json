@@ -52,6 +52,12 @@
   "plugins": {
     "sql": {
       "preload": ["sqlite:workspace.sqlite3"]
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM5MUI5M0E3RkNGRDk0NTQKUldSVWxQMzhwNU1iT2NxZEVibndvQWNpZWhXWXdYekgxWkJ2czBvMVNnbDY1WjFlVkZyQVEvWnEK",
+      "endpoints": [
+        "https://github.com/arlecchinoOPSource/Unhollowed-2/releases/download/updater-beta/latest.json"
+      ]
     }
   }
 }

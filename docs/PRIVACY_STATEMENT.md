@@ -4,7 +4,7 @@ This is the user-facing statement. Every claim is backed by a check recorded in 
 
 ## In short
 
-Unhollowed 2 is a local app. Your projects, issues, documents, calendar, habits, and mood check-ins stay on your computer. The app has no account, no sync, and no analytics, and its code makes no network requests.
+Unhollowed 2 is a local app. Your projects, issues, documents, calendar, habits, and mood check-ins stay on your computer. The app has no account, no sync, and no analytics. Its only network request is an update check, made only when you ask for one.
 
 ## What the app does not do
 
@@ -38,4 +38,6 @@ You own your data. You can export projects (JSON), issues (CSV), calendar events
 
 ## Changes and contact
 
-This statement describes the beta. It will be updated if the app ever adds a network feature, and any such feature will be off by default and described here first. Contact details are the owner's to add.
+This statement describes the beta. It will be updated if the app ever adds a network feature, and any such feature will be off by default and described here first.
+
+**Update check.** When you choose to check for updates, the app downloads one small file from the project's GitHub releases over HTTPS. The request contains no workspace data, account, or app version. GitHub, like any web server, sees your IP address and the request time. The app never checks on its own. Contact details are the owner's to add.

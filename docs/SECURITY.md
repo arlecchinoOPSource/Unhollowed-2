@@ -25,23 +25,23 @@ Out of scope: an attacker with the user's OS account, physical access, and suppl
 
 1. **Webview to Rust (IPC).** The only capability, `src-tauri/capabilities/main.json`, has `"permissions": []`. The window can call the app's own `#[tauri::command]` functions and nothing from the SQL, dialog, or notification plugins. The SQL plugin is registered only to run migrations from Rust and cannot be reached from the webview.
 2. **Content Security Policy.** Production: `default-src 'self'; connect-src ipc: http://ipc.localhost; font-src 'self'; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'none'`. No inline script, no eval, no remote origin. The looser `devCsp` applies only to `tauri dev`.
-3. **Filesystem.** No fs, shell, http, opener, process, or updater plugin. Rust reads or writes a user file only after a native open or save dialog the user completes, with a size check before reading.
+3. **Filesystem.** No fs, shell, http, opener, or process plugin. The updater plugin is registered for Rust only; the webview has no updater permission and calls one command, `check_for_update` ([Updater](UPDATER.md)). Rust reads or writes a user file only after a native open or save dialog the user completes, with a size check before reading.
 4. **SQLite.** Every query uses bound parameters. The three `format!` SQL strings (`documents/library.rs`, `issues/query.rs`, `portability.rs`) interpolate only compile-time constants (column lists, a `NOW` expression, fixed assignment clauses); no user value reaches them. Every record query filters by `workspace_id`.
 5. **Rendering.** Documents render through ProseMirror schema nodes, not raw HTML. Imported Word HTML is parsed in an inert `<template>`, links are filtered through `safeWebLink` (`http`, `https`, `mailto` only), and images are replaced with managed assets or dropped. The only `innerHTML` uses (`importWord.ts`, `fileTransfer.ts`) write into detached templates.
 6. **External URLs.** The app opens no URL itself (no opener plugin). Links in documents and events are stored as text and validated on entry.
 7. **Local storage.** Preferences only; no secrets or credentials exist in the app.
-8. **Data leakage.** No outbound network request is made by app code. Exports go only to the path the user picks.
+8. **Data leakage.** The only outbound request is the update check: one HTTPS `GET` of the beta channel manifest, made only when the person asks, with no app data, version, or identifier in it ([Updater](UPDATER.md)). Exports go only to the path the user picks.
 
 ## Command and capability inventory
 
 | Item                         | Count / state | Notes                                                                                                                                                                  |
 | ---------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Capabilities                 | 1 (`main`)    | No permissions, no `remote` origins                                                                                                                                    |
-| Registered Tauri commands    | 156           | All in `src-tauri/src/main.rs` `generate_handler!`; all scoped to the active workspace                                                                                 |
+| Registered Tauri commands    | 157           | All in `src-tauri/src/main.rs` `generate_handler!`; all scoped to the active workspace                                                                                 |
 | Commands touching user files | 4 modules     | `portability.rs`, `scheduling/ics.rs`, `habits/backup.rs`, `habits/import.rs` are the only code calling a native open or save dialog. Each checks size before reading. |
 | Commands starting a process  | 0             | No `Command::new` anywhere                                                                                                                                             |
-| Commands making network I/O  | 0             |                                                                                                                                                                        |
-| Plugins                      | 3             | `sql` (Rust only), `dialog` (Rust only), `notification` (system reminders)                                                                                             |
+| Commands making network I/O  | 1             | `check_for_update`: user-initiated only, one HTTPS `GET`, one check at a time                                                                                          |
+| Plugins                      | 4             | `sql` (Rust only), `dialog` (Rust only), `notification` (system reminders), `updater` (Rust only, user-initiated checks)                                               |
 
 ## Findings
 
@@ -74,7 +74,7 @@ Findings from this pass: none required a code fix. The gaps were missing fronten
 
 ## Verification
 
-- `tests/unit/securityConfig.test.tsx` fails the build if: the capability gains a permission, a second capability appears, the production CSP gains `unsafe-inline`, `unsafe-eval`, a wildcard, or a remote origin, `withGlobalTauri` or an asset-protocol scope is enabled, or a shell, fs, http, opener, process, updater, or global-shortcut plugin is added.
+- `tests/unit/securityConfig.test.tsx` fails the build if: the capability gains a permission, a second capability appears, the production CSP gains `unsafe-inline`, `unsafe-eval`, a wildcard, or a remote origin, `withGlobalTauri` or an asset-protocol scope is enabled, a shell, fs, http, opener, process, or global-shortcut plugin is added, the web updater package is added, or the updater endpoint, key, or `dangerous*`/`allowDowngrades` settings change.
 - Malformed-input behavior is tracked in U2-P6-03, network behavior in U2-P6-04, database integrity in U2-P6-05.
 
 ## Gaps
