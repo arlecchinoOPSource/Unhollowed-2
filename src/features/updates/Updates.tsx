@@ -1,11 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { BrandMark } from "../../components/brand/BrandMark";
 import { isBusy, type UpdateState } from "./updateMachine";
-import { startUpdateCheck, useUpdates } from "./updateStore";
+import { startDownload, startUpdateCheck, useUpdates } from "./updateStore";
 import "./updates.css";
 
-/** What each state says. Every error names its next step. */
-function describe(state: UpdateState): { title: string; detail?: string } {
+/**
+ * What each state says. Every error names its next step. A `working` state
+ * shows an animated ellipsis after its title.
+ */
+function describe(state: UpdateState): {
+  title: string;
+  detail?: string;
+  working?: boolean;
+} {
   switch (state.phase) {
     case "idle":
       return {
@@ -14,7 +22,7 @@ function describe(state: UpdateState): { title: string; detail?: string } {
           "Unhollowed checks only when you ask. Your workspace stays on this computer.",
       };
     case "checking":
-      return { title: "Checking…" };
+      return { title: "Checking", working: true };
     case "upToDate":
       return {
         title: "Unhollowed is up to date",
@@ -26,13 +34,13 @@ function describe(state: UpdateState): { title: string; detail?: string } {
         detail: `You have version ${state.currentVersion}.`,
       };
     case "downloading":
-      return { title: "Downloading update…" };
+      return { title: "Downloading update", working: true };
     case "verifying":
-      return { title: "Verifying update…" };
+      return { title: "Verifying update", working: true };
     case "installing":
-      return { title: "Installing update…" };
+      return { title: "Installing update", working: true };
     case "restarting":
-      return { title: "Restarting Unhollowed…" };
+      return { title: "Restarting Unhollowed", working: true };
     case "error":
       return errorText(state.reason);
   }
@@ -59,7 +67,15 @@ function errorText(reason: Extract<UpdateState, { phase: "error" }>["reason"]) {
         detail: `Try again later. ${safe}`,
       };
     case "download":
+      return {
+        title: "The update could not be downloaded",
+        detail: `Try again later. ${safe}`,
+      };
     case "verification":
+      return {
+        title: "The update could not be verified",
+        detail: `Its signature did not match, so it was discarded. ${safe}`,
+      };
     case "install":
       return {
         title: "The update could not be installed",
@@ -75,7 +91,7 @@ export function Updates() {
   const location = useLocation();
   const heading = useRef<HTMLHeadingElement>(null);
   const busy = isBusy(state);
-  const { title, detail } = describe(state);
+  const { title, detail, working } = describe(state);
 
   useEffect(() => heading.current?.focus(), []);
 
@@ -94,10 +110,25 @@ export function Updates() {
       <h1 id="updates-heading" ref={heading} tabIndex={-1}>
         Updates
       </h1>
-      <div role="status" aria-live="polite" className="updates-status">
-        <p className="updates-title">{title}</p>
+      <div className="updates-mark" aria-hidden="true">
+        <BrandMark size={96} className={busy ? "is-breathing" : ""} />
+      </div>
+      {/* Announces each new state once; progress below is not live. */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="updates-status"
+        key={state.phase}
+      >
+        <p className="updates-title">
+          {title}
+          {working && <Ellipsis />}
+        </p>
         {detail && <p className="updates-detail">{detail}</p>}
       </div>
+      {state.phase === "downloading" && (
+        <DownloadProgress downloaded={state.downloaded} total={state.total} />
+      )}
       {state.phase === "available" && state.notes && (
         <div className="updates-notes">
           <h2>What’s new</h2>
@@ -112,6 +143,15 @@ export function Updates() {
             onClick={() => void startUpdateCheck()}
           >
             {state.phase === "idle" ? "Check for updates" : "Check again"}
+          </button>
+        )}
+        {state.phase === "available" && (
+          <button
+            type="button"
+            className="action"
+            onClick={() => void startDownload()}
+          >
+            Download and install
           </button>
         )}
         {state.phase === "error" && state.reason !== "unsupported" && (
@@ -131,5 +171,67 @@ export function Updates() {
         )}
       </div>
     </section>
+  );
+}
+
+/** Three dots that appear in turn. Read as "..." by assistive technology. */
+function Ellipsis() {
+  return (
+    <span className="updates-ellipsis">
+      <span>.</span>
+      <span>.</span>
+      <span>.</span>
+    </span>
+  );
+}
+
+const sizeFormat = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 1,
+});
+
+/** Bytes as KB or MB, for the size under the progress bar. */
+export function formatBytes(bytes: number) {
+  return bytes < 1024 * 1024
+    ? `${sizeFormat.format(bytes / 1024)} KB`
+    : `${sizeFormat.format(bytes / 1024 / 1024)} MB`;
+}
+
+/**
+ * Progress from the bytes actually received. With no total (or a total of
+ * zero), the bar is indeterminate and no percentage is shown.
+ */
+export function DownloadProgress({
+  downloaded,
+  total,
+}: {
+  downloaded: number;
+  total: number | null;
+}) {
+  const known = total && total > 0 ? total : null;
+  const percent = known
+    ? Math.min(100, Math.floor((downloaded / known) * 100))
+    : null;
+  const text =
+    percent === null || known === null
+      ? `${formatBytes(downloaded)} downloaded`
+      : `${percent}% · ${formatBytes(downloaded)} of ${formatBytes(known)}`;
+  return (
+    <div className="updates-progress">
+      <div
+        role="progressbar"
+        aria-label="Download progress"
+        aria-valuemin={percent === null ? undefined : 0}
+        aria-valuemax={percent === null ? undefined : 100}
+        aria-valuenow={percent ?? undefined}
+        aria-valuetext={percent === null ? `${text}, size unknown` : text}
+        className={`updates-track${percent === null ? " is-indeterminate" : ""}`}
+      >
+        <div
+          className="updates-fill"
+          style={percent === null ? undefined : { width: `${percent}%` }}
+        />
+      </div>
+      <p className="updates-detail">{text}</p>
+    </div>
   );
 }

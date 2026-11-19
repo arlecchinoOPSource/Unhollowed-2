@@ -1,12 +1,15 @@
 //! On-demand update check (U2-P7-02). It runs only when the person asks:
 //! nothing here is called at startup, on a timer, or in the background, and the
 //! rest of the app never needs the network. See docs/UPDATER.md.
+//! The download (U2-P7-05) runs only after the person chooses to install.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Runtime, State};
+use tauri::ipc::Channel;
+use tauri::{AppHandle, Manager, Runtime, State};
 use tauri_plugin_updater::{Error, Update, UpdaterExt};
 
 /// Targets with published updater packages (docs/UPDATER_COMPATIBILITY.md).
@@ -77,6 +80,65 @@ impl Drop for Held<'_> {
     }
 }
 
+/// The update the last check found, if any. Only it can be downloaded, so the
+/// webview cannot choose a package or address.
+#[derive(Default)]
+pub struct PendingUpdate(Mutex<Option<Update>>);
+
+/// The downloaded package after its signature verified, kept for installation
+/// (U2-P7-06). Never written to disk here.
+#[derive(Default)]
+pub struct VerifiedPackage(pub Mutex<Option<(String, Vec<u8>)>>);
+
+/// Progress sent to the webview while downloading. Byte counts come from the
+/// download itself; `total` is null when the server did not give a size.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(
+    tag = "event",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum DownloadEvent {
+    Progress {
+        downloaded: u64,
+        total: Option<u64>,
+    },
+    /// Every byte arrived; the signature is being checked.
+    Finished,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum DownloadResult {
+    /// Downloaded, and the signature matched the embedded key and version.
+    Verified,
+    /// Another update operation is running; this request did nothing.
+    Busy,
+    /// No update was found by a check first.
+    NothingToDownload,
+    Failed {
+        reason: DownloadFailure,
+        detail: String,
+    },
+}
+
+/// Nothing was installed or changed in any of these cases.
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DownloadFailure {
+    Offline,
+    Download,
+    Verification,
+}
+
+/// At most this often per second does progress reach the webview, so assistive
+/// technology and rendering are not flooded with per-chunk events.
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+
 /// The installed version, shown in Settings → About.
 #[tauri::command]
 pub fn app_version<R: Runtime>(app: AppHandle<R>) -> String {
@@ -118,7 +180,94 @@ async fn check<R: Runtime>(
         Ok(updater) => updater.check().await,
         Err(error) => Err(error),
     };
+    // Remember only an update the person could be offered, and forget any
+    // package downloaded for an earlier check.
+    if let Some(pending) = app.try_state::<PendingUpdate>() {
+        *pending.0.lock().unwrap() = match &result {
+            Ok(Some(update)) if update.download_url.scheme() == "https" => Some(update.clone()),
+            _ => None,
+        };
+    }
+    if let Some(verified) = app.try_state::<VerifiedPackage>() {
+        *verified.0.lock().unwrap() = None;
+    }
     classify(result, current, platform)
+}
+
+#[tauri::command]
+pub async fn download_update(
+    lock: State<'_, UpdateLock>,
+    pending: State<'_, PendingUpdate>,
+    verified: State<'_, VerifiedPackage>,
+    on_event: Channel<DownloadEvent>,
+) -> Result<DownloadResult, ()> {
+    Ok(download(&lock, &pending, &verified, &on_event).await)
+}
+
+/// Downloads the pending update and verifies it. The plugin checks the
+/// signature before returning the bytes, so a package that does not verify is
+/// never kept.
+async fn download(
+    lock: &UpdateLock,
+    pending: &PendingUpdate,
+    verified: &VerifiedPackage,
+    events: &Channel<DownloadEvent>,
+) -> DownloadResult {
+    let Some(_held) = lock.try_hold() else {
+        return DownloadResult::Busy;
+    };
+    let Some(update) = pending.0.lock().unwrap().clone() else {
+        return DownloadResult::NothingToDownload;
+    };
+    let downloaded = AtomicU64::new(0);
+    // 0 means unknown: a missing or zero Content-Length gives no usable total.
+    let total = AtomicU64::new(0);
+    let last = Mutex::new(None::<Instant>);
+    let progress = || DownloadEvent::Progress {
+        downloaded: downloaded.load(Ordering::Relaxed),
+        total: Some(total.load(Ordering::Relaxed)).filter(|bytes| *bytes > 0),
+    };
+    let result = update
+        .download(
+            |chunk, length| {
+                downloaded.fetch_add(chunk as u64, Ordering::Relaxed);
+                total.store(length.unwrap_or(0), Ordering::Relaxed);
+                let mut last = last.lock().unwrap();
+                if last.is_none_or(|at| at.elapsed() >= PROGRESS_INTERVAL) {
+                    *last = Some(Instant::now());
+                    let _ = events.send(progress());
+                }
+            },
+            || {
+                let _ = events.send(progress());
+                let _ = events.send(DownloadEvent::Finished);
+            },
+        )
+        .await;
+    match result {
+        Ok(bytes) => {
+            *verified.0.lock().unwrap() = Some((update.version, bytes));
+            DownloadResult::Verified
+        }
+        Err(error) => DownloadResult::Failed {
+            reason: download_failure(&error),
+            detail: error.to_string(),
+        },
+    }
+}
+
+fn download_failure(error: &Error) -> DownloadFailure {
+    match error {
+        Error::Minisign(_)
+        | Error::SignedVersionMismatch { .. }
+        | Error::MissingSignedVersion
+        | Error::Base64(_)
+        | Error::SignatureUtf8(_) => DownloadFailure::Verification,
+        Error::Reqwest(error) if error.is_connect() || error.is_timeout() => {
+            DownloadFailure::Offline
+        }
+        _ => DownloadFailure::Download,
+    }
 }
 
 fn classify(result: Result<Option<Update>, Error>, current: String, target: String) -> UpdateCheck {
@@ -497,5 +646,111 @@ mod signing_tests {
 
     fn update_with(signature: &str) -> Update {
         update(&serve(signature.trim(), Some(PACKAGE)))
+    }
+
+    // U2-P7-05: the download command, with the events the webview receives.
+    use super::{
+        download as download_command, DownloadEvent, DownloadFailure, DownloadResult,
+        PendingUpdate, UpdateLock, VerifiedPackage,
+    };
+    use std::sync::{Arc, Mutex};
+    use tauri::ipc::{Channel, InvokeResponseBody};
+
+    fn events() -> (Channel<DownloadEvent>, Arc<Mutex<Vec<serde_json::Value>>>) {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = seen.clone();
+        let channel = Channel::new(move |body| {
+            if let InvokeResponseBody::Json(json) = body {
+                sink.lock()
+                    .unwrap()
+                    .push(serde_json::from_str(&json).unwrap());
+            }
+            Ok(())
+        });
+        (channel, seen)
+    }
+
+    fn fetch(
+        update: Option<Update>,
+    ) -> (
+        DownloadResult,
+        Vec<serde_json::Value>,
+        Option<(String, Vec<u8>)>,
+    ) {
+        let pending = PendingUpdate(Mutex::new(update));
+        let verified = VerifiedPackage::default();
+        let (channel, seen) = events();
+        let result = tauri::async_runtime::block_on(download_command(
+            &UpdateLock::default(),
+            &pending,
+            &verified,
+            &channel,
+        ));
+        let package = verified.0.lock().unwrap().take();
+        let seen = seen.lock().unwrap().clone();
+        (result, seen, package)
+    }
+
+    #[test]
+    fn a_verified_download_reports_real_bytes_and_keeps_the_package() {
+        let (result, seen, package) = fetch(Some(update_with(GOOD)));
+        assert_eq!(result, DownloadResult::Verified);
+        let length = PACKAGE.len() as u64;
+        assert_eq!(seen.last().unwrap(), &json!({ "event": "finished" }));
+        assert_eq!(
+            seen[seen.len() - 2],
+            json!({ "event": "progress", "downloaded": length, "total": length })
+        );
+        let counts: Vec<u64> = seen
+            .iter()
+            .filter_map(|event| event["downloaded"].as_u64())
+            .collect();
+        assert!(
+            counts.windows(2).all(|pair| pair[0] <= pair[1]),
+            "{counts:?}"
+        );
+        assert_eq!(package, Some(("0.2.0".into(), PACKAGE.to_vec())));
+    }
+
+    #[test]
+    fn a_package_that_does_not_verify_is_reported_and_not_kept() {
+        let (result, _, package) = fetch(Some(update_with(WRONG_KEY)));
+        assert!(matches!(
+            result,
+            DownloadResult::Failed {
+                reason: DownloadFailure::Verification,
+                ..
+            }
+        ));
+        assert_eq!(package, None);
+    }
+
+    #[test]
+    fn a_missing_package_fails_the_download_command() {
+        let (result, seen, package) = fetch(Some(update(&serve(GOOD.trim(), None))));
+        assert!(matches!(
+            result,
+            DownloadResult::Failed {
+                reason: DownloadFailure::Download,
+                ..
+            }
+        ));
+        assert!(seen.is_empty());
+        assert_eq!(package, None);
+    }
+
+    #[test]
+    fn nothing_downloads_without_a_checked_update_or_while_busy() {
+        assert_eq!(fetch(None).0, DownloadResult::NothingToDownload);
+        let lock = UpdateLock::default();
+        let _held = lock.try_hold().unwrap();
+        let (channel, _) = events();
+        let result = tauri::async_runtime::block_on(download_command(
+            &lock,
+            &PendingUpdate(Mutex::new(Some(update_with(GOOD)))),
+            &VerifiedPackage::default(),
+            &channel,
+        ));
+        assert_eq!(result, DownloadResult::Busy);
     }
 }

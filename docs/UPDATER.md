@@ -30,7 +30,16 @@ The endpoint is a fixed asset on a dedicated `updater-beta` release that holds o
 - **States.** `src/features/updates/updateMachine.ts` defines the nine states: idle, checking, up to date, update available, downloading, verifying, installing, restarting, and error. `transition` is the only way to change state, and it ignores an event that does not apply, so late or repeated events cannot produce contradictory screens. A shared store (`updateStore.ts`) keeps one state for the whole app. It starts nothing while an operation is in flight, so repeated activation cannot begin a second one.
 - **Leaving the screen.** The screen lives inside the normal workspace, so the sidebar stays usable. **Done** is offered whenever leaving is safe (idle, up to date, available, error, and during a check, which changes nothing), and it returns focus to the sidebar control. Errors explain what happened, say the workspace is not affected, and offer **Try again**, except on unsupported platforms.
 - **Version.** Settings → About shows the installed version from the `app_version` command, so the window needs no extra permission.
-- **Later work.** Download progress and the butterfly visuals are U2-P7-05. Installation and relaunch are U2-P7-06.
+- **Later work.** Installation and relaunch are U2-P7-06.
+
+## Download and progress (U2-P7-05)
+
+- **Starting.** **Download and install** in the available state is the only way a download starts. `download_update` fetches only the update the last check found (kept in Rust as `PendingUpdate`), so the webview cannot choose a package or an address. It shares the one-operation lock with the check.
+- **Progress.** The native download reports the bytes actually received through a Tauri `Channel`, at most every 100 ms. With a known total, the bar and text show a percentage and "2 MB of 8 MB". With a missing or zero total, the bar is indeterminate and only the downloaded size is shown. Nothing is estimated. Progress is not a live region; the status line announces each new state once.
+- **Verification.** When every byte has arrived, the screen shows **Verifying update...** while the plugin checks the signature against the embedded key and the signed version ([Updater signing](UPDATER_SIGNING.md)). A package that fails verification is discarded and reported as "could not be verified". A verified package is kept in memory (`VerifiedPackage`) for installation.
+- **Until U2-P7-06.** Installing is not wired yet, so a verified download ends in "could not be installed", with nothing changed. The installing and restarting messages exist and are covered by the state tests.
+- **Cancellation.** The plugin's download API offers no safe cancellation, so none is offered, and **Done** is hidden while downloading. The sidebar still works, and the download finishes or fails on its own.
+- **Visuals.** The official butterfly (`BrandMark`, unchanged geometry) sits above the status. While an operation runs it breathes (a slight scale and opacity change) and its wings move gently. The working titles end in three dots that light in turn. Only `transform` and `opacity` animate, and only in busy states; a settled screen runs no animation. With reduced motion, the butterfly is still, the dots are solid, and the indeterminate bar is a still, lighter bar.
 
 ## Results
 

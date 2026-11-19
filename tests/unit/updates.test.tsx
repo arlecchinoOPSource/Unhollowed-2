@@ -8,13 +8,20 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { checkForUpdate, type UpdateCheck } from "../../src/database/updates";
+import {
+  checkForUpdate,
+  downloadUpdate,
+  type DownloadEvent,
+  type DownloadResult,
+  type UpdateCheck,
+} from "../../src/database/updates";
 import { UpdateButton } from "../../src/features/updates/UpdateButton";
 import { Updates } from "../../src/features/updates/Updates";
 import { useUpdates } from "../../src/features/updates/updateStore";
 
 vi.mock("../../src/database/updates", () => ({
   checkForUpdate: vi.fn(),
+  downloadUpdate: vi.fn(),
   getAppVersion: vi.fn(),
 }));
 
@@ -31,6 +38,14 @@ function app(start = "/") {
     </MemoryRouter>,
   );
 }
+
+/** The state title, whose ellipsis is split across elements. */
+const findTitle = (text: string) =>
+  screen.findByText(
+    (_, element) =>
+      element?.classList.contains("updates-title") === true &&
+      element.textContent === text,
+  );
 
 /** A check that answers only when released, to observe the checking state. */
 function pending() {
@@ -58,7 +73,7 @@ test("opening the updater checks once and reports an up-to-date app", async () =
   const answer = pending();
   app();
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-  expect(await screen.findByText("Checking…")).toBeVisible();
+  expect(await findTitle("Checking...")).toBeVisible();
   await answer({ status: "current", currentVersion: "1.0.0-beta.1" });
   expect(screen.getByText("Unhollowed is up to date")).toBeVisible();
   expect(screen.getByText(/latest version, 1\.0\.0-beta\.1/)).toBeVisible();
@@ -157,4 +172,108 @@ test("the checking state can be left, because a check changes nothing", async ()
   fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
   expect(await screen.findByRole("button", { name: "Done" })).toBeVisible();
   await answer({ status: "current", currentVersion: "1" });
+});
+
+// U2-P7-05: download progress from real byte counts.
+const offer = {
+  status: "available" as const,
+  currentVersion: "1.0.0-beta.1",
+  version: "1.1.0-beta.1",
+  date: null,
+  notes: null,
+};
+
+/** A download that sends `events`, then waits until released with a result. */
+function downloading(events: DownloadEvent[]) {
+  let finish!: (result: DownloadResult) => void;
+  vi.mocked(downloadUpdate).mockImplementation((onEvent) => {
+    for (const event of events) onEvent(event);
+    return new Promise((resolve) => (finish = resolve));
+  });
+  return (result: DownloadResult) => act(async () => finish(result));
+}
+
+async function openOffer() {
+  vi.mocked(checkForUpdate).mockResolvedValueOnce(offer);
+  app();
+  fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+  return screen.findByRole("button", { name: "Download and install" });
+}
+
+test("a known total shows a byte-driven percentage", async () => {
+  vi.mocked(downloadUpdate).mockReset();
+  const finish = downloading([
+    { event: "progress", downloaded: 2 * 1024 * 1024, total: 8 * 1024 * 1024 },
+  ]);
+  fireEvent.click(await openOffer());
+  expect(await findTitle("Downloading update...")).toBeVisible();
+  const bar = screen.getByRole("progressbar", { name: "Download progress" });
+  expect(bar).toHaveAttribute("aria-valuenow", "25");
+  expect(screen.getByText("25% · 2 MB of 8 MB")).toBeVisible();
+  await finish({ status: "failed", reason: "offline", detail: "x" });
+  expect(screen.getByText("Could not reach the update server")).toBeVisible();
+});
+
+test.each([
+  ["missing", null],
+  ["zero", 0],
+])(
+  "a %s total shows an indeterminate bar and no percentage",
+  async (_, total) => {
+    vi.mocked(downloadUpdate).mockReset();
+    const finish = downloading([
+      {
+        event: "progress",
+        downloaded: 512 * 1024,
+        total: total as number | null,
+      },
+    ]);
+    fireEvent.click(await openOffer());
+    const bar = await screen.findByRole("progressbar", {
+      name: "Download progress",
+    });
+    expect(bar).not.toHaveAttribute("aria-valuenow");
+    expect(bar).toHaveClass("is-indeterminate");
+    expect(screen.getByText("512 KB downloaded")).toBeVisible();
+    expect(screen.queryByText(/%/)).toBeNull();
+    await finish({ status: "busy" });
+  },
+);
+
+test("a finished download is verified, and a bad signature is reported", async () => {
+  vi.mocked(downloadUpdate).mockReset();
+  const finish = downloading([
+    { event: "progress", downloaded: 10, total: 10 },
+    { event: "finished" },
+  ]);
+  fireEvent.click(await openOffer());
+  expect(await findTitle("Verifying update...")).toBeVisible();
+  expect(screen.queryByRole("progressbar")).toBeNull();
+  await finish({ status: "failed", reason: "verification", detail: "x" });
+  expect(screen.getByText("The update could not be verified")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("a verified package stops before installing, which arrives later", async () => {
+  vi.mocked(downloadUpdate).mockReset();
+  const finish = downloading([{ event: "finished" }]);
+  fireEvent.click(await openOffer());
+  await finish({ status: "verified" });
+  expect(screen.getByText("The update could not be installed")).toBeVisible();
+  expect(screen.getByText(/Nothing was changed/)).toBeVisible();
+});
+
+test("repeated activation starts one download, and leaving is not offered mid-download", async () => {
+  vi.mocked(downloadUpdate).mockReset();
+  const finish = downloading([]);
+  const button = await openOffer();
+  fireEvent.click(button);
+  expect(
+    screen.queryByRole("button", { name: "Download and install" }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+  expect(downloadUpdate).toHaveBeenCalledTimes(1);
+  expect(checkForUpdate).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+  await finish({ status: "busy" });
 });

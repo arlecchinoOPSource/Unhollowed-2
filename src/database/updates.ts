@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 
 /** Why a check failed. Nothing was downloaded or changed; the person can retry. */
 export type UpdateFailureReason = "offline" | "invalidMetadata" | "server";
@@ -30,4 +30,32 @@ export function checkForUpdate(): Promise<UpdateCheck> {
 /** The installed app's version, as the operating system sees it. */
 export function getAppVersion(): Promise<string> {
   return invoke("app_version");
+}
+
+/** Byte progress from the native download (U2-P7-05). */
+export type DownloadEvent =
+  | { event: "progress"; downloaded: number; total: number | null }
+  /** Every byte arrived; the signature is being checked. */
+  | { event: "finished" };
+
+export type DownloadResult =
+  | { status: "verified" }
+  | { status: "busy" }
+  | { status: "nothingToDownload" }
+  | {
+      status: "failed";
+      reason: "offline" | "download" | "verification";
+      detail: string;
+    };
+
+/**
+ * Downloads the update the last check found and verifies its signature.
+ * Progress arrives through `onEvent`, at most about ten times a second.
+ */
+export function downloadUpdate(
+  onEvent: (event: DownloadEvent) => void,
+): Promise<DownloadResult> {
+  const channel = new Channel<DownloadEvent>();
+  channel.onmessage = onEvent;
+  return invoke("download_update", { onEvent: channel });
 }
