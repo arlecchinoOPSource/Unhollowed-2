@@ -10,7 +10,7 @@ Regenerate the notices after dependency changes with `npm run notices` and verif
 
 ## Privacy and beta status
 
-See the [privacy statement](PRIVACY_STATEMENT.md) for local data and backup locations, storage limits, and what happens when you open an external link. Unhollowed 2 is beta software provided as is, without warranty. Keep [backups](BACKUP.md) of important work. Use unsigned validation builds for internal testing.
+See the [privacy statement](PRIVACY_STATEMENT.md) for local data and backup locations, storage limits, and what happens when you open an external link. Unhollowed 2 is beta software provided as is, without warranty. Keep [backups](BACKUP.md) of important work. Use the verified downloads from the official public beta release. Both platform installers are unsigned for `v1.0.0-beta.1`.
 
 ## Supported platforms
 

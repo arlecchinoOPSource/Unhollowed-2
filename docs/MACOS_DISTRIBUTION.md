@@ -2,12 +2,14 @@
 
 Validation and plan for U2-P6-17. Local checks were run on macOS 26.5.1, Apple M5, on a release build of this change (`npx tauri build --bundles app`). **No signing credential exists on this machine or in the repository, none was created, and nothing here is signed or notarized.**
 
+The owner approved distributing `v1.0.0-beta.1` without Developer ID signing or notarization. Gatekeeper or managed-device policies may block the app. The signing steps below are for future releases.
+
 ## Two kinds of build
 
-| Kind                         | Made by                                                               | Signed                                     | Who can run it                                                                                                                                                                                                                                                  |
-| ---------------------------- | --------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unsigned internal test build | `Desktop packaging` workflow (`--no-sign`) or `npm run desktop:build` | Ad-hoc only                                | Developers and testers. After a download, macOS quarantines it and Gatekeeper blocks it until the tester opens it with right-click, **Open**, or clears the flag with `xattr -dr com.apple.quarantine "Unhollowed 2.app"`. Never give this build to the public. |
-| Notarized public build       | A future release job with Apple credentials (see below)               | Developer ID Application, hardened runtime | Anyone; opens with the normal Gatekeeper prompt.                                                                                                                                                                                                                |
+| Kind                   | Made by                                                               | Signed                                     | Who can run it                                                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unsigned build         | `Desktop packaging` workflow (`--no-sign`) or `npm run desktop:build` | Ad-hoc only                                | Validation builds are for testers. The owner-approved, verified `v1.0.0-beta.1` candidate may be distributed publicly with the Gatekeeper limitation disclosed. |
+| Notarized public build | A future release job with Apple credentials (see below)               | Developer ID Application, hardened runtime | Anyone; opens with the normal Gatekeeper prompt.                                                                                                                |
 
 ## What was verified on the unsigned build
 

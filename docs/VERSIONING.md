@@ -1,6 +1,6 @@
 # Release versioning
 
-Policy and plan for U2-P6-16. **No version number was changed.** The application is still `0.1.0` everywhere. This document records where the version lives, what the first beta must set, and a Windows packaging constraint that was found by running a real Windows build.
+Versioning policy for U2-P6-16 and the `1.0.0-beta.1` release candidate.
 
 ## Where the version lives
 
@@ -19,7 +19,7 @@ The application's own metadata (window title, bundle name) comes from `tauri.con
 
 ## Version for the first beta
 
-`1.0.0-beta.1` (SemVer 2.0). npm, Cargo, and Tauri all accept it. A release PR sets it in all six places at once, as [Release](RELEASE.md) already requires, and a `v1.0.0-beta.1` tag follows from the reviewed commit. Nobody has tagged or bumped yet.
+`1.0.0-beta.1` (SemVer 2.0). npm, Cargo, and Tauri all accept it. The candidate sets the application version in all six places and WiX ProductVersion to `0.99.1`. The tag follows from the reviewed commit after authorization.
 
 ## Increment rules
 
@@ -43,7 +43,7 @@ Windows packaging was tested on a throwaway branch with the CI workflow (`Deskto
 | App version `1.0.0-beta.1`, no other change                             | **The MSI build fails**: `optional pre-release identifier in app version must be numeric-only and cannot be greater than 65535 for msi target`. The NSIS setup `.exe` built. |
 | App version `1.0.0-beta.1` plus `bundle.windows.wix.version = "0.99.1"` | **Both installers build** (NSIS `.exe` and MSI), named with the app version, `Unhollowed 2_1.0.0-beta.1_x64-setup.exe` and `Unhollowed 2_1.0.0-beta.1_x64_en-US.msi`.        |
 
-So the beta cannot be released with the current configuration. The release PR must also add an explicit MSI version.
+The candidate uses the explicit MSI version from the successful packaging trial.
 
 ### How Windows Installer compares versions
 
@@ -70,4 +70,4 @@ Not verified: that Windows Installer actually upgrades `0.99.1` to `0.99.2` in p
 
 ## Status
 
-Policy, guard test, and the Windows constraint are done. The version bump itself is deliberately left for the release PR. Owner decision needed: approve `1.0.0-beta.1` and the `0.99.N` MSI mapping.
+The version guard checks the candidate metadata. Verify its actual installers before publishing.
