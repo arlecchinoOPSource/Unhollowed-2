@@ -92,14 +92,9 @@ jobs:
             ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'Unhollowed 2*' } | Select-Object -First 1
           $exe = Get-ChildItem "$env:ProgramFiles\Unhollowed 2", "$env:LOCALAPPDATA\Unhollowed 2" -Filter '*.exe' -ErrorAction SilentlyContinue |
             Where-Object Name -ne 'uninstall.exe' | Select-Object -First 1
-          try {
-            $list = Call $installer 'RelatedProducts' 'GetProperty' @('{8A580644-DADF-5B7B-853D-70D74A87A67E}')
-            $related = @(for ($i = 0; $i -lt $list.Count; $i++) { Call $list 'Item' 'GetProperty' @($i) }) -join ', '
-          } catch { $related = "lookup failed: $($_.Exception.Message)" }
           $out += "| Uninstall entry | $($entry.PSPath -replace '^.*::','') |"
           $out += "| DisplayVersion, Publisher, InstallLocation | $($entry.DisplayVersion), $($entry.Publisher), $($entry.InstallLocation) |"
           $out += "| Installed executable | $($exe.FullName) |"
-          $out += "| Installed products with upgrade code 8A580644-... | $related |"
           Start-Process msiexec -ArgumentList @('/x', "`"$msi`"", '/qn', '/norestart') -Wait
           $out += "| Executable left after uninstall | $(if ($exe) { Test-Path $exe.FullName } else { 'n/a' }) |"
           $out | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
