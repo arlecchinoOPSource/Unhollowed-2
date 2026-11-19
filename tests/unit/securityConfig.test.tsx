@@ -50,4 +50,16 @@ describe("desktop trust boundary (U2-P6-01)", () => {
       expect(key).not.toMatch(/^dangerous|^allowDowngrades$/);
     }
   });
+
+  // Rotating the key is a deliberate, reviewed step: update this ID with it
+  // (docs/UPDATER_SIGNING.md). The test fixtures' key must never ship.
+  it("embeds the owner's updater key and requires signed versions (U2-P7-03)", () => {
+    const updater = conf.plugins.updater;
+    const key = Buffer.from(updater.pubkey, "base64").toString("utf8");
+    expect(key).toContain("minisign public key: 391B93A7FCFD9454");
+    expect(updater.pubkey).not.toBe(
+      read("src-tauri/fixtures/updater/test-key.pub").trim(),
+    );
+    expect(updater.requireSignedVersion).toBe(true);
+  });
 });

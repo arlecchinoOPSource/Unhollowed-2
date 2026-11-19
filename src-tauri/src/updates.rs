@@ -352,3 +352,144 @@ mod tests {
         );
     }
 }
+
+/// U2-P7-03: the maintained verifier accepts only a package signed by the
+/// embedded key for the announced version. The fixtures in
+/// `src-tauri/fixtures/updater` were signed with throwaway test keys whose
+/// private halves were never committed (docs/UPDATER_SIGNING.md).
+#[cfg(test)]
+mod signing_tests {
+    use serde_json::json;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+    use tauri::test::{mock_builder, mock_context, noop_assets};
+    use tauri_plugin_updater::{Error, Update, UpdaterExt};
+
+    const TARGET: &str = "darwin-aarch64";
+    const PACKAGE: &[u8] = include_bytes!("../fixtures/updater/package.bin");
+    const TEST_KEY: &str = include_str!("../fixtures/updater/test-key.pub");
+    const GOOD: &str = include_str!("../fixtures/updater/good.sig");
+    const OTHER_VERSION: &str = include_str!("../fixtures/updater/other-version.sig");
+    const WRONG_KEY: &str = include_str!("../fixtures/updater/wrong-key.sig");
+
+    /// Serves the manifest at `/latest.json` and `package` (or a 404 when it is
+    /// `None`) at `/package`, like the channel and its release asset.
+    fn serve(signature: &str, package: Option<&'static [u8]>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let manifest = json!({
+            "version": "0.2.0",
+            "platforms": { TARGET: { "url": format!("{base}/package"), "signature": signature } }
+        })
+        .to_string();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().take(2).flatten() {
+                let mut line = String::new();
+                let _ = BufReader::new(&stream).read_line(&mut line);
+                let (status, body) = match (line.contains("/latest.json"), package) {
+                    (true, _) => ("200 OK", manifest.as_bytes().to_vec()),
+                    (false, Some(bytes)) => ("200 OK", bytes.to_vec()),
+                    (false, None) => ("404 Not Found", b"Not Found".to_vec()),
+                };
+                let mut stream = stream;
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(&body);
+            }
+        });
+        format!("{base}/latest.json")
+    }
+
+    /// Checks the feed with the embedded test key and signed versions required,
+    /// as the production configuration does.
+    fn update(endpoint: &str) -> Update {
+        let mut context = mock_context(noop_assets());
+        context.config_mut().plugins.0.insert(
+            "updater".into(),
+            json!({
+                "pubkey": TEST_KEY.trim(),
+                "endpoints": [endpoint],
+                "requireSignedVersion": true,
+                "dangerousInsecureTransportProtocol": true
+            }),
+        );
+        let app = mock_builder()
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .build(context)
+            .unwrap();
+        let updater = app.updater_builder().target(TARGET).build().unwrap();
+        tauri::async_runtime::block_on(updater.check())
+            .unwrap()
+            .expect("the fixture feed announces 0.2.0 to the 0.1.0 mock app")
+    }
+
+    fn download(signature: &str, package: Option<&'static [u8]>) -> Result<Vec<u8>, Error> {
+        let update = update(&serve(signature, package));
+        tauri::async_runtime::block_on(update.download(|_, _| {}, || {}))
+    }
+
+    #[test]
+    fn a_package_signed_by_the_embedded_key_for_the_announced_version_verifies() {
+        assert_eq!(download(GOOD.trim(), Some(PACKAGE)).unwrap(), PACKAGE);
+    }
+
+    #[test]
+    fn a_package_signed_by_another_key_is_rejected() {
+        assert!(matches!(
+            download(WRONG_KEY.trim(), Some(PACKAGE)),
+            Err(Error::Minisign(_))
+        ));
+    }
+
+    #[test]
+    fn a_changed_package_is_rejected() {
+        assert!(matches!(
+            download(GOOD.trim(), Some(b"a different package")),
+            Err(Error::Minisign(_))
+        ));
+    }
+
+    #[test]
+    fn a_signature_for_another_version_is_rejected() {
+        let result = download(OTHER_VERSION.trim(), Some(PACKAGE));
+        assert!(
+            matches!(&result, Err(Error::SignedVersionMismatch { signed, announced }) if signed == "0.1.5" && announced == "0.2.0"),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn a_missing_or_malformed_signature_is_rejected() {
+        for signature in ["", "not a signature", "dW50cnVzdGVkIGNvbW1lbnQ6IA=="] {
+            assert!(download(signature, Some(PACKAGE)).is_err(), "{signature:?}");
+        }
+    }
+
+    #[test]
+    fn a_missing_package_is_a_download_failure() {
+        assert!(matches!(
+            download(GOOD.trim(), None),
+            Err(Error::Network(message)) if message.contains("404")
+        ));
+    }
+
+    // `install` verifies before it touches anything, so a package that fails
+    // verification never reaches the platform installer.
+    #[test]
+    fn installation_refuses_a_package_that_does_not_verify() {
+        let update = update(&serve(WRONG_KEY.trim(), Some(PACKAGE)));
+        assert!(matches!(update.install(PACKAGE), Err(Error::Minisign(_))));
+        let update = update_with(GOOD);
+        assert!(matches!(
+            update.install(b"a different package"),
+            Err(Error::Minisign(_))
+        ));
+    }
+
+    fn update_with(signature: &str) -> Update {
+        update(&serve(signature.trim(), Some(PACKAGE)))
+    }
+}

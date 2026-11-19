@@ -21,6 +21,10 @@ on:
         type: choice
         options: [windows, macos, both]
         default: windows
+      updater:
+        description: Also build signed updater packages (needs the updater-signing environment)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -77,6 +81,12 @@ jobs:
           ) }}
     runs-on: ${{ matrix.platform == 'windows' && 'windows-2025' || 'macos-15' }}
     timeout-minutes: 40
+    # Signed updater packages are built only for release tags and on request.
+    # The private key lives only in this protected environment's secrets
+    # (docs/UPDATER_SIGNING.md); every other run never sees it.
+    environment: ${{ (github.ref_type == 'tag' || inputs.updater) && 'updater-signing' || '' }}
+    env:
+      SIGN_UPDATER: ${{ (github.ref_type == 'tag' || inputs.updater) && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -93,11 +103,28 @@ jobs:
           workspaces: src-tauri -> target
       - name: Install frontend dependencies
         run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Require the updater signing key
+        if: env.SIGN_UPDATER == 'true'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ] || [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+            echo "::error::The updater-signing environment has no TAURI_SIGNING_PRIVATE_KEY or password. See docs/UPDATER_SIGNING.md."
+            exit 1
+          fi
       - name: Build desktop packages with Tauri
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.SIGN_UPDATER == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.SIGN_UPDATER == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         with:
-          args: --ci --no-sign --bundles ${{ matrix.platform == 'windows' && 'nsis,msi' || 'app,dmg' }} -- --locked
+          # --no-sign also skips updater signatures, so signing runs drop it. Without
+          # Apple or Windows certificates the installers stay unsigned either way.
+          args: --ci --bundles ${{ matrix.platform == 'windows' && 'nsis,msi' || 'app,dmg' }} ${{ env.SIGN_UPDATER == 'true' && '--config src-tauri/tauri.updater.conf.json' || '--no-sign' }} -- --locked
           uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
       - name: Stage, verify, and checksum the installers
         shell: bash
         run: |
@@ -106,10 +133,16 @@ jobs:
           bundle=src-tauri/target/release/bundle
           if [ "${{ matrix.platform }}" = windows ]; then
             cp "$bundle"/nsis/*.exe "$bundle"/msi/*.msi release-artifacts/
+            if [ "$SIGN_UPDATER" = true ]; then cp "$bundle"/nsis/*.exe.sig "$bundle"/msi/*.msi.sig release-artifacts/; fi
           else
             cp "$bundle"/dmg/*.dmg release-artifacts/
+            if [ "$SIGN_UPDATER" = true ]; then
+              # Tauri names the archive after the app only; add the version and architecture.
+              cp "$bundle/macos/Unhollowed 2.app.tar.gz" "release-artifacts/Unhollowed 2_${version}_aarch64.app.tar.gz"
+              cp "$bundle/macos/Unhollowed 2.app.tar.gz.sig" "release-artifacts/Unhollowed 2_${version}_aarch64.app.tar.gz.sig"
+            fi
           fi
-          bash scripts/verify-artifacts.sh "${{ matrix.platform }}" release-artifacts "$version"
+          bash scripts/verify-artifacts.sh "${{ matrix.platform }}" release-artifacts "$version" "$([ "$SIGN_UPDATER" = true ] && echo updater)"
       - name: Record installer signatures
         shell: bash
         run: |
