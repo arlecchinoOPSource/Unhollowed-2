@@ -1,0 +1,162 @@
+# Updater compatibility and channel audit
+
+Audit for U2-P7-01 (#253), the first step of the [1.1.0 on-demand updater milestone](https://github.com/arlecchinoOPSource/Unhollowed-2/milestone/11). It records how `v1.0.0-beta.1` is packaged and installed, which formats the Tauri 2 updater can use, and how existing users reach the first updater-enabled build. Audited 2026-11-19 on commit `8f1d5d3` (the `v1.0.0-beta.1` tag).
+
+**No updater was added, and no published release file was changed.** The published assets were only downloaded and read.
+
+## Summary
+
+- `v1.0.0-beta.1` has **no updater**. It cannot find, download, or install a newer version. Every existing user must **install the first updater-enabled build by hand** once (see [Manual bootstrap](#manual-bootstrap-from-v100-beta1)). Only later releases can arrive through the updater.
+- Keep the identifier `dev.arlecchino.unhollowed2` **and** the product name `Unhollowed 2`. The identifier names the data folder. The product name sets the Windows MSI upgrade code. A change to either one splits installs.
+- The updater can serve all three published installer families: macOS arm64 (from the `.app`), Windows x64 NSIS, and Windows x64 MSI. Each family must update only from its own kind of package.
+- Use one **beta** channel for 1.1.0 prereleases. The first updater-enabled build is `1.1.0-beta.1`. The Windows MSI needs a new version mapping, because `1.1.0-beta.N` cannot be an MSI version ([Versions](#version-and-channel-strategy)).
+- Unsigned upgrades work on macOS when the new app replaces the old one in the same location. The data is kept. Gatekeeper and SmartScreen warn on every manual download of an unsigned build.
+
+## Published `v1.0.0-beta.1` assets
+
+From the GitHub prerelease, published 2026-11-19 14:55 UTC. The checksums in `SHA256SUMS` match the digests GitHub reports. The DMG was downloaded and its checksum was checked here (`shasum -a 256 -c SHA256SUMS`: `OK`).
+
+| Asset                                     | Size      | SHA-256 (start) | Built by                                                                                                                 | Signature                                                            |
+| ----------------------------------------- | --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `Unhollowed-2_1.0.0-beta.1_aarch64.dmg`   | 8,135,915 | `c0b1d165`      | **Local Mac build** (`BUILD-INFO.txt`: "Mac artifact source: local"). The CI macOS job of run 44547268988 was cancelled. | Ad-hoc linker signature, not notarized                               |
+| `Unhollowed-2_1.0.0-beta.1_x64-setup.exe` | 5,810,764 | `15dd56a4`      | `Desktop packaging` run 44547268988, `Package windows`, tag `v1.0.0-beta.1`                                              | `NotSigned` (recorded by the run)                                    |
+| `Unhollowed-2_1.0.0-beta.1_x64_en-US.msi` | 8,278,016 | `073c6f15`      | Same run                                                                                                                 | `NotSigned` (recorded by the run)                                    |
+| `SHA256SUMS`, `BUILD-INFO.txt`            | 316, 823  |                 | Release maintainer                                                                                                       | Both builds record commit `8f1d5d36984c7b5ae8e2dfbd9e69a83107f540ba` |
+
+No updater artifacts (`.app.tar.gz`, `.sig`, `latest.json`) were published. `createUpdaterArtifacts` is not set.
+
+## Current packaging architecture
+
+| Item                 | Value                                                                                  | Source                                  |
+| -------------------- | -------------------------------------------------------------------------------------- | --------------------------------------- |
+| Tauri                | `tauri` 2.12.5 (lockfile), `@tauri-apps/cli` 2.12.4, `tauri-action` v1.0.0             | `Cargo.lock`, `package.json`, workflows |
+| Plugins              | `dialog`, `notification`, `sql` (SQLite). **No `tauri-plugin-updater`.**               | `src-tauri/Cargo.toml`                  |
+| Window permissions   | `capabilities/main.json` grants no plugin permissions                                  | `src-tauri/capabilities/main.json`      |
+| Network policy       | CSP `connect-src ipc: http://ipc.localhost`: the web view cannot reach any remote host | `tauri.conf.json`                       |
+| Bundle targets       | `"targets": "all"`; CI builds `dmg` on macOS arm64 and `nsis,msi` on Windows x64       | `tauri.conf.json`, `platform-build.yml` |
+| Version              | `1.0.0-beta.1`; MSI `ProductVersion` `0.99.1` (`bundle.windows.wix.version`)           | [Versioning](VERSIONING.md)             |
+| Publisher, copyright | `Arlecchino`, `Copyright © 2026 Arlecchino`                                            | `tauri.conf.json`                       |
+| Signing              | None. CI builds pass `--no-sign`. The owner approved unsigned public beta packages.    | [Release](RELEASE.md)                   |
+
+## Installation identity by installer
+
+| Item                | macOS arm64 DMG                                                                                                                                    | Windows x64 NSIS `-setup.exe`                                                                                              | Windows x64 MSI                                                                                                                             |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| App identity        | `CFBundleIdentifier` `dev.arlecchino.unhollowed2`, `CFBundleName` `Unhollowed 2` (**read from the published DMG**)                                 | Uninstall entry `Unhollowed 2` under `HKCU` (per-user)                                                                     | `UpgradeCode` `8a580644-dadf-5b7b-853d-70d74a87a67e`, derived from the **product name** (see below); `ProductCode` new per build (`Id="*"`) |
+| Version shown       | `CFBundleShortVersionString` and `CFBundleVersion` `1.0.0-beta.1` (read)                                                                           | `1.0.0-beta.1`                                                                                                             | `ProductVersion` `0.99.1`                                                                                                                   |
+| Install scope       | Wherever the user drags it; normally `/Applications`                                                                                               | Per-user (Tauri default `currentUser`), no administrator prompt                                                            | Tauri's WiX template declares `InstallScope="perMachine"` (administrator prompt)                                                            |
+| App path            | `/Applications/Unhollowed 2.app`                                                                                                                   | `%LOCALAPPDATA%\Unhollowed 2\unhollowed-2.exe` (observed in U2-P6-18)                                                      | Template default `%ProgramFiles%\Unhollowed 2`; U2-P6-18 observed `%LOCALAPPDATA%\Unhollowed 2` (see W-2)                                   |
+| Workspace data      | `~/Library/Application Support/dev.arlecchino.unhollowed2/workspace.sqlite3` (observed here)                                                       | `%APPDATA%\dev.arlecchino.unhollowed2\workspace.sqlite3` (observed)                                                        | Same as NSIS (observed)                                                                                                                     |
+| Publisher           | Not shown                                                                                                                                          | `Arlecchino` (`bundle.publisher`, set in #250)                                                                             | `Arlecchino`                                                                                                                                |
+| Architecture        | `arm64` only (`lipo -archs`). Intel Macs are not supported.                                                                                        | x64                                                                                                                        | x64                                                                                                                                         |
+| Minimum OS declared | `LSMinimumSystemVersion` `10.13` (untested, MAC-3 in [macOS](MACOS_DISTRIBUTION.md))                                                               | Windows 10 with WebView2                                                                                                   | Same                                                                                                                                        |
+| Code signature      | Ad-hoc. `codesign -dv`: `Identifier=unhollowed_2-adb50498f5cc0ccd`, `TeamIdentifier=not set`. `spctl` rejects it.                                  | `NotSigned`                                                                                                                | `NotSigned`                                                                                                                                 |
+| Expected OS trust   | A browser download is quarantined. Gatekeeper blocks the first open. The user allows it in **System Settings → Privacy & Security → Open Anyway**. | SmartScreen "Windows protected your PC" on a browser download. **More info → Run anyway.** Smart App Control may block it. | Same as NSIS, plus the administrator prompt shows an unknown publisher.                                                                     |
+
+### Correction: the MSI upgrade code comes from the product name
+
+[Identity](IDENTITY.md) said the MSI upgrade code is derived from the identifier. The Tauri bundler derives it from the **product name**: `Uuid::new_v5(NAMESPACE_DNS, "<productName>.exe.app.x64")`. `npx tauri inspect wix-upgrade-code` prints `8a580644-dadf-5b7b-853d-70d74a87a67e` for `Unhollowed 2`. A Python `uuid5` computation gives the same value.
+
+Consequence: renaming the product, even only for display, changes the upgrade code. A new MSI would then install beside the old one instead of upgrading it. `tests/unit/identity.test.tsx` now guards the product name and the absence of a different `wix.upgradeCode`. If the product must be renamed, set `bundle.windows.wix.upgradeCode` to the value above in the same change.
+
+## Tauri 2 updater formats compared with today's installers
+
+From the [Tauri updater documentation](https://v2.tauri.app/plugin/updater/) and the `tauri-plugin-updater` source.
+
+| Platform    | Ordinary download (keep) | Updater package with `bundle.createUpdaterArtifacts: true`                | How the updater installs it                                                                                                                                                      |
+| ----------- | ------------------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS arm64 | DMG                      | `Unhollowed 2.app.tar.gz` + `.sig`. The DMG is **not** an updater format. | Extracts next to the running app and swaps the bundle in place. If the folder is not writable, it asks for an administrator password through AppleScript. The app must relaunch. |
+| Windows x64 | NSIS `-setup.exe`        | The same `-setup.exe` + `.sig`                                            | Runs the setup with `/UPDATE` in the configured `installMode` (default `passive`). The app exits first.                                                                          |
+| Windows x64 | MSI                      | The same `.msi` + `.sig`                                                  | Runs `msiexec /i <msi> /promptrestart` with the mode's flags. The app exits first. A per-machine MSI asks for administrator rights.                                              |
+
+Rules that shape later issues:
+
+- **Signatures cannot be turned off.** Every updater package needs a minisign signature made with `TAURI_SIGNING_PRIVATE_KEY`, checked against the `pubkey` built into the app. This is separate from Apple and Authenticode signing (#255).
+- **Pick the update by installer family.** The plugin first looks for a `platforms` key `{os}-{arch}-{installer}` (for example `windows-x86_64-nsis` or `windows-x86_64-msi`), then falls back to `{os}-{arch}`. The installer type is recorded in the binary at bundle time (`tauri::utils::platform::bundle_type`). Publish both Windows keys, so an MSI install never receives the NSIS setup, and the reverse.
+- **Only newer versions install.** By default an update is offered only when its SemVer version is greater than the running one. Do not override `version_comparator`, so downgrades stay impossible.
+- **Permissions are explicit.** The window needs `updater:default` (check, download, install) in a capability. Today the window has none (#254).
+- The `v1Compatible` zip formats are for apps that had a Tauri 1 updater. This app never had one: use `true`.
+
+### Supported updater targets for 1.1.0
+
+| Target                 | Updater                 | Reason                                                                      |
+| ---------------------- | ----------------------- | --------------------------------------------------------------------------- |
+| macOS aarch64 (`.app`) | **Supported**           | The published platform                                                      |
+| Windows x86_64 NSIS    | **Supported** (primary) | Recommended Windows installer (WIN-3 in [Windows](WINDOWS_DISTRIBUTION.md)) |
+| Windows x86_64 MSI     | **Supported**           | Already published; needs its own manifest key and MSI version mapping       |
+| macOS x86_64 (Intel)   | Not supported           | No Intel build exists                                                       |
+| Windows ARM64, Linux   | Not supported           | Not built or tested                                                         |
+
+## Upgrade compatibility
+
+| Transition                                                                           | Result                                                                                      | Evidence                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS: published beta over an older workspace (migration 5)                          | **Pass**                                                                                    | Run here, published DMG, throwaway `HOME`: migrations 5 to 29, the fixture project kept, `integrity_check` `ok`                                                                                        |
+| macOS: relaunch                                                                      | **Pass**                                                                                    | 29 migrations, nothing re-applied, project kept                                                                                                                                                        |
+| macOS: replace the installed `.app` with a new copy                                  | **Pass**                                                                                    | The old bundle was moved away and a fresh copy put in its place, as Finder's **Replace** does. The workspace stayed 29 migrations with the project kept. Same version only: no newer build exists yet. |
+| Windows NSIS / MSI: install, start, upgrade an older workspace, uninstall keeps data | **Pass** on a `0.1.0` CI build                                                              | U2-P6-18 runs ([Windows](WINDOWS_DISTRIBUTION.md)). **Not repeated on the published installers** (see gaps).                                                                                           |
+| Windows NSIS over NSIS, newer version                                                | Expected: in-place upgrade (same per-user uninstall key)                                    | Not tested: needs two builds                                                                                                                                                                           |
+| Windows MSI `0.99.1` to a higher MSI version                                         | Expected: major upgrade (same upgrade code, higher version, `MajorUpgrade` in the template) | Not tested: needs two builds                                                                                                                                                                           |
+| Windows NSIS to MSI, or MSI to NSIS                                                  | **Unsupported**                                                                             | Different install registrations. They do not upgrade each other and can collide in one folder (WIN-3). Users stay on their installer family.                                                           |
+| Any version to a lower version                                                       | **Blocked**                                                                                 | The updater refuses it by default. The MSI shows its downgrade error. The app refuses a database from a newer version ([Versioning](VERSIONING.md)).                                                   |
+| Workspace data across any reinstall                                                  | Kept                                                                                        | The data folder is named by the identifier, not the install path, and uninstallers do not remove it                                                                                                    |
+
+### No automatic checks, and offline start
+
+Verified on the published macOS build: there is no updater plugin, no update code in `src` or `src-tauri/src`, and no network permission. Over 12 seconds after start, the app process and its child processes had **no open network sockets** (`lsof -i`). The app started and opened the workspace with no network needed. The updater work must keep this: check only when the user asks (#256), and never at start or in the background.
+
+## Unsigned beta installs: platform restrictions
+
+| Platform | Restriction                                                                                                                                                                                                                                                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS    | Every manual download of an unsigned build needs **Open Anyway** again. An app that runs from the DMG or from a quarantined Downloads folder is moved to a random read-only path (App Translocation). The updater cannot replace it there. The app must be in `/Applications` (or another writable folder) before it can update. |
+| macOS    | Ad-hoc signatures change with every build. The system may treat each update as a new app for stored permissions such as notifications. A Developer ID signature fixes this (#255). Expected, not observed.                                                                                                                       |
+| macOS    | A user who is not an administrator can still update from `/Applications` only after entering administrator credentials in the updater's password prompt.                                                                                                                                                                         |
+| Windows  | SmartScreen and Smart App Control apply to browser downloads (Mark of the Web). Files the updater downloads are not marked, so the prompt should not appear. **Not verified.** Managed devices may block unsigned installers entirely.                                                                                           |
+| Windows  | NSIS updates need no administrator rights. MSI updates do, because the MSI is per-machine.                                                                                                                                                                                                                                       |
+
+Unsigned updater packages are still checked against the minisign key. Apple and Authenticode signing are separate, and they are not required for the updater to work. They decide what the operating system shows the user.
+
+## Version and channel strategy
+
+| Decision            | Recommendation                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Channel             | One **beta** channel while 1.1.0 is in prerelease. Beta builds update only from the beta manifest. Promotion to a stable manifest is a separate, explicit step (#259).                                                                                                                                                                                                                                                |
+| First updater build | `1.1.0-beta.1`. SemVer order: `1.0.0-beta.1` < `1.1.0-beta.1` < `1.1.0-beta.2` < `1.1.0-rc.1` < `1.1.0`.                                                                                                                                                                                                                                                                                                              |
+| Version source      | Unchanged: the six places in [Versioning](VERSIONING.md). Manifest versions must equal the tag without the `v`.                                                                                                                                                                                                                                                                                                       |
+| MSI version mapping | `1.1.0-beta.N` cannot be an MSI version, and the existing `0.99.N` scheme would sort below `1.0.0`. **Owner decision needed** (proposal): for `X.Y.0-beta.N` use `X.(Y-1).(60000+N)`, and for `X.Y.0-rc.N` use `X.(Y-1).(61000+N)`. For `1.1.0-beta.1` that is `1.0.60001`. It is above `0.99.1` and below `1.1.0`, and a `1.0.z` fix release stays below as long as `z` < 60000. Omit the field for stable versions. |
+| Skipped `1.0.0`     | With this plan, no `1.0.0` stable build is published before 1.1.0. If one is needed, publish it before `1.1.0-beta.1`, or its MSI would sort below the beta.                                                                                                                                                                                                                                                          |
+
+## Manual bootstrap from `v1.0.0-beta.1`
+
+`v1.0.0-beta.1` cannot update itself. Each user installs the first updater-enabled build (`1.1.0-beta.1`) by hand, with the same installer family as before. The workspace stays where it is.
+
+| Installed today | Bootstrap step                                                                                                                                    | Notes                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| macOS DMG       | Quit the app. Download the new DMG, drag the app to `/Applications`, and choose **Replace**. Open it, then use **Open Anyway** if it is unsigned. | Do not run it from the DMG or Downloads, or later updates fail (translocation). |
+| Windows NSIS    | Quit the app. Run the new `-setup.exe`.                                                                                                           | SmartScreen: **More info → Run anyway** if unsigned                             |
+| Windows MSI     | Quit the app. Run the new `.msi`. It replaces `0.99.1` through its upgrade code.                                                                  | Needs administrator rights. Do not switch to the NSIS setup.                    |
+| Any             | Optional before the step: **Settings → Backup** ([Backup](BACKUP.md)).                                                                            | Migrations run on first start. A failed start leaves the original data.         |
+
+Release notes for `1.1.0-beta.1` and the user guide must say this plainly (#260): **"Version 1.0.0-beta.1 cannot update itself. Install this version manually once. Later versions can be installed from the app."**
+
+## Gaps and follow-up
+
+| Gap                                                                                                                                                                                                                                                                                     | Follow-up                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **Windows (W-1)**: the published NSIS and MSI were not installed in this audit. The issue asks for runs on archived authentic installers. Proposed: let the `Windows installer test` workflow take a release tag, download the assets, check `SHA256SUMS`, and run the existing script. | Needs owner approval for the Actions run; record here |
+| **W-2**: the MSI template is per-machine (Program Files), but U2-P6-18 saw the MSI in `%LOCALAPPDATA%\Unhollowed 2`. The likely reason is that the template reuses the `InstallDir` the NSIS run had already left in `HKCU`. Confirm on a clean profile.                                | Same run, MSI first                                   |
+| A newer-version install over the published beta (NSIS, MSI, and DMG). It needs a second build.                                                                                                                                                                                          | #260 (bootstrap path)                                 |
+| Gatekeeper on a **quarantined** DMG on a clean Mac, and SmartScreen on a clean Windows client. Here the DMG came from `gh`, which does not add quarantine.                                                                                                                              | #260                                                  |
+| The macOS DMG was a local build, not a CI build. Its build log is not public.                                                                                                                                                                                                           | #259: build every updater package in CI from the tag  |
+| Intel Mac, Windows ARM64, Windows 10/11 client editions                                                                                                                                                                                                                                 | Unsupported or untested; out of scope                 |
+
+## How the macOS checks were run
+
+On macOS 26.5.1 (Apple Silicon), with only scratch folders:
+
+1. `gh release download v1.0.0-beta.1 -p '*.dmg' -p SHA256SUMS -p BUILD-INFO.txt`, then `shasum -a 256 -c SHA256SUMS --ignore-missing`.
+2. `hdiutil attach -readonly`. Read `Info.plist` with `PlistBuddy`. Ran `lipo -archs`, `codesign -dv`, and `spctl -a -vv`.
+3. `U2_OLD_DATABASE=<scratch>/workspace.sqlite3 cargo test --locked write_older_release_fixture -- --ignored` (migration 5, one project).
+4. Copied the app with `ditto` into a scratch `Apps` folder and the fixture into `<scratch HOME>/Library/Application Support/dev.arlecchino.unhollowed2/`. Started the binary with `HOME=<scratch HOME>` for 10 seconds per run: first start, relaunch, then replaced the bundle and started again. After each run, read `_sqlx_migrations`, `projects`, and `pragma integrity_check` with `sqlite3`.
+5. Started it once more and listed the sockets of the process and its children with `lsof -nP -a -p <pid> -i`.
