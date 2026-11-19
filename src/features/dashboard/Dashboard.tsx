@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { listHabits, type Habit } from "../../database/habits";
 import { listProjects, type Project } from "../../database/projects";
 import { isTauri } from "../../database/status";
@@ -43,10 +43,13 @@ export function Dashboard() {
   const [library, setLibrary] = useState(false);
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
   const opener = useRef<HTMLElement | null>(null);
-  const restoreFocus = () =>
-    requestAnimationFrame(() => {
-      if (opener.current?.isConnected) opener.current.focus();
-    });
+  useLayoutEffect(() => {
+    if (library || settingsFor) return;
+    const button = opener.current;
+    opener.current = null;
+    // The modal is gone. Restore focus before the next keyboard action.
+    if (button?.isConnected) button.focus();
+  }, [library, settingsFor]);
   const layout = draft ?? dashboard.layout;
   const prefs: Preferences = {
     preset: layout.preferences.preset,
@@ -525,10 +528,7 @@ export function Dashboard() {
                 setDraft({ ...draft, widgets: [...draft.widgets, added] });
                 setArrangeNote(`${definition.label} added.`);
               }}
-              onClose={() => {
-                setLibrary(false);
-                restoreFocus();
-              }}
+              onClose={() => setLibrary(false)}
             />
           )}
           {settingsFor && draft && (
@@ -544,12 +544,8 @@ export function Dashboard() {
                 });
                 setArrangeNote("Settings applied.");
                 setSettingsFor(null);
-                restoreFocus();
               }}
-              onClose={() => {
-                setSettingsFor(null);
-                restoreFocus();
-              }}
+              onClose={() => setSettingsFor(null)}
             />
           )}
         </>
