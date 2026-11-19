@@ -2,8 +2,15 @@ name: Windows installer test
 
 # Builds the unsigned Windows installers, then installs, starts, upgrades, and
 # uninstalls them on a real Windows runner. Manual only. See docs/WINDOWS_DISTRIBUTION.md.
+# With release_tag, it tests that published release's installers instead of a
+# fresh build (docs/UPDATER_COMPATIBILITY.md). The release is only read.
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published release tag to test (for example v1.0.0-beta.1). Empty builds from this ref.
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -33,10 +40,65 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefer-offline --no-audit --no-fund
       - name: Build unsigned installers
+        if: inputs.release_tag == ''
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
         with:
           args: --ci --no-sign --bundles nsis,msi -- --locked
           uploadUpdaterJson: false
+      # The fixture test compiles the app, which needs the frontend build.
+      - name: Build the frontend for the fixture
+        if: inputs.release_tag != ''
+        run: npm run build
+      - name: Download and verify the published installers
+        if: inputs.release_tag != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          $dir = "$env:RUNNER_TEMP\release"
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --dir $dir --pattern '*.exe' --pattern '*.msi' --pattern SHA256SUMS
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $sums = @{}
+          Get-Content "$dir\SHA256SUMS" | ForEach-Object {
+            if ($_ -match '^([0-9a-f]{64}) [ *](.+)$') { $sums[$Matches[2]] = $Matches[1] }
+          }
+          foreach ($file in Get-ChildItem $dir -Include *.exe, *.msi -Recurse) {
+            $actual = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+            if ($sums[$file.Name] -ne $actual) { throw "$($file.Name): SHA-256 $actual does not match SHA256SUMS" }
+            "$($file.Name): SHA-256 OK ($actual)" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          }
+      # Reads the published MSI's identity and installs it first on the clean
+      # runner, before any NSIS install can leave an install folder in HKCU.
+      - name: Inspect the published MSI on a clean profile
+        if: inputs.release_tag != ''
+        shell: pwsh
+        run: |
+          function Call($obj, $name, $kind, $argList) { $obj.GetType().InvokeMember($name, $kind, $null, $obj, $argList) }
+          $msi = (Get-ChildItem "$env:RUNNER_TEMP\release\*.msi" | Select-Object -First 1).FullName
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $db = Call $installer 'OpenDatabase' 'InvokeMethod' @($msi, 0)
+          $out = @('| MSI check | Value |', '| --- | --- |')
+          foreach ($name in 'ProductName', 'ProductVersion', 'Manufacturer', 'UpgradeCode', 'ProductCode', 'ALLUSERS', 'MSIINSTALLPERUSER') {
+            $view = Call $db 'OpenView' 'InvokeMethod' @("SELECT Value FROM Property WHERE Property = '$name'")
+            Call $view 'Execute' 'InvokeMethod' $null | Out-Null
+            $record = Call $view 'Fetch' 'InvokeMethod' $null
+            $value = if ($record) { Call $record 'StringData' 'GetProperty' @(1) } else { '(not set)' }
+            $out += "| Property $name | $value |"
+          }
+          $out += "| HKCU install-dir key before install | $(Test-Path 'HKCU:\Software\Arlecchino\Unhollowed 2') |"
+          Start-Process msiexec -ArgumentList @('/i', "`"$msi`"", '/qn', '/norestart') -Wait
+          $entry = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'Unhollowed 2*' } | Select-Object -First 1
+          $exe = Get-ChildItem "$env:ProgramFiles\Unhollowed 2", "$env:LOCALAPPDATA\Unhollowed 2" -Filter '*.exe' -ErrorAction SilentlyContinue |
+            Where-Object Name -ne 'uninstall.exe' | Select-Object -First 1
+          $out += "| Uninstall entry | $($entry.PSPath -replace '^.*::','') |"
+          $out += "| DisplayVersion, Publisher, InstallLocation | $($entry.DisplayVersion), $($entry.Publisher), $($entry.InstallLocation) |"
+          $out += "| Installed executable | $($exe.FullName) |"
+          Start-Process msiexec -ArgumentList @('/x', "`"$msi`"", '/qn', '/norestart') -Wait
+          $out += "| Executable left after uninstall | $(if ($exe) { Test-Path $exe.FullName } else { 'n/a' }) |"
+          $out | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          if (-not $entry -or -not $exe) { exit 1 }
       - name: Write an older-release database fixture
         shell: pwsh
         run: |
@@ -46,7 +108,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Install, run, upgrade, and uninstall
         shell: pwsh
+        env:
+          TAG: ${{ inputs.release_tag }}
         run: |
-          $nsis = (Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1).FullName
-          $msi = (Get-ChildItem src-tauri/target/release/bundle/msi/*.msi | Select-Object -First 1).FullName
+          $root = if ($env:TAG) { "$env:RUNNER_TEMP\release" } else { 'src-tauri/target/release/bundle' }
+          $nsis = (Get-ChildItem $root -Filter '*-setup.exe' -Recurse | Select-Object -First 1).FullName
+          $msi = (Get-ChildItem $root -Filter '*.msi' -Recurse | Select-Object -First 1).FullName
           pwsh scripts/windows-install-test.ps1 -Nsis $nsis -Msi $msi -OldDatabase "$env:RUNNER_TEMP\old\workspace.sqlite3"
