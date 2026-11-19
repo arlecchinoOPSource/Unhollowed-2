@@ -296,7 +296,7 @@ test("the planning-to-completion journey keeps one issue, one document, and the 
   // Schedule work on this issue.
   await page.getByRole("button", { name: "Schedule work session" }).click();
   const form = page.getByRole("form", { name: "New session" });
-  await form.getByLabel("Date").fill("2026-11-17");
+  await form.getByLabel("Date", { exact: true }).fill("2026-11-17");
   await form.getByLabel("Start").fill("14:00");
   await form.getByLabel("End").fill("15:00");
   await form.getByRole("button", { name: "Add session" }).click();

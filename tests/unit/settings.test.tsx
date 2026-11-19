@@ -8,6 +8,9 @@ vi.mock("../../src/database/status", () => ({
   isTauri: () => true,
   readDatabaseStatus: vi.fn(),
 }));
+vi.mock("../../src/database/updates", () => ({
+  getAppVersion: () => Promise.resolve("1.0.0-beta.1"),
+}));
 
 afterEach(cleanup);
 
@@ -30,4 +33,9 @@ test("reports a failed workspace read and allows retry", async () => {
   fireEvent.click(button);
   expect(await screen.findByText(/Could not read the workspace/)).toBeVisible();
   expect(button).toBeEnabled();
+});
+
+test("shows the installed version under About (U2-P7-04)", async () => {
+  render(<Settings />);
+  expect(await screen.findByText("Unhollowed 1.0.0-beta.1")).toBeVisible();
 });

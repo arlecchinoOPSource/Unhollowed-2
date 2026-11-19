@@ -26,3 +26,8 @@ export type UpdateCheck =
 export function checkForUpdate(): Promise<UpdateCheck> {
   return invoke("check_for_update");
 }
+
+/** The installed app's version, as the operating system sees it. */
+export function getAppVersion(): Promise<string> {
+  return invoke("app_version");
+}

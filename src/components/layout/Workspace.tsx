@@ -9,6 +9,7 @@ import { isTauri } from "../../database/status";
 import { isIssueShortcut } from "../../features/issues/issueKeyboard";
 import { ReminderRunner } from "../../features/calendar/ReminderRunner";
 import { SidebarViews } from "../../features/views/SidebarViews";
+import { UpdateButton } from "../../features/updates/UpdateButton";
 import { useTheme } from "../../stores/theme";
 
 // Navigation groups: the day, the work, the self, then settings.
@@ -36,7 +37,7 @@ export function Workspace() {
     pages.find(
       ({ path }) =>
         path === pathname || (path !== "/" && pathname.startsWith(`${path}/`)),
-    )?.title ?? "Workspace";
+    )?.title ?? (pathname === "/updates" ? "Updates" : "Workspace");
 
   return (
     <div className="workspace">
@@ -63,6 +64,7 @@ export function Workspace() {
           ))}
         </nav>
         <SidebarViews />
+        <UpdateButton />
       </aside>
       <div className="workspace-body">
         <header className="topbar">

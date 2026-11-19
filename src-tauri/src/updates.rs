@@ -77,6 +77,12 @@ impl Drop for Held<'_> {
     }
 }
 
+/// The installed version, shown in Settings → About.
+#[tauri::command]
+pub fn app_version<R: Runtime>(app: AppHandle<R>) -> String {
+    app.package_info().version.to_string()
+}
+
 #[tauri::command]
 pub async fn check_for_update<R: Runtime>(
     app: AppHandle<R>,
