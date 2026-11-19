@@ -77,3 +77,110 @@
     justify-content: center;
   }
 }
+
+/* U2-P7-05: the butterfly, ellipsis, and progress. Only transform and opacity
+   animate, and only while an operation runs. */
+.updates-mark {
+  line-height: 0;
+}
+.updates-mark .brand-mark.is-breathing {
+  animation: updates-breathe 3.2s ease-in-out infinite;
+}
+.updates-mark .brand-mark.is-breathing .brand-wing {
+  animation: updates-wing-left 3.2s ease-in-out infinite;
+}
+.updates-mark .brand-mark.is-breathing .brand-wing-1,
+.updates-mark .brand-mark.is-breathing .brand-wing-3 {
+  animation-name: updates-wing-right;
+}
+@keyframes updates-breathe {
+  50% {
+    transform: scale(1.04);
+    opacity: 0.85;
+  }
+}
+@keyframes updates-wing-left {
+  50% {
+    transform: perspective(600px) rotateY(16deg);
+  }
+}
+@keyframes updates-wing-right {
+  50% {
+    transform: perspective(600px) rotateY(-16deg);
+  }
+}
+.updates-status {
+  animation: updates-enter 0.3s var(--ease) both;
+}
+@keyframes updates-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.updates-ellipsis span {
+  animation: updates-dot 1.4s infinite both;
+}
+.updates-ellipsis span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.updates-ellipsis span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes updates-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.updates-progress {
+  display: grid;
+  gap: 8px;
+  width: min(320px, 100%);
+}
+.updates-track {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.updates-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s var(--ease);
+}
+.updates-track.is-indeterminate .updates-fill {
+  width: 35%;
+  animation: updates-slide 1.4s ease-in-out infinite;
+}
+@keyframes updates-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+/* Reduced motion: a still butterfly, solid dots, and a still bar. The
+   messages carry every state on their own. */
+@media (prefers-reduced-motion: reduce) {
+  .updates-mark .brand-mark.is-breathing,
+  .updates-mark .brand-mark.is-breathing .brand-wing,
+  .updates-ellipsis span,
+  .updates-status {
+    animation: none !important;
+  }
+  .updates-ellipsis span {
+    opacity: 1;
+  }
+  .updates-track.is-indeterminate .updates-fill {
+    width: 100%;
+    opacity: 0.45;
+    animation: none !important;
+  }
+}

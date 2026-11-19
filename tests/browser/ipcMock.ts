@@ -551,8 +551,17 @@ export async function installIpcMock(page: Page) {
       if (!wasClosed && issue.closed) advance(issue, today);
       return issue;
     };
+    // Channels (U2-P7-05): the API registers a callback and passes its id.
+    const callbacks = new Map<number, (message: unknown) => void>();
+    let nextCallback = 1;
     Object.assign(window, {
       __TAURI_INTERNALS__: {
+        transformCallback: (callback: (message: unknown) => void) => {
+          const id = nextCallback++;
+          callbacks.set(id, callback);
+          return id;
+        },
+        unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (
           command: string,
           args: {
@@ -2826,6 +2835,31 @@ export async function installIpcMock(page: Page) {
             }
             case "app_version":
               return "1.0.0-beta.1";
+            // window.__downloadPlan sets the events sent, whether to wait for
+            // a `release-download` event first, and the result.
+            case "download_update": {
+              const plan =
+                (
+                  window as unknown as {
+                    __downloadPlan?: {
+                      events?: unknown[];
+                      hold?: boolean;
+                      result?: unknown;
+                    };
+                  }
+                ).__downloadPlan ?? {};
+              const channel = (args as { onEvent?: { id: number } }).onEvent;
+              (plan.events ?? []).forEach((message, index) =>
+                callbacks.get(channel?.id ?? 0)?.({ index, message }),
+              );
+              if (plan.hold)
+                await new Promise((resolve) =>
+                  window.addEventListener("release-download", resolve, {
+                    once: true,
+                  }),
+                );
+              return plan.result ?? { status: "verified" };
+            }
             // window.__updateCheck sets the result of an update check.
             case "check_for_update":
               return (

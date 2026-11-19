@@ -56,9 +56,12 @@ fn main() {
         // update. The webview has no updater permissions.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateLock::default())
+        .manage(updates::PendingUpdate::default())
+        .manage(updates::VerifiedPackage::default())
         .invoke_handler(tauri::generate_handler![
             updates::app_version,
             updates::check_for_update,
+            updates::download_update,
             database::database_status,
             relationships::list_issue_relationships,
             relationships::add_issue_relationship,
