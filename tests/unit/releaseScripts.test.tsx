@@ -179,6 +179,94 @@ describe("verify-artifacts.sh", () => {
     expect(existsSync(join(dir, "SHA256SUMS"))).toBe(false);
   });
 
+  describe("with updater packages (U2-P7-03)", () => {
+    // Real minisign signatures from the test-only key, bound to 0.2.0 and 0.1.5.
+    const fixture = (name: string) =>
+      readFileSync(`src-tauri/fixtures/updater/${name}`, "utf8");
+    const winUpdate = [
+      "Unhollowed 2_0.2.0_x64-setup.exe",
+      "Unhollowed 2_0.2.0_x64_en-US.msi",
+    ];
+    const signed = (names: string[], sig = fixture("good.sig")) => {
+      const dir = files(names);
+      for (const name of names)
+        if (!name.endsWith(".dmg"))
+          writeFileSync(join(dir, `${name}.sig`), sig);
+      return dir;
+    };
+    // The fixtures are signed with the test key, not the embedded one.
+    const verifyUpdater = (args: string[]) =>
+      run("verify-artifacts.sh", args, {
+        UPDATER_PUBKEY: fixture("test-key.pub").trim(),
+      });
+
+    it("accepts signed Windows installers and lists the signatures in the checksums", () => {
+      const dir = signed(winUpdate);
+      const result = verifyUpdater(["windows", dir, "0.2.0", "updater"]);
+      expect(result.status, result.stderr).toBe(0);
+      const sums = readFileSync(join(dir, "SHA256SUMS"), "utf8")
+        .trim()
+        .split("\n");
+      expect(sums).toHaveLength(4);
+      expect(readFileSync(join(dir, "BUILD-INFO.txt"), "utf8")).toContain(
+        "updater packages: signed, bound to 0.2.0",
+      );
+    });
+
+    it("requires the macOS updater archive and its signature", () => {
+      const names = [
+        "Unhollowed 2_0.2.0_aarch64.dmg",
+        "Unhollowed 2_0.2.0_aarch64.app.tar.gz",
+      ];
+      expect(
+        verifyUpdater(["macos", signed(names), "0.2.0", "updater"]).status,
+      ).toBe(0);
+      const missing = verifyUpdater([
+        "macos",
+        signed([names[0]]),
+        "0.2.0",
+        "updater",
+      ]);
+      expect(missing.stderr).toMatch(
+        /Missing expected installer: .*app\.tar\.gz/,
+      );
+    });
+
+    it("fails on a missing signature or one for another version", () => {
+      const dir = signed(winUpdate);
+      writeFileSync(join(dir, `${winUpdate[1]}.sig`), "");
+      expect(
+        verifyUpdater(["windows", dir, "0.2.0", "updater"]).stderr,
+      ).toMatch(/Missing or empty updater signature/);
+      const stale = signed(winUpdate, fixture("other-version.sig"));
+      expect(
+        verifyUpdater(["windows", stale, "0.2.0", "updater"]).stderr,
+      ).toMatch(/not bound to version 0\.2\.0/);
+    });
+
+    it("fails on a signature made by a key other than the embedded one", () => {
+      // Without UPDATER_PUBKEY the script reads the production key.
+      const result = run("verify-artifacts.sh", [
+        "windows",
+        signed(winUpdate),
+        "0.2.0",
+        "updater",
+      ]);
+      expect(result.stderr).toMatch(/different key than the embedded one/);
+    });
+
+    it("fails if a private signing key is in the folder, in any mode", () => {
+      const dir = files(windows);
+      writeFileSync(
+        join(dir, "leftover.key"),
+        "untrusted comment: rsign encrypted secret key\nnot a real key\n",
+      );
+      const result = run("verify-artifacts.sh", ["windows", dir, "1.0.0"]);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/private signing key/);
+    });
+  });
+
   it("requires an Apple Silicon DMG on macOS", () => {
     expect(
       run("verify-artifacts.sh", [

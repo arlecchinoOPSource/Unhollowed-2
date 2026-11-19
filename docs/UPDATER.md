@@ -22,7 +22,7 @@ The endpoint is a fixed asset on a dedicated `updater-beta` release that holds o
 
 `tests/unit/securityConfig.test.tsx` fails if the endpoint changes, if the key is missing, or if any `dangerous*` or `allowDowngrades` setting appears. Test feeds exist only in the Rust tests: a local HTTP server, with plain HTTP allowed in the test configuration and nowhere else. A production build cannot be pointed at another feed.
 
-`bundle.createUpdaterArtifacts` is not set yet. Producing signed updater packages needs the private key in CI (#255, #259).
+`requireSignedVersion` is on: a package must be signed for the exact version the manifest announces. Signing, the key, asset names, and the manifest are in [Updater signing](UPDATER_SIGNING.md).
 
 ## Results
 
