@@ -1,0 +1,213 @@
+name: Release publish
+
+# Publishes a reviewed, signed release and only then moves the updater feed
+# (U2-P7-07, docs/RELEASE_PIPELINE.md). Manual only. It never builds: it reuses
+# the signed packages that "Desktop packaging" made for the same commit.
+#
+#   verify  (read-only)                 tag, commit, packages, signatures, manifest
+#   publish (release-publish approval)  upload assets, check the public URLs
+#   promote (updater-feed approval)     re-check everything, update the feed last
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Reviewed release tag, for example v1.1.0-beta.1
+        required: true
+      dry_run:
+        description: Publish to an isolated dry-run release and feed instead
+        type: boolean
+        default: true
+      windows_run:
+        description: Desktop packaging run ID for Windows (default, the latest successful one for the tag's commit)
+        required: false
+        default: ""
+      macos_run:
+        description: Desktop packaging run ID for macOS (default, the latest successful one for the tag's commit)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag }}
+  DRY_RUN: ${{ inputs.dry_run }}
+  RELEASE_TAG: ${{ inputs.dry_run && format('dry-run-{0}', inputs.tag) || inputs.tag }}
+  FEED_TAG: ${{ inputs.dry_run && 'updater-dry-run' || 'updater-beta' }}
+
+jobs:
+  verify:
+    name: Verify the candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+      version: ${{ steps.commit.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Tag matches the version and the commit is on main
+        id: commit
+        run: |
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          bash scripts/verify-release-tag.sh "$TAG"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Download the signed packages built from this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          WINDOWS_RUN: ${{ inputs.windows_run }}
+          MACOS_RUN: ${{ inputs.macos_run }}
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          conclusion() { gh run view "$1" --repo "$GITHUB_REPOSITORY" --json jobs --jq ".jobs[] | select(.name == \"$2\") | .conclusion"; }
+          for platform in windows macos; do
+            case "$platform" in
+              windows) run="$WINDOWS_RUN"; artifact=unhollowed-2-windows-X64 ;;
+              macos) run="$MACOS_RUN"; artifact=unhollowed-2-macos-ARM64 ;;
+            esac
+            job="Package $platform"
+            if [ -z "$run" ]; then
+              for candidate in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow platform-build.yml --commit "$SHA" --limit 20 --json databaseId --jq '.[].databaseId'); do
+                if [ "$(conclusion "$candidate" "$job")" = success ]; then run="$candidate"; break; fi
+              done
+            fi
+            [ -n "$run" ] || fail "No successful '$job' run for $SHA. Run Desktop packaging for the tag first."
+            IFS=$'\t' read -r head event path <<< "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" --jq '[.head_sha, .event, .path] | @tsv')"
+            [ "$head" = "$SHA" ] || fail "Run $run built $head, not the tagged commit $SHA."
+            [ "$path" = .github/workflows/platform-build.yml ] || fail "Run $run is not a Desktop packaging run."
+            # A real release uses only the tag push, which also checked Quick CI.
+            [ "$DRY_RUN" = true ] || [ "$event" = push ] || fail "Run $run was started by $event. Use the run from the tag push."
+            [ "$(conclusion "$run" "$job")" = success ] || fail "'$job' did not succeed in run $run."
+            gh run download "$run" --repo "$GITHUB_REPOSITORY" -n "$artifact" -D "staged/$platform"
+            grep -qx "commit: $SHA" "staged/$platform/BUILD-INFO.txt" || fail "BUILD-INFO for $platform names another commit."
+            (cd "staged/$platform" && sha256sum -c SHA256SUMS)
+            echo "$platform: run $run ($event), commit $SHA" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Verify signatures and stage the release
+        env:
+          VERSION: ${{ steps.commit.outputs.version }}
+        run: |
+          mkdir -p release
+          for platform in windows macos; do
+            mkdir -p "check/$platform"
+            find "staged/$platform" -maxdepth 1 -type f ! -name SHA256SUMS ! -name BUILD-INFO.txt -exec cp {} "check/$platform/" \;
+            bash scripts/verify-artifacts.sh "$platform" "check/$platform" "$VERSION" updater
+            find "check/$platform" -maxdepth 1 -type f ! -name SHA256SUMS ! -name BUILD-INFO.txt -exec cp {} release/ \;
+            cp "staged/$platform/BUILD-INFO.txt" "release/BUILD-INFO-$platform.txt"
+          done
+          notes="docs/release-notes/$TAG.md"
+          [ -f "$notes" ] || notes=""
+          UPDATER_RELEASE_TAG="$RELEASE_TAG" node scripts/updater-manifest.mjs release "$VERSION" $notes > latest.json
+          # Release assets use a hyphen for the product name's space.
+          shopt -s nullglob
+          for file in release/*\ *; do mv "$file" "release/$(basename "$file" | tr ' ' '-')"; done
+          (cd release && sha256sum -- * > SHA256SUMS)
+          node scripts/updater-feed.mjs latest.json --release-tag "$RELEASE_TAG" --assets release
+          cp latest.json release/
+          { echo '```'; cat release/SHA256SUMS; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-candidate
+          path: release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish release assets
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Approval here publishes assets; it does not move the feed.
+    environment: release-publish
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ needs.verify.outputs.sha }}
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-candidate
+          path: release
+      - name: Create the release and upload its assets
+        run: |
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if [ "$DRY_RUN" = true ]; then
+              gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$SHA" --prerelease --latest=false \
+                --title "Dry run: Unhollowed $VERSION" --notes "Isolated dry run of the updater pipeline (docs/RELEASE_PIPELINE.md). Do not install."
+            else
+              prerelease=""
+              case "$VERSION" in *-*) prerelease=--prerelease ;; esac
+              notes="docs/release-notes/$TAG.md"
+              [ -f "$notes" ] || notes=/dev/null
+              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag $prerelease --latest=false \
+                --title "Unhollowed $VERSION" --notes-file "$notes"
+            fi
+          fi
+          # No --clobber: an asset that already exists is never replaced.
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" release/*
+      - name: The public assets are the verified ones
+        run: node scripts/updater-feed.mjs release/latest.json --release-tag "$RELEASE_TAG"
+
+  promote:
+    name: Promote to the updater feed
+    needs: [verify, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # A separate approval: distribution to users happens only here, last.
+    environment: updater-feed
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Re-check the published candidate against the live feed
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -D candidate
+          current=()
+          if gh release download "$FEED_TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -D live 2>/dev/null; then
+            current=(--current live/latest.json)
+            echo "Live feed before: $(node -p "require('./live/latest.json').version")" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          node scripts/updater-feed.mjs candidate/latest.json --release-tag "$RELEASE_TAG" "${current[@]}"
+      - name: Update the feed
+        run: |
+          if ! gh release view "$FEED_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$FEED_TAG" --repo "$GITHUB_REPOSITORY" --target main --prerelease --latest=false \
+              --title "Updater feed ($FEED_TAG)" \
+              --notes "The in-app updater reads latest.json from this release. Change it only with the Release publish or Updater feed withdraw workflows (docs/RELEASE_PIPELINE.md)."
+          fi
+          gh release upload "$FEED_TAG" --repo "$GITHUB_REPOSITORY" candidate/latest.json --clobber
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/$FEED_TAG/latest.json" -o served.json
+          cmp served.json candidate/latest.json
+          echo "Feed $FEED_TAG now offers $(node -p "require('./served.json').version")." >> "$GITHUB_STEP_SUMMARY"

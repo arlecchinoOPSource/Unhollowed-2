@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 const fixture = (name: string) =>
   readFileSync(`src-tauri/fixtures/updater/${name}`, "utf8");
 const TEST_KEY = fixture("test-key.pub").trim();
+const PACKAGE = "src-tauri/fixtures/updater/package.bin";
 const packages = [
   "Unhollowed 2_0.2.0_aarch64.app.tar.gz",
   "Unhollowed 2_0.2.0_x64-setup.exe",
@@ -20,7 +21,8 @@ const packages = [
 function release(sig = fixture("good.sig")) {
   const dir = mkdtempSync(join(tmpdir(), "u2-manifest-"));
   for (const name of packages) {
-    writeFileSync(join(dir, name), `bytes of ${name}`);
+    // The bytes the fixture signatures were made over.
+    writeFileSync(join(dir, name), readFileSync(PACKAGE));
     writeFileSync(join(dir, `${name}.sig`), sig);
   }
   return dir;
@@ -79,6 +81,21 @@ describe("updater-manifest.mjs", () => {
     );
     expect(manifest(release(fixture("wrong-key.sig"))).stderr).toMatch(
       /different key/,
+    );
+  });
+
+  it("refuses a package that does not match its signature", () => {
+    const dir = release();
+    writeFileSync(join(dir, packages[1]), "a different package");
+    expect(manifest(dir).stderr).toMatch(/does not match the package/);
+  });
+
+  it("points at a dry-run release when one is named", () => {
+    const result = manifest(release(), {
+      UPDATER_RELEASE_TAG: "dry-run-v0.2.0",
+    });
+    expect(JSON.parse(result.stdout).platforms["windows-x86_64-msi"].url).toBe(
+      "https://github.com/arlecchinoOPSource/Unhollowed-2/releases/download/dry-run-v0.2.0/Unhollowed-2_0.2.0_x64_en-US.msi",
     );
   });
 

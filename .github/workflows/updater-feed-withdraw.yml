@@ -1,0 +1,65 @@
+name: Updater feed withdraw
+
+# Stops the updater from offering a faulty release (U2-P7-07,
+# docs/RELEASE_PIPELINE.md). Manual only, behind the updater-feed approval.
+# It cannot undo an update already installed: ship a fixed, higher version.
+#
+#   restore_tag set:   the feed offers that earlier, good release again. Apps
+#                      already on a newer version are not downgraded.
+#   restore_tag empty: the feed is removed. Checks then report that the update
+#                      server did not answer, and nothing is offered.
+on:
+  workflow_dispatch:
+    inputs:
+      restore_tag:
+        description: Earlier good release to offer instead, for example v1.1.0-beta.1 (empty removes the feed)
+        required: false
+        default: ""
+      dry_run:
+        description: Act on the dry-run feed instead of the beta feed
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+jobs:
+  withdraw:
+    name: Withdraw the feed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: updater-feed
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RESTORE: ${{ inputs.restore_tag }}
+      RELEASE_TAG: ${{ inputs.dry_run && inputs.restore_tag != '' && format('dry-run-{0}', inputs.restore_tag) || inputs.restore_tag }}
+      FEED_TAG: ${{ inputs.dry_run && 'updater-dry-run' || 'updater-beta' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Restore an earlier release, or remove the feed
+        run: |
+          if [ -z "$RESTORE" ]; then
+            gh release delete-asset "$FEED_TAG" latest.json --repo "$GITHUB_REPOSITORY" --yes
+            code="$(curl -s -o /dev/null -w '%{http_code}' -L "https://github.com/$GITHUB_REPOSITORY/releases/download/$FEED_TAG/latest.json")"
+            [ "$code" = 404 ] || { echo "::error::The feed still answers $code."; exit 1; }
+            echo "Feed $FEED_TAG removed; nothing is offered." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -D restore
+          # The earlier release must still verify in full; only its version may be older.
+          node scripts/updater-feed.mjs restore/latest.json --release-tag "$RELEASE_TAG" --allow-older
+          gh release upload "$FEED_TAG" --repo "$GITHUB_REPOSITORY" restore/latest.json --clobber
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/releases/download/$FEED_TAG/latest.json" -o served.json
+          cmp served.json restore/latest.json
+          echo "Feed $FEED_TAG now offers $(node -p "require('./served.json').version") again." >> "$GITHUB_STEP_SUMMARY"
