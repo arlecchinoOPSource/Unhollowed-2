@@ -71,3 +71,15 @@ export function saveDocumentDraft(id: string, draft: Draft) {
   });
   return result;
 }
+
+/**
+ * Saves every edit not yet stored and waits for all document writes, before
+ * the app hands over to an installer (U2-P7-06). Rejects if any save fails,
+ * so nothing is installed while a document is unsaved.
+ */
+export async function flushDocumentWrites() {
+  await Promise.all(
+    [...drafts].map(([id, draft]) => saveDocumentDraft(id, draft)),
+  );
+  await Promise.all(savingById.values());
+}

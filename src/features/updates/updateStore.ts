@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import { checkForUpdate, downloadUpdate } from "../../database/updates";
+import {
+  checkForUpdate,
+  downloadUpdate,
+  installUpdate,
+} from "../../database/updates";
+import { flushDocumentWrites } from "../documents/editor/drafts";
+import { forgetUpdate, rememberUpdate } from "./resume";
 import {
   isBusy,
   transition,
@@ -14,8 +20,11 @@ import {
 export const useUpdates = create<{
   state: UpdateState;
   send: (event: UpdateEvent) => void;
+  /** The page the person opened the updater from, restored after an update. */
+  returnTo: string;
 }>()((set) => ({
   state: { phase: "idle" },
+  returnTo: "/",
   send: (event) => set(({ state }) => ({ state: transition(state, event) })),
 }));
 
@@ -61,13 +70,9 @@ export async function startDownload() {
   switch (result.status) {
     case "verified":
       send({ type: "downloaded" });
-      // shortcut: installation arrives in U2-P7-06; until then a verified
-      // package stops here, with nothing changed.
-      send({
-        type: "failed",
-        reason: "install",
-        detail: "Installing updates is not available in this version yet.",
-      });
+      send({ type: "verified" });
+      // "Download and install" was the person's confirmation to install.
+      await startInstall();
       return;
     case "failed":
       send({ type: "failed", reason: result.reason, detail: result.detail });
@@ -76,4 +81,35 @@ export async function startDownload() {
     case "nothingToDownload":
       send({ type: "failed", reason: "download", detail: result.status });
   }
+}
+
+/**
+ * Hands over to the installer, but only after every document edit is saved.
+ * The native side also waits for database writes to finish. If anything
+ * fails, the app and workspace stay open and the error says what to do.
+ */
+async function startInstall() {
+  const { state, send, returnTo } = useUpdates.getState();
+  if (state.phase !== "installing") return;
+  try {
+    await flushDocumentWrites();
+  } catch (error) {
+    send({ type: "failed", reason: "save", detail: String(error) });
+    return;
+  }
+  rememberUpdate({ version: state.version, path: returnTo });
+  const result = await installUpdate(() => send({ type: "installed" })).catch(
+    (error: unknown) => ({
+      status: "failed" as const,
+      reason: "install" as const,
+      detail: String(error),
+    }),
+  );
+  // Reaching here means the app did not restart: nothing was installed.
+  forgetUpdate();
+  send({
+    type: "failed",
+    reason: "install",
+    detail: result.status === "failed" ? result.detail : result.status,
+  });
 }

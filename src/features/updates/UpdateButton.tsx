@@ -1,6 +1,6 @@
 import { ArrowDownToLine } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
-import { startUpdateCheck } from "./updateStore";
+import { startUpdateCheck, useUpdates } from "./updateStore";
 import "./updates.css";
 
 /**
@@ -9,7 +9,7 @@ import "./updates.css";
  */
 export function UpdateButton() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   return (
     <button
       type="button"
@@ -20,6 +20,8 @@ export function UpdateButton() {
       aria-current={pathname === "/updates" ? "page" : undefined}
       onClick={() => {
         // Does nothing while an update operation is already running.
+        if (pathname !== "/updates")
+          useUpdates.setState({ returnTo: pathname + search });
         void startUpdateCheck();
         void navigate("/updates");
       }}

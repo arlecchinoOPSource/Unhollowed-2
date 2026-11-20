@@ -2834,7 +2834,35 @@ export async function installIpcMock(page: Page) {
               return structuredClone(issue);
             }
             case "app_version":
-              return "1.0.0-beta.1";
+              return (
+                (window as unknown as { __appVersion?: string }).__appVersion ??
+                "1.0.0-beta.1"
+              );
+            // window.__installPlan: `installed` sends the restart event and
+            // never returns, like a real restart; otherwise `result`.
+            case "install_update": {
+              const plan =
+                (
+                  window as unknown as {
+                    __installPlan?: { installed?: boolean; result?: unknown };
+                  }
+                ).__installPlan ?? {};
+              const channel = (args as { onEvent?: { id: number } }).onEvent;
+              if (plan.installed) {
+                callbacks.get(channel?.id ?? 0)?.({
+                  index: 0,
+                  message: { event: "installed" },
+                });
+                return new Promise(() => {});
+              }
+              return (
+                plan.result ?? {
+                  status: "failed",
+                  reason: "install",
+                  detail: "mock",
+                }
+              );
+            }
             // window.__downloadPlan sets the events sent, whether to wait for
             // a `release-download` event first, and the result.
             case "download_update": {

@@ -1,7 +1,8 @@
 //! On-demand update check (U2-P7-02). It runs only when the person asks:
 //! nothing here is called at startup, on a timer, or in the background, and the
 //! rest of the app never needs the network. See docs/UPDATER.md.
-//! The download (U2-P7-05) runs only after the person chooses to install.
+//! The download (U2-P7-05) runs only after the person chooses to install, and
+//! installation (U2-P7-06) only after the download verified.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -10,6 +11,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, Runtime, State};
+use tauri_plugin_sql::DbInstances;
 use tauri_plugin_updater::{Error, Update, UpdaterExt};
 
 /// Targets with published updater packages (docs/UPDATER_COMPATIBILITY.md).
@@ -254,6 +256,110 @@ async fn download(
             detail: error.to_string(),
         },
     }
+}
+
+/// Sent just before the app restarts into the installed version (macOS).
+/// On Windows the installer takes over and the app exits instead.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "event", rename_all = "camelCase")]
+pub enum InstallEvent {
+    Installed,
+}
+
+/// Installation either restarts the app, so a result means it did not happen.
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum InstallResult {
+    Busy,
+    /// No verified package for the update the last check found.
+    NotReady,
+    Failed {
+        reason: InstallFailure,
+        detail: String,
+    },
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum InstallFailure {
+    /// The workspace database could not be held still for the handoff.
+    Database,
+    /// The platform installation failed; the installed app was kept.
+    Install,
+}
+
+/// Installs the verified package. First it takes SQLite's write lock, which
+/// waits for any write in progress to commit and keeps new ones from starting,
+/// so the handoff never interrupts a mutation. On any failure the lock is
+/// released and the app and workspace stay open. Data folders are not touched:
+/// the installer replaces only the application.
+#[tauri::command]
+pub async fn install_update<R: Runtime>(
+    app: AppHandle<R>,
+    lock: State<'_, UpdateLock>,
+    pending: State<'_, PendingUpdate>,
+    verified: State<'_, VerifiedPackage>,
+    instances: State<'_, DbInstances>,
+    on_event: Channel<InstallEvent>,
+) -> Result<InstallResult, ()> {
+    let Some(_held) = lock.try_hold() else {
+        return Ok(InstallResult::Busy);
+    };
+    let Some((update, bytes)) = ready(&pending, &verified) else {
+        return Ok(InstallResult::NotReady);
+    };
+    let database = |detail: String| InstallResult::Failed {
+        reason: InstallFailure::Database,
+        detail,
+    };
+    let Ok(pool) = crate::database::pool(&instances).await else {
+        return Ok(database("the workspace database is not open".into()));
+    };
+    let mut connection = match hold_writes(&pool).await {
+        Ok(connection) => connection,
+        Err(error) => return Ok(database(error.to_string())),
+    };
+    // `install` verifies the bytes again before touching anything. On Windows
+    // it starts the NSIS or MSI installer and exits this process.
+    match update.install(&bytes) {
+        Ok(()) => {
+            let _ = on_event.send(InstallEvent::Installed);
+            // Lets the webview show "Restarting" before the process restarts.
+            std::thread::sleep(Duration::from_millis(600));
+            app.restart()
+        }
+        Err(error) => {
+            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
+            Ok(InstallResult::Failed {
+                reason: InstallFailure::Install,
+                detail: error.to_string(),
+            })
+        }
+    }
+}
+
+/// Takes SQLite's write lock on one connection: it waits (up to the busy
+/// timeout) for a write in progress to commit, and blocks new writes until the
+/// connection rolls back or the process ends.
+async fn hold_writes(
+    pool: &sqlx::SqlitePool,
+) -> sqlx::Result<sqlx::pool::PoolConnection<sqlx::Sqlite>> {
+    let mut connection = pool.acquire().await?;
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *connection)
+        .await?;
+    Ok(connection)
+}
+
+/// The pending update and its verified bytes, only if they belong together.
+fn ready(pending: &PendingUpdate, verified: &VerifiedPackage) -> Option<(Update, Vec<u8>)> {
+    let update = pending.0.lock().unwrap().clone()?;
+    let (version, bytes) = verified.0.lock().unwrap().clone()?;
+    (version == update.version).then_some((update, bytes))
 }
 
 fn download_failure(error: &Error) -> DownloadFailure {
@@ -739,6 +845,23 @@ mod signing_tests {
         assert_eq!(package, None);
     }
 
+    // U2-P7-06: installation needs a verified package for the pending update.
+    #[test]
+    fn installation_needs_a_verified_package_of_the_pending_version() {
+        use super::ready;
+        let pending = PendingUpdate(Mutex::new(Some(update_with(GOOD))));
+        assert!(ready(&pending, &VerifiedPackage::default()).is_none());
+        let stale = VerifiedPackage(Mutex::new(Some(("0.1.5".into(), PACKAGE.to_vec()))));
+        assert!(ready(&pending, &stale).is_none());
+        let fresh = VerifiedPackage(Mutex::new(Some(("0.2.0".into(), PACKAGE.to_vec()))));
+        let (update, bytes) = ready(&pending, &fresh).unwrap();
+        assert_eq!(
+            (update.version.as_str(), bytes.as_slice()),
+            ("0.2.0", PACKAGE)
+        );
+        assert!(ready(&PendingUpdate::default(), &fresh).is_none());
+    }
+
     #[test]
     fn nothing_downloads_without_a_checked_update_or_while_busy() {
         assert_eq!(fetch(None).0, DownloadResult::NothingToDownload);
@@ -752,5 +875,64 @@ mod signing_tests {
             &channel,
         ));
         assert_eq!(result, DownloadResult::Busy);
+    }
+}
+
+#[cfg(test)]
+mod handoff_tests {
+    use super::hold_writes;
+    use crate::test_support::TempDatabase;
+    use std::time::Duration;
+
+    // U2-P7-06: the installer handoff waits for a write in progress and lets no
+    // new write start, so no mutation is cut off.
+    #[test]
+    fn the_handoff_lock_waits_for_writes_and_blocks_new_ones() {
+        tauri::async_runtime::block_on(async {
+            let database = TempDatabase::new("update-handoff");
+            let pool = database.open().await;
+            sqlx::query("CREATE TABLE notes (body TEXT)")
+                .execute(&pool)
+                .await
+                .unwrap();
+
+            // A write in progress on another connection.
+            let mut writer = pool.begin().await.unwrap();
+            sqlx::query("INSERT INTO notes VALUES ('in flight')")
+                .execute(&mut *writer)
+                .await
+                .unwrap();
+            let lock = tauri::async_runtime::spawn({
+                let pool = pool.clone();
+                async move { hold_writes(&pool).await.unwrap() }
+            });
+            std::thread::sleep(Duration::from_millis(200));
+            writer.commit().await.unwrap();
+            let mut held = lock.await.unwrap();
+
+            // The committed write survived, and a new write cannot start.
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(count, 1);
+            let mut other = pool.acquire().await.unwrap();
+            sqlx::query("PRAGMA busy_timeout = 100")
+                .execute(&mut *other)
+                .await
+                .unwrap();
+            assert!(sqlx::query("INSERT INTO notes VALUES ('late')")
+                .execute(&mut *other)
+                .await
+                .is_err());
+
+            // A failed install rolls back and writing works again.
+            sqlx::query("ROLLBACK").execute(&mut *held).await.unwrap();
+            drop(held);
+            sqlx::query("INSERT INTO notes VALUES ('after')")
+                .execute(&mut *other)
+                .await
+                .unwrap();
+        });
     }
 }

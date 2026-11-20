@@ -184,3 +184,40 @@
     animation: none !important;
   }
 }
+
+/* U2-P7-06: the small confirmation after an update's restart. */
+.update-notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(380px, calc(100vw - 40px));
+  padding: 12px 12px 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--text) 35%, transparent);
+  animation: updates-enter 0.3s var(--ease) both;
+}
+.update-notice p {
+  margin: 0;
+}
+.update-notice button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.update-notice button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}

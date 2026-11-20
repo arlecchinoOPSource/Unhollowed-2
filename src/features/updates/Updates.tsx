@@ -79,7 +79,13 @@ function errorText(reason: Extract<UpdateState, { phase: "error" }>["reason"]) {
     case "install":
       return {
         title: "The update could not be installed",
-        detail: `Try again later. ${safe}`,
+        detail: `Unhollowed is still on its current version and your workspace is unchanged. Try again, or download the installer you used before from the Unhollowed releases page and run it over this version.`,
+      };
+    case "save":
+      return {
+        title: "A document could not be saved",
+        detail:
+          "The update was not installed, so no work is lost. Open the document, check that it saves, then try again.",
       };
   }
 }
