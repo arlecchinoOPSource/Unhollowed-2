@@ -1,6 +1,6 @@
 # Updater signing and release hosting
 
-Contract for U2-P7-03 (#255): how updater packages are signed and verified, where the private key lives, how release assets and the manifest are named, and what happens when a key must change. The update check itself is in [Updater](UPDATER.md); packaging and the manual bootstrap from `v1.0.0-beta.1` are in [Updater compatibility](UPDATER_COMPATIBILITY.md). Publishing the manifest is #259.
+Contract for U2-P7-03 (#255): how updater packages are signed and verified, where the private key lives, how release assets and the manifest are named, and what happens when a key must change. The update check itself is in [Updater](UPDATER.md); packaging and the manual bootstrap from `v1.0.0-beta.1` are in [Updater compatibility](UPDATER_COMPATIBILITY.md). Publishing the manifest is in [Release pipeline](RELEASE_PIPELINE.md).
 
 **Two different signatures.** Tauri updater signatures (minisign) prove that a package came from the owner, and the app checks them before installing anything. Apple Developer ID signing and notarization, and Windows Authenticode, decide what the operating system shows the user. They are separate. The beta's unsigned installers ([Release](RELEASE.md)) do not waive updater signatures: every updater package is signed, and an unsigned or wrongly signed package is never installed.
 
@@ -81,7 +81,7 @@ Each package has a `<package>.sig` next to it. The app asks for `{os}-{arch}-{in
 
 ### Feed ownership
 
-The beta feed is the asset `latest.json` on a dedicated release tagged `updater-beta` in this repository. The owner controls it. Only the approved publish step in #259 replaces it, and it does so last, after the versioned release and its assets are public. Nothing in this change creates or changes a release.
+The beta feed is the asset `latest.json` on a dedicated release tagged `updater-beta` in this repository. The owner controls it. Only the approved `promote` step of [Release publish](RELEASE_PIPELINE.md) replaces it, last, after the versioned release and its assets are public and verified.
 
 ## Key rotation, compromise, and loss
 

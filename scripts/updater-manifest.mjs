@@ -12,13 +12,21 @@
 // made by a key other than the one embedded in src-tauri/tauri.conf.json (or
 // UPDATER_PUBKEY, for tests).
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import {
+  decode,
+  embeddedPubkey,
+  keyId,
+  signedVersion,
+  verifies,
+} from "./minisign.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [dir, version, notesFile] = process.argv.slice(2);
 const repository =
   process.env.GITHUB_REPOSITORY ?? "arlecchinoOPSource/Unhollowed-2";
+// The release that holds the packages: v<version>, or an isolated dry-run
+// release (U2-P7-07).
+const releaseTag = process.env.UPDATER_RELEASE_TAG ?? `v${version}`;
 
 function fail(message) {
   console.error(`Error: ${message}`);
@@ -48,18 +56,7 @@ const targets = {
   "windows-x86_64-msi": packages.msi,
 };
 
-// A Tauri key or signature is base64 of minisign text. Line 2 is base64 bytes
-// whose bytes 2-9 are the key ID.
-const decode = (text) => Buffer.from(text.trim(), "base64").toString("utf8");
-const keyId = (minisign) =>
-  Buffer.from(minisign.split("\n")[1] ?? "", "base64")
-    .subarray(2, 10)
-    .toString("hex");
-
-const pubkey =
-  process.env.UPDATER_PUBKEY ??
-  JSON.parse(readFileSync(join(root, "src-tauri/tauri.conf.json"), "utf8"))
-    .plugins.updater.pubkey;
+const pubkey = embeddedPubkey();
 const expectedKey = keyId(decode(pubkey));
 if (expectedKey.length !== 16) fail("Could not read the updater public key.");
 
@@ -70,18 +67,17 @@ for (const name of Object.values(packages)) {
   if (!existsSync(sigPath)) fail(`Missing updater signature: ${name}.sig`);
   const signature = readFileSync(sigPath, "utf8").trim();
   const text = decode(signature);
-  const comment = text
-    .split("\n")
-    .find((line) => line.startsWith("trusted comment: "));
-  if (!comment?.endsWith(`\tversion:${version}`))
+  if (signedVersion(text) !== version)
     fail(`${name}.sig is not bound to version ${version}.`);
   if (keyId(text) !== expectedKey)
     fail(`${name}.sig was made by a different key than the embedded one.`);
+  if (!verifies(readFileSync(join(dir, name)), signature, pubkey))
+    fail(`${name}.sig does not match the package.`);
   signatures[name] = signature;
 }
 
 const asset = (name) =>
-  `https://github.com/${repository}/releases/download/v${version}/${encodeURIComponent(name.replaceAll(" ", "-"))}`;
+  `https://github.com/${repository}/releases/download/${releaseTag}/${encodeURIComponent(name.replaceAll(" ", "-"))}`;
 
 const manifest = {
   version,
