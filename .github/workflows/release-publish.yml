@@ -157,7 +157,7 @@ jobs:
           if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             if [ "$DRY_RUN" = true ]; then
               gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$SHA" --prerelease --latest=false \
-                --title "Dry run: Unhollowed $VERSION" --notes "Isolated dry run of the updater pipeline (docs/RELEASE_PIPELINE.md). Do not install."
+                --title "Dry run: Unhollowed $VERSION" --notes "Isolated updater acceptance assets. Install only in disposable test environments as described in docs/UPDATER_ACCEPTANCE.md."
             else
               prerelease=""
               case "$VERSION" in *-*) prerelease=--prerelease ;; esac

@@ -63,3 +63,24 @@ describe("desktop trust boundary (U2-P6-01)", () => {
     expect(updater.requireSignedVersion).toBe(true);
   });
 });
+
+it("isolates the native acceptance client without relaxing package trust", () => {
+  const acceptance = JSON.parse(
+    read("src-tauri/tauri.updater-acceptance.conf.json"),
+  );
+  expect(acceptance).toEqual({
+    $schema: conf.$schema,
+    version: "1.1.0-beta.0",
+    bundle: { windows: { wix: { version: "1.0.60000" } } },
+    plugins: {
+      updater: {
+        endpoints: [
+          "https://github.com/arlecchinoOPSource/Unhollowed-2/releases/download/updater-dry-run/latest.json",
+        ],
+      },
+    },
+  });
+  expect(read(".github/workflows/platform-build.yml")).not.toContain(
+    "tauri.updater-acceptance.conf.json",
+  );
+});

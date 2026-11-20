@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0-beta.1 — 2026-11-20
+
+- Added an on-demand desktop updater. The sidebar control checks the beta channel on request, verifies signed downloads, and saves pending document edits before installer handoff.
+- Existing 1.0.0-beta.1 users install this beta manually once. See the [updater guide](docs/UPDATER.md) for installer families and recovery.
+
 ## 1.0.0-beta.1 — 2026-11-18
 
 - Prepared the first public beta for unsigned Apple Silicon macOS and Windows x64 distribution. See the [draft release notes](docs/release-notes/v1.0.0-beta.1.md) for compatibility, verification, and known limitations.
