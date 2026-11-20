@@ -30,7 +30,12 @@ export type UpdateState =
   | { phase: "error"; reason: UpdateErrorReason; detail: string };
 
 export type UpdateErrorReason =
-  UpdateFailureReason | "unsupported" | "download" | "verification" | "install";
+  | UpdateFailureReason
+  | "unsupported"
+  | "download"
+  | "verification"
+  | "install"
+  | "save";
 
 export type UpdateEvent =
   | { type: "check" }

@@ -62,6 +62,7 @@ fn main() {
             updates::app_version,
             updates::check_for_update,
             updates::download_update,
+            updates::install_update,
             database::database_status,
             relationships::list_issue_relationships,
             relationships::add_issue_relationship,

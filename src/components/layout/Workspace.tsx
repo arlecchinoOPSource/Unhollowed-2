@@ -10,6 +10,7 @@ import { isIssueShortcut } from "../../features/issues/issueKeyboard";
 import { ReminderRunner } from "../../features/calendar/ReminderRunner";
 import { SidebarViews } from "../../features/views/SidebarViews";
 import { UpdateButton } from "../../features/updates/UpdateButton";
+import { UpdateNotice } from "../../features/updates/UpdateNotice";
 import { useTheme } from "../../stores/theme";
 
 // Navigation groups: the day, the work, the self, then settings.
@@ -101,6 +102,7 @@ export function Workspace() {
         </header>
         <main id="main" tabIndex={-1}>
           <ReminderRunner />
+          <UpdateNotice />
           <RouteErrorBoundary resetKey={pathname}>
             <Outlet />
           </RouteErrorBoundary>

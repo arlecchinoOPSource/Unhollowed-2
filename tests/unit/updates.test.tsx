@@ -11,6 +11,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
   checkForUpdate,
   downloadUpdate,
+  installUpdate,
   type DownloadEvent,
   type DownloadResult,
   type UpdateCheck,
@@ -18,11 +19,16 @@ import {
 import { UpdateButton } from "../../src/features/updates/UpdateButton";
 import { Updates } from "../../src/features/updates/Updates";
 import { useUpdates } from "../../src/features/updates/updateStore";
+import { flushDocumentWrites } from "../../src/features/documents/editor/drafts";
 
 vi.mock("../../src/database/updates", () => ({
   checkForUpdate: vi.fn(),
   downloadUpdate: vi.fn(),
+  installUpdate: vi.fn(),
   getAppVersion: vi.fn(),
+}));
+vi.mock("../../src/features/documents/editor/drafts", () => ({
+  flushDocumentWrites: vi.fn(() => Promise.resolve()),
 }));
 
 // U2-P7-04: the sidebar control and the updater screen, against a mocked
@@ -57,6 +63,7 @@ function pending() {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   useUpdates.setState({ state: { phase: "idle" } });
   vi.mocked(checkForUpdate).mockReset();
 });
@@ -254,13 +261,62 @@ test("a finished download is verified, and a bad signature is reported", async (
   expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
 });
 
-test("a verified package stops before installing, which arrives later", async () => {
+// U2-P7-06: installation after a verified download.
+const RESUME = "unhollowed-2-update-resume";
+
+test("a verified package saves documents, records the return page, and installs", async () => {
   vi.mocked(downloadUpdate).mockReset();
+  let restarting!: () => void;
+  vi.mocked(installUpdate).mockImplementation((onEvent) => {
+    restarting = () => onEvent({ event: "installed" });
+    return new Promise(() => {});
+  });
+  const finish = downloading([{ event: "finished" }]);
+  const offerButton = await openOffer();
+  // As if the updater had been opened from a filtered issue list.
+  useUpdates.setState({ returnTo: "/issues?state=all" });
+  fireEvent.click(offerButton);
+  await finish({ status: "verified" });
+  expect(flushDocumentWrites).toHaveBeenCalledTimes(1);
+  expect(installUpdate).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(localStorage.getItem(RESUME) ?? "null")).toEqual({
+    version: "1.1.0-beta.1",
+    path: "/issues?state=all",
+  });
+  expect(await findTitle("Installing update...")).toBeVisible();
+  await act(async () => restarting());
+  expect(await findTitle("Restarting Unhollowed...")).toBeVisible();
+});
+
+test("a document that cannot be saved stops the installation", async () => {
+  vi.mocked(downloadUpdate).mockReset();
+  vi.mocked(installUpdate).mockReset();
+  vi.mocked(flushDocumentWrites).mockRejectedValueOnce(new Error("disk full"));
+  const finish = downloading([{ event: "finished" }]);
+  fireEvent.click(await openOffer());
+  await finish({ status: "verified" });
+  expect(screen.getByText("A document could not be saved")).toBeVisible();
+  expect(installUpdate).not.toHaveBeenCalled();
+  expect(localStorage.getItem(RESUME)).toBeNull();
+  expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("a failed installation keeps the app open with recovery steps", async () => {
+  vi.mocked(downloadUpdate).mockReset();
+  vi.mocked(installUpdate).mockResolvedValueOnce({
+    status: "failed",
+    reason: "install",
+    detail: "permission denied",
+  });
   const finish = downloading([{ event: "finished" }]);
   fireEvent.click(await openOffer());
   await finish({ status: "verified" });
   expect(screen.getByText("The update could not be installed")).toBeVisible();
-  expect(screen.getByText(/Nothing was changed/)).toBeVisible();
+  expect(
+    screen.getByText(/releases page and run it over this version/),
+  ).toBeVisible();
+  expect(localStorage.getItem(RESUME)).toBeNull();
+  expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
 });
 
 test("repeated activation starts one download, and leaving is not offered mid-download", async () => {

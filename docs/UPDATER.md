@@ -30,16 +30,55 @@ The endpoint is a fixed asset on a dedicated `updater-beta` release that holds o
 - **States.** `src/features/updates/updateMachine.ts` defines the nine states: idle, checking, up to date, update available, downloading, verifying, installing, restarting, and error. `transition` is the only way to change state, and it ignores an event that does not apply, so late or repeated events cannot produce contradictory screens. A shared store (`updateStore.ts`) keeps one state for the whole app. It starts nothing while an operation is in flight, so repeated activation cannot begin a second one.
 - **Leaving the screen.** The screen lives inside the normal workspace, so the sidebar stays usable. **Done** is offered whenever leaving is safe (idle, up to date, available, error, and during a check, which changes nothing), and it returns focus to the sidebar control. Errors explain what happened, say the workspace is not affected, and offer **Try again**, except on unsupported platforms.
 - **Version.** Settings → About shows the installed version from the `app_version` command, so the window needs no extra permission.
-- **Later work.** Installation and relaunch are U2-P7-06.
 
 ## Download and progress (U2-P7-05)
 
 - **Starting.** **Download and install** in the available state is the only way a download starts. `download_update` fetches only the update the last check found (kept in Rust as `PendingUpdate`), so the webview cannot choose a package or an address. It shares the one-operation lock with the check.
 - **Progress.** The native download reports the bytes actually received through a Tauri `Channel`, at most every 100 ms. With a known total, the bar and text show a percentage and "2 MB of 8 MB". With a missing or zero total, the bar is indeterminate and only the downloaded size is shown. Nothing is estimated. Progress is not a live region; the status line announces each new state once.
 - **Verification.** When every byte has arrived, the screen shows **Verifying update...** while the plugin checks the signature against the embedded key and the signed version ([Updater signing](UPDATER_SIGNING.md)). A package that fails verification is discarded and reported as "could not be verified". A verified package is kept in memory (`VerifiedPackage`) for installation.
-- **Until U2-P7-06.** Installing is not wired yet, so a verified download ends in "could not be installed", with nothing changed. The installing and restarting messages exist and are covered by the state tests.
 - **Cancellation.** The plugin's download API offers no safe cancellation, so none is offered, and **Done** is hidden while downloading. The sidebar still works, and the download finishes or fails on its own.
 - **Visuals.** The official butterfly (`BrandMark`, unchanged geometry) sits above the status. While an operation runs it breathes (a slight scale and opacity change) and its wings move gently. The working titles end in three dots that light in turn. Only `transform` and `opacity` animate, and only in busy states; a settled screen runs no animation. With reduced motion, the butterfly is still, the dots are solid, and the indeterminate bar is a still, lighter bar.
+
+## Installation and restart (U2-P7-06)
+
+**Download and install** is the person's confirmation to install. After the package verifies, the app installs it without asking again. Installing always ends in a restart or a hand-off to the platform installer. Unhollowed never claims to update in place, and there is no automatic rollback.
+
+### What happens, in order
+
+1. **Documents.** `flushDocumentWrites` saves every document edit still in memory and waits for all document saves. If any save fails, nothing is installed. The screen says "A document could not be saved", and the app and workspace stay open.
+2. **Resume record.** The app stores `unhollowed-2-update-resume` in local storage: only the version being installed and the page the updater was opened from. No workspace data goes in it.
+3. **Database.** `install_update` takes SQLite's write lock (`BEGIN IMMEDIATE`). This waits for any write in progress to commit and keeps new writes from starting, so the hand-off never cuts a mutation off (`handoff_tests` in `updates.rs`). If the lock cannot be taken within the busy timeout, nothing is installed and the lock is not held.
+4. **Install.** The plugin verifies the package signature again, then:
+   - **macOS:** replaces `Unhollowed 2.app` in place (asking for an administrator password if its folder is not writable), shows **Restarting Unhollowed...**, and restarts into the new version.
+   - **Windows:** starts the NSIS setup or the MSI, matching the installed family, in passive mode, and exits the app. The installer replaces the program and starts Unhollowed again.
+5. **After the restart.** `UpdateNotice` reads the resume record once and removes it. It compares the running version (`app_version`, local only) with the version that was installed:
+   - **They match:** a small notice says "Unhollowed is up to date. Version X is installed.", and the app returns to the saved page. The workspace opens normally, with no second loading sequence.
+   - **They differ:** the notice says the update did not finish, that the old version is still in use and the workspace was not changed, and links to **Try again**.
+
+If installation fails before the restart, the resume record is removed, the write lock is released, and the screen shows "The update could not be installed" with the recovery steps below.
+
+### What is preserved
+
+The installers replace only the application. The workspace database (`workspace.sqlite3` in the app data folder named by `dev.arlecchino.unhollowed2`), webview preferences, and document drafts live outside the application and are not touched ([Updater compatibility](UPDATER_COMPATIBILITY.md), [Identity](IDENTITY.md)). IDs and paths do not change. New versions run their forward-only migrations on first start. Survival across upgrades is covered by the existing upgrade tests, for example:
+
+- documents: `documents::tests::existing_databases_upgrade_without_losing_data`
+- projects and issues: `issues::tests::upgrading_from_the_projects_schema_keeps_existing_records`
+- calendars: `scheduling::links::tests::links_survive_a_restart_and_upgrade_from_the_previous_version`
+- habits: `habits::schema_tests::upgrade_keeps_existing_data_and_habits_survive_reopen`
+- dashboards: `dashboards::tests::upgrading_from_the_previous_schema_keeps_existing_data`
+- everything together: `phase5_acceptance::upgrade_layouts_records_and_restart_keep_supported_data_and_recompute_the_same_analytics` and `backup_tests::a_backup_from_an_older_release_upgrades_without_losing_a_row`
+
+### Recovery when installation fails
+
+Nothing in the workspace changes in any of these cases. Back up first (**Settings → Backup**) if you want a copy before trying again.
+
+| Installed with | What to do                                                                                                                                                                                                                                                                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS DMG      | Quit Unhollowed, download the DMG from the releases page, drag the app to `/Applications`, and choose **Replace**. If the error says the previous app was left at a path, move that app back to `/Applications` first. If the app runs from the DMG or Downloads, move it to `/Applications`, because macOS will not let it be replaced there. |
+| Windows NSIS   | Run the `-setup.exe` from the releases page. It installs over the current version for your user account.                                                                                                                                                                                                                                       |
+| Windows MSI    | Run the `.msi` from the releases page with administrator rights. Windows Installer rolls back a failed MSI installation on its own. Do not switch to the NSIS setup.                                                                                                                                                                           |
+
+If the app still reports the older version after a restart, the notice says so. Use **Try again**, or install by hand as above.
 
 ## Results
 

@@ -59,3 +59,24 @@ export function downloadUpdate(
   channel.onmessage = onEvent;
   return invoke("download_update", { onEvent: channel });
 }
+
+/** Sent just before the app restarts into the installed version (macOS). */
+export type InstallEvent = { event: "installed" };
+
+/** Installing restarts or exits the app, so any result means it did not. */
+export type InstallResult =
+  | { status: "busy" }
+  | { status: "notReady" }
+  | { status: "failed"; reason: "database" | "install"; detail: string };
+
+/**
+ * Installs the verified package (U2-P7-06). On macOS the app restarts; on
+ * Windows the NSIS or MSI installer takes over and the app exits.
+ */
+export function installUpdate(
+  onEvent: (event: InstallEvent) => void,
+): Promise<InstallResult> {
+  const channel = new Channel<InstallEvent>();
+  channel.onmessage = onEvent;
+  return invoke("install_update", { onEvent: channel });
+}
