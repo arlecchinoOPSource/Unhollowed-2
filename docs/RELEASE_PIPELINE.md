@@ -35,8 +35,8 @@ The workflows use only `github.token`, with `contents: write` limited to these t
 ## Running it
 
 1. Merge the release PR, push the `v*` tag, and wait for **Desktop packaging** (both platforms) to succeed.
-2. **Actions → Release publish → Run workflow** from the tag, with the tag and **dry run** checked. This publishes to an isolated release `dry-run-<tag>` and feed `updater-dry-run`, which no app reads. Approve both steps and read the summaries.
-3. Run it again with **dry run** unchecked. Approve **publish**, check the release page, finish acceptance (#260), then approve **promote**.
+2. **Actions → Release publish → Run workflow** from the tag, with the tag and **dry run** checked. This publishes to an isolated release `dry-run-<tag>` and feed `updater-dry-run`, which production builds never read. Approve both steps and follow the [native acceptance guide](UPDATER_ACCEPTANCE.md). Test withdrawal on this same feed.
+3. Run it again with **dry run** unchecked. Approve **publish**, check the release page, and confirm the isolated native acceptance evidence (#260) before approving **promote**.
 
 The packaging artifacts expire after 7 days. Re-run Desktop packaging for the tag if they have.
 
